@@ -1,0 +1,3 @@
+# User-triggered resume notes
+
+CW will keep resume notes outside the core task workflow and create them only when the user explicitly wants to pause, switch sessions, switch coding harnesses, or hand work to another agent. Each task has at most one current `resume.md`, which lives inside the task directory, stays concise, and points to existing task artifacts instead of duplicating the task truth. New resume notes replace older ones, and finish removes or invalidates the resume note because the task no longer needs a continuation entry point. When a resume note is successfully used to continue work, CW deletes it after the first subsequent workflow action records progress.

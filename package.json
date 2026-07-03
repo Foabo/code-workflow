@@ -1,0 +1,29 @@
+{
+  "name": "code-workflow",
+  "version": "0.1.0",
+  "description": "CW workflow kernel for coding harnesses.",
+  "type": "module",
+  "bin": {
+    "cw": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "DESIGN.md",
+    "CONTEXT.md",
+    "docs/adr"
+  ],
+  "devDependencies": {
+    "@types/node": "^20.14.11",
+    "typescript": "^5.5.3",
+    "vitest": "^2.0.4"
+  }
+}
