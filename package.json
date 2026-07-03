@@ -3,12 +3,14 @@
   "version": "0.1.0",
   "description": "CW workflow kernel for coding harnesses.",
   "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "bin": {
-    "cw": "./dist/cli.js"
+    "cw": "./dist/src/cli.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run",
+    "test": "npm run build && node --test dist/tests/*.test.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "engines": {
@@ -23,7 +25,6 @@
   ],
   "devDependencies": {
     "@types/node": "^20.14.11",
-    "typescript": "^5.5.3",
-    "vitest": "^2.0.4"
+    "typescript": "^5.5.3"
   }
 }
