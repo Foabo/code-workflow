@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import assert from "node:assert/strict";
@@ -7,7 +7,9 @@ import {
   consumeResumeNote,
   createResumeNote,
   createTask,
+  discardTask,
   doctorProject,
+  finishTask,
   initProject,
   readTaskState,
   updateTaskState,
@@ -109,6 +111,51 @@ describe("cw kernel", () => {
     const stored = await readTaskState(root, "task-resume");
     assert.equal(stored.artifacts.resume, null);
     assert.equal(stored.resume_condition, null);
+  });
+
+  it("finishes a task only through the closure gate", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await createTask(root, { id: "task-finish", title: "Finish test" });
+
+    await assert.rejects(
+      updateTaskState(root, "task-finish", { lifecycle: "closed" }),
+      /use finishTask/
+    );
+    await assert.rejects(
+      finishTask(root, "task-finish", { summary: "Done" }),
+      /closure gate failed/
+    );
+
+    await writeFile(
+      path.join(root, ".cw/tasks/task-finish/spec.md"),
+      "# Spec\n\n## Acceptance Criteria\n- [x] Works\n",
+      "utf8"
+    );
+    await writeFile(
+      path.join(root, ".cw/tasks/task-finish/task.md"),
+      "# Task\n\n## Implementation\n- [x] Implemented\n\n## Verification\n- [x] Tested\n\n## Check\n- [x] Acceptance criteria in spec.md are covered.\n",
+      "utf8"
+    );
+
+    const finished = await finishTask(root, "task-finish", { summary: "Task finished" });
+    assert.equal(finished.lifecycle, "closed");
+    assert.equal(finished.phase, "finish");
+    assert.equal(finished.next_action, "Task is closed");
+  });
+
+  it("discards a task only with explicit confirmation", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await createTask(root, { id: "task-discard", title: "Discard test" });
+
+    await assert.rejects(
+      discardTask(root, "task-discard", { confirmed: false, worktreeHandling: "none" }),
+      /confirmation/
+    );
+
+    await discardTask(root, "task-discard", { confirmed: true, worktreeHandling: "none" });
+    await assert.rejects(access(path.join(root, ".cw/tasks/task-discard")));
   });
 });
 

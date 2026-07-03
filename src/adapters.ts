@@ -72,6 +72,8 @@ ${commandPurposes[command]}
 - cw internal create-task --id <task-id> --title <title>
 - cw internal append-trace --task <task-id> --type <event-type> --summary <summary>
 - cw internal set-state --task <task-id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
+- cw internal finish-task --task <task-id> --summary <summary>
+- cw internal discard-task --task <task-id> --confirm --worktree <handling>
 - cw internal create-resume --task <task-id> --content <markdown>
 - cw internal consume-resume --task <task-id>
 `;

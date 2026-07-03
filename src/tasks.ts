@@ -1,6 +1,7 @@
 import path from "node:path";
-import { appendFile, rm, writeFile } from "node:fs/promises";
+import { appendFile, readFile, rm, writeFile } from "node:fs/promises";
 import { ensureDir, writeFileIfMissing } from "./fs.js";
+import { getGitStatus } from "./git.js";
 import { readJsonFile, writeJsonFile } from "./json.js";
 import { getCwPaths, taskDir, taskJsonPath, tracePath } from "./paths.js";
 import { assertTaskStateRecord } from "./schema.js";
@@ -24,6 +25,19 @@ export type UpdateTaskStateInput = {
   resumeCondition?: string | null;
   healthFlags?: string[];
   invalidatedArtifacts?: string[];
+  now?: Date;
+};
+
+export type FinishTaskInput = {
+  summary: string;
+  dirtyWorktreeHandling?: "covered" | "acknowledged" | "clean";
+  baselineDecision?: "accepted" | "edited" | "skipped" | "none";
+  now?: Date;
+};
+
+export type DiscardTaskInput = {
+  worktreeHandling: "keep" | "stash" | "revert" | "delete-worktree" | "none";
+  confirmed: boolean;
   now?: Date;
 };
 
@@ -90,6 +104,9 @@ export async function updateTaskState(
   input: UpdateTaskStateInput
 ): Promise<TaskStateRecord> {
   const state = await readTaskState(root, taskId);
+  if (input.lifecycle === "closed") {
+    throw new Error("use finishTask to close a task");
+  }
   const next: TaskStateRecord = {
     ...state,
     lifecycle: input.lifecycle ?? state.lifecycle,
@@ -110,6 +127,59 @@ export async function updateTaskState(
     summary: stateUpdateSummary(state, next)
   });
   return next;
+}
+
+export async function finishTask(root: string, taskId: string, input: FinishTaskInput): Promise<TaskStateRecord> {
+  const state = await readTaskState(root, taskId);
+  if (state.lifecycle !== "open") {
+    throw new Error("only open tasks can finish");
+  }
+
+  const gateIssues = await closureGateIssues(root, taskId, state, input);
+  if (gateIssues.length > 0) {
+    throw new Error(`closure gate failed:\n${gateIssues.map((issue) => `- ${issue}`).join("\n")}`);
+  }
+
+  if (state.artifacts.resume !== null) {
+    await rm(path.join(taskDir(root, taskId), state.artifacts.resume), { force: true });
+  }
+
+  const now = (input.now ?? new Date()).toISOString();
+  const next: TaskStateRecord = {
+    ...state,
+    lifecycle: "closed",
+    phase: "finish",
+    next_action: "Task is closed",
+    artifacts: { ...state.artifacts, resume: null },
+    resume_condition: null,
+    updated_at: now
+  };
+
+  await writeJsonFile(taskJsonPath(root, taskId), next);
+  await appendTrace(root, taskId, {
+    ts: now,
+    type: "task.finished",
+    summary: input.summary,
+    data: {
+      baseline_decision: input.baselineDecision ?? "none",
+      dirty_worktree_handling: input.dirtyWorktreeHandling ?? "clean"
+    }
+  });
+  return next;
+}
+
+export async function discardTask(root: string, taskId: string, input: DiscardTaskInput): Promise<void> {
+  if (!input.confirmed) {
+    throw new Error("discard requires explicit confirmation");
+  }
+  const now = (input.now ?? new Date()).toISOString();
+  await readTaskState(root, taskId);
+  await appendTrace(root, taskId, {
+    ts: now,
+    type: "task.discarded",
+    summary: `Task discarded with worktree handling: ${input.worktreeHandling}`
+  });
+  await rm(taskDir(root, taskId), { recursive: true, force: true });
 }
 
 export async function appendTrace(root: string, taskId: string, event: TraceEvent): Promise<void> {
@@ -164,6 +234,40 @@ export async function consumeResumeNote(root: string, taskId: string, now = new 
     summary: "Resume note consumed and removed."
   });
   return next;
+}
+
+async function closureGateIssues(
+  root: string,
+  taskId: string,
+  state: TaskStateRecord,
+  input: FinishTaskInput
+): Promise<string[]> {
+  const issues: string[] = [];
+  const dir = taskDir(root, taskId);
+  const spec = await readFile(path.join(dir, state.artifacts.spec), "utf8");
+  const task = await readFile(path.join(dir, state.artifacts.task), "utf8");
+
+  if (hasUncheckedCheckbox(spec)) {
+    issues.push("spec.md has unchecked acceptance criteria or checklist items");
+  }
+  if (hasUncheckedCheckbox(task)) {
+    issues.push("task.md has unchecked implementation, verification, or check items");
+  }
+
+  if (state.artifacts.baseline_delta !== null && input.baselineDecision === undefined) {
+    issues.push("baseline delta requires an accepted, edited, or skipped decision");
+  }
+
+  const gitStatus = await getGitStatus(root);
+  if (gitStatus.kind === "dirty" && input.dirtyWorktreeHandling === undefined) {
+    issues.push("dirty worktree requires covered or acknowledged handling");
+  }
+
+  return issues;
+}
+
+function hasUncheckedCheckbox(markdown: string): boolean {
+  return /^- \[ \]/m.test(markdown);
 }
 
 function validateTaskId(taskId: string): void {

@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 import { initProject } from "./init.js";
-import { appendTrace, consumeResumeNote, createResumeNote, createTask, updateTaskState } from "./tasks.js";
+import {
+  appendTrace,
+  consumeResumeNote,
+  createResumeNote,
+  createTask,
+  discardTask,
+  finishTask,
+  updateTaskState
+} from "./tasks.js";
 import { doctorProject, validateProject } from "./validate.js";
 import { TaskLifecycle, TraceEvent } from "./types.js";
 import { HarnessName } from "./adapters.js";
@@ -80,6 +88,25 @@ async function runInternal(subcommand: string | undefined, args: string[], root:
         resumeCondition: optionalNullableString(flags, "resume-condition")
       });
       printJson(task);
+      return 0;
+    }
+    case "finish-task": {
+      const taskId = requiredString(flags, "task");
+      const task = await finishTask(root, taskId, {
+        summary: requiredString(flags, "summary"),
+        dirtyWorktreeHandling: optionalDirtyWorktreeHandling(flags, "dirty-worktree"),
+        baselineDecision: optionalBaselineDecision(flags, "baseline")
+      });
+      printJson(task);
+      return 0;
+    }
+    case "discard-task": {
+      const taskId = requiredString(flags, "task");
+      await discardTask(root, taskId, {
+        confirmed: flags.confirm === true || flags.confirm === "true",
+        worktreeHandling: optionalDiscardWorktreeHandling(flags, "worktree") ?? "none"
+      });
+      printJson({ ok: true });
       return 0;
     }
     case "create-resume": {
@@ -172,6 +199,45 @@ function optionalHarness(flags: Flags, key: string): HarnessName | undefined {
   throw new Error(`--${key} must be generic`);
 }
 
+function optionalDirtyWorktreeHandling(
+  flags: Flags,
+  key: string
+): "covered" | "acknowledged" | "clean" | undefined {
+  const value = optionalString(flags, key);
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "covered" || value === "acknowledged" || value === "clean") {
+    return value;
+  }
+  throw new Error(`--${key} must be covered, acknowledged, or clean`);
+}
+
+function optionalBaselineDecision(flags: Flags, key: string): "accepted" | "edited" | "skipped" | "none" | undefined {
+  const value = optionalString(flags, key);
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "accepted" || value === "edited" || value === "skipped" || value === "none") {
+    return value;
+  }
+  throw new Error(`--${key} must be accepted, edited, skipped, or none`);
+}
+
+function optionalDiscardWorktreeHandling(
+  flags: Flags,
+  key: string
+): "keep" | "stash" | "revert" | "delete-worktree" | "none" | undefined {
+  const value = optionalString(flags, key);
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "keep" || value === "stash" || value === "revert" || value === "delete-worktree" || value === "none") {
+    return value;
+  }
+  throw new Error(`--${key} must be keep, stash, revert, delete-worktree, or none`);
+}
+
 function printJson(value: unknown): void {
   console.log(JSON.stringify(value, null, 2));
 }
@@ -189,6 +255,8 @@ function printInternalUsage(): void {
   cw internal create-task --id <id> --title <title> [--phase <phase>] [--next-action <text>]
   cw internal append-trace --task <id> --type <type> --summary <text>
   cw internal set-state --task <id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
+  cw internal finish-task --task <id> --summary <text> [--dirty-worktree covered|acknowledged|clean] [--baseline accepted|edited|skipped|none]
+  cw internal discard-task --task <id> --confirm [--worktree keep|stash|revert|delete-worktree|none]
   cw internal create-resume --task <id> --content <markdown>
   cw internal consume-resume --task <id>`);
 }
