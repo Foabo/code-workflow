@@ -8,6 +8,7 @@ export function getCwPaths(root: string) {
     root,
     cw,
     version: path.join(cw, "version.json"),
+    agentCommands: path.join(cw, "agent-commands"),
     project: path.join(cw, "project"),
     tasks: path.join(cw, "tasks"),
     templates: path.join(cw, "templates")

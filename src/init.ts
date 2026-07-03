@@ -1,4 +1,5 @@
 import path from "node:path";
+import { generateAdapter, HarnessName } from "./adapters.js";
 import { ensureDir, writeFileIfMissing } from "./fs.js";
 import { getCwPaths } from "./paths.js";
 import { PROJECT_BASELINE_TEMPLATES, TASK_ARTIFACT_TEMPLATES } from "./templates.js";
@@ -7,12 +8,24 @@ import { CW_SCHEMA_VERSION, VersionRecord } from "./types.js";
 export type InitResult = {
   created: string[];
   existing: string[];
+  adapters: Array<{
+    harness: HarnessName;
+    created: string[];
+    existing: string[];
+  }>;
 };
 
-export async function initProject(root: string, now = new Date()): Promise<InitResult> {
+export type InitOptions = {
+  harnesses?: HarnessName[];
+  now?: Date;
+};
+
+export async function initProject(root: string, options: InitOptions | Date = {}): Promise<InitResult> {
+  const normalized = normalizeOptions(options);
   const paths = getCwPaths(root);
   const created: string[] = [];
   const existing: string[] = [];
+  const adapters: InitResult["adapters"] = [];
 
   await ensureDir(paths.cw);
   await ensureDir(paths.project);
@@ -22,7 +35,7 @@ export async function initProject(root: string, now = new Date()): Promise<InitR
   const version: VersionRecord = {
     schema_version: CW_SCHEMA_VERSION,
     cw_version: "0.1.0",
-    created_at: now.toISOString()
+    created_at: normalized.now.toISOString()
   };
 
   if (await writeJsonIfMissing(paths.version, version)) {
@@ -49,7 +62,11 @@ export async function initProject(root: string, now = new Date()): Promise<InitR
     }
   }
 
-  return { created, existing };
+  for (const harness of normalized.harnesses) {
+    adapters.push(await generateAdapter(root, harness));
+  }
+
+  return { created, existing, adapters };
 }
 
 async function writeJsonIfMissing(filePath: string, value: unknown): Promise<boolean> {
@@ -58,4 +75,14 @@ async function writeJsonIfMissing(filePath: string, value: unknown): Promise<boo
 
 function relative(root: string, filePath: string): string {
   return path.relative(root, filePath);
+}
+
+function normalizeOptions(options: InitOptions | Date): Required<InitOptions> {
+  if (options instanceof Date) {
+    return { harnesses: ["generic"], now: options };
+  }
+  return {
+    harnesses: options.harnesses ?? ["generic"],
+    now: options.now ?? new Date()
+  };
 }

@@ -3,6 +3,7 @@ import { initProject } from "./init.js";
 import { appendTrace, consumeResumeNote, createResumeNote, createTask, updateTaskState } from "./tasks.js";
 import { doctorProject, validateProject } from "./validate.js";
 import { TaskLifecycle, TraceEvent } from "./types.js";
+import { HarnessName } from "./adapters.js";
 
 type Flags = Record<string, string | boolean>;
 
@@ -15,7 +16,7 @@ async function main(argv: string[]): Promise<number> {
   try {
     switch (command) {
       case "init": {
-        const result = await initProject(root);
+        const result = await initProject(root, { harnesses: [optionalHarness(publicFlags, "harness") ?? "generic"] });
         printJson(result);
         return 0;
       }
@@ -160,13 +161,24 @@ function optionalLifecycle(flags: Flags, key: string): TaskLifecycle | undefined
   throw new Error(`--${key} must be one of open, blocked, parked, closed`);
 }
 
+function optionalHarness(flags: Flags, key: string): HarnessName | undefined {
+  const value = optionalString(flags, key);
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "generic") {
+    return value;
+  }
+  throw new Error(`--${key} must be generic`);
+}
+
 function printJson(value: unknown): void {
   console.log(JSON.stringify(value, null, 2));
 }
 
 function printUsage(): void {
   console.log(`Usage:
-  cw init [--root <path>]
+  cw init [--root <path>] [--harness generic]
   cw validate [--root <path>]
   cw doctor [--root <path>]
   cw internal <helper> [flags]`);

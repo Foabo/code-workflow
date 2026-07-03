@@ -23,6 +23,9 @@ describe("cw kernel", () => {
     assert.ok(result.created.includes(".cw/version.json"));
     assert.ok(result.created.includes(".cw/project/overview.md"));
     assert.ok(result.created.includes(".cw/templates/spec.md"));
+    assert.equal(result.adapters[0]?.harness, "generic");
+    assert.ok(result.adapters[0]?.created.includes(".cw/agent-commands/cw-work.md"));
+    assert.match(await readFile(path.join(root, ".cw/agent-commands/cw-work.md"), "utf8"), /repo truth/);
     assert.deepEqual(await validateProject(root), []);
     assert.equal((await doctorProject(root)).ok, true);
   });
