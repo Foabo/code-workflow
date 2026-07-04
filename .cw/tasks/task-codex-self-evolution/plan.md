@@ -2,7 +2,7 @@
 
 ## Approach
 
-Implement the accepted task goal: Adapt CW for Codex by generating project-local Codex prompt entries and prove CW can use its own workflow in this repository.
+Implement the accepted task goal: Adapt CW for Codex by generating repository-local Codex plugin skills and prove CW can use its own workflow in this repository.
 
 ## Key Decisions
 

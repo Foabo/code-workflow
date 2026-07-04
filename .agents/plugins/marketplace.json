@@ -1,0 +1,20 @@
+{
+  "name": "cw-repo",
+  "interface": {
+    "displayName": "CW Repository Plugins"
+  },
+  "plugins": [
+    {
+      "name": "cw-workflow",
+      "source": {
+        "source": "local",
+        "path": "./plugins/cw-workflow"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

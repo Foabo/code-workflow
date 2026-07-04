@@ -1,13 +1,15 @@
 ---
-description: Abandon a task after user-confirmed worktree handling, then remove the task record.
-argument-hint: "[--task <task-id>] [--root <path>] [workflow flags]"
+name: cw-work
+description: Default task progress action. Create or select a task, advance the next responsible phase, run check when appropriate, then stop before finish.
 ---
 
-Use CW's repository-local workflow state to run cw-discard.
+Use this skill when the user asks Codex to run `cw-work` or the matching CW workflow action in this repository.
 
-# cw-discard
+Before acting, read the repository's `.cw` files relevant to the current task. Treat `.cw` as Repo Truth, generated plugin skills as invocation surfaces, and Git as the source of truth for code changes.
 
-Abandon a task after user-confirmed worktree handling, then remove the task record.
+# cw-work
+
+Default task progress action. Create or select a task, advance the next responsible phase, run check when appropriate, then stop before finish.
 
 ## Required Reading
 
@@ -29,10 +31,15 @@ Abandon a task after user-confirmed worktree handling, then remove the task reco
 
 ## Workflow Steps
 
-1. Run `cw preflight --action discard --task <task-id>`.
-2. Inspect Git status and explain whether changes will be kept, stashed, reverted, or an isolated worktree will be deleted.
-3. Ask for explicit confirmation.
-4. Run `cw internal discard-task --task <task-id> --confirm --worktree <keep|stash|revert|delete-worktree|none>`.
+1. Run `cw preflight --action work`.
+2. If no task exists, create one with `cw internal create-task --id <task-id> --title <title>` after deriving a clear title from the user request.
+3. Select the task with `cw internal select-task` or `cw internal select-task --task <task-id>`.
+4. Read spec.md, plan.md, task.md, and relevant project baseline files.
+5. If the task needs clarification, follow cw-clarify behavior.
+6. If planning is missing or stale, follow cw-plan behavior.
+7. If executable checklist items exist, follow cw-run behavior.
+8. Run cw-check behavior when implementation appears complete.
+9. When check passes, stop and ask whether to run cw-finish.
 
 ## Helper Commands
 

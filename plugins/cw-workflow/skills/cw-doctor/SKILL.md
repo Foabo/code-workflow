@@ -1,13 +1,15 @@
 ---
-description: Execute the next checklist items from task.md, modify repository code, update progress, and append trace events through helpers.
-argument-hint: "[--task <task-id>] [--root <path>] [workflow flags]"
+name: cw-doctor
+description: Inspect repository workflow health with cw doctor and report issues or warnings.
 ---
 
-Use CW's repository-local workflow state to run cw-run.
+Use this skill when the user asks Codex to run `cw-doctor` or the matching CW workflow action in this repository.
 
-# cw-run
+Before acting, read the repository's `.cw` files relevant to the current task. Treat `.cw` as Repo Truth, generated plugin skills as invocation surfaces, and Git as the source of truth for code changes.
 
-Execute the next checklist items from task.md, modify repository code, update progress, and append trace events through helpers.
+# cw-doctor
+
+Inspect repository workflow health with cw doctor and report issues or warnings.
 
 ## Required Reading
 
@@ -29,14 +31,10 @@ Execute the next checklist items from task.md, modify repository code, update pr
 
 ## Workflow Steps
 
-1. Run `cw preflight --action run --task <task-id>`.
-2. Read spec.md, plan.md, task.md, and relevant code.
-3. Implement the next unchecked implementation items in task.md.
-4. For simple file creation or replacement tasks, the executable shim may be called with `cw-run --task <task-id> --write-file <path> --content <text>`.
-5. Update task.md checklist progress.
-6. Record material progress with `cw internal append-trace --task <task-id> --type run.updated --summary <summary>`.
-7. Run `cw internal ensure-baseline-delta --task <task-id>` when stable reusable project facts are discovered.
-8. Run `cw internal set-state --task <task-id> --phase check --next-action <text>` when implementation items are complete enough to verify.
+1. Run `cw doctor`.
+2. Report issues first, then warnings.
+3. For malformed or missing files, recommend the smallest repair.
+4. Do not change project baseline or task artifacts unless the user asks for repair.
 
 ## Helper Commands
 

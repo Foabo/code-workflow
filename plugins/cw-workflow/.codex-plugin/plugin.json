@@ -1,0 +1,25 @@
+{
+  "name": "cw-workflow",
+  "version": "0.1.0",
+  "description": "Codex skills for the CW coding workflow kernel.",
+  "author": {
+    "name": "CW"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "CW Workflow",
+    "shortDescription": "Run CW workflow actions from Codex.",
+    "longDescription": "CW Workflow provides Codex skills that use repository-local .cw task state, project baseline files, and kernel helpers.",
+    "developerName": "CW",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use CW to start a task.",
+      "Use CW to check the current task.",
+      "Use CW to finish verified work."
+    ]
+  }
+}

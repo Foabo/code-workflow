@@ -1,13 +1,15 @@
 ---
-description: Draft project baseline updates for an existing repository, then ask the user what to merge.
-argument-hint: "[--task <task-id>] [--root <path>] [workflow flags]"
+name: cw-plan
+description: Read the accepted spec and project baseline, then update plan.md and task.md without writing implementation code.
 ---
 
-Use CW's repository-local workflow state to run cw-understand.
+Use this skill when the user asks Codex to run `cw-plan` or the matching CW workflow action in this repository.
 
-# cw-understand
+Before acting, read the repository's `.cw` files relevant to the current task. Treat `.cw` as Repo Truth, generated plugin skills as invocation surfaces, and Git as the source of truth for code changes.
 
-Draft project baseline updates for an existing repository, then ask the user what to merge.
+# cw-plan
+
+Read the accepted spec and project baseline, then update plan.md and task.md without writing implementation code.
 
 ## Required Reading
 
@@ -29,11 +31,12 @@ Draft project baseline updates for an existing repository, then ask the user wha
 
 ## Workflow Steps
 
-1. Run `cw preflight --action understand`.
-2. Inspect repository structure, package files, commands, and existing docs.
-3. Draft candidate updates for .cw/project/overview.md, architecture.md, rules.md, and commands.md.
-4. Ask the user what to merge before editing project baseline files.
-5. After accepted edits, run `cw internal append-trace --task <task-id> --type baseline.updated --summary <summary>` only if this is tied to a task.
+1. Run `cw preflight --action plan --task <task-id>`.
+2. Read spec.md and relevant project baseline files.
+3. If the spec is unclear, return to cw-clarify behavior.
+4. Edit plan.md with the implementation approach, key decisions, risks, and validation strategy.
+5. Edit task.md with executable implementation, verification, and check items.
+6. Run `cw internal set-state --task <task-id> --phase run --next-action <text>`.
 
 ## Helper Commands
 

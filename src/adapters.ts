@@ -151,20 +151,22 @@ async function generateGenericAdapter(
 
 async function generateCodexAdapter(root: string, options: AdapterOptions): Promise<AdapterResult> {
   const generic = await generateGenericAdapter(root, "codex", options);
-  const promptDir = path.join(root, ".codex", "prompts");
-  await ensureDir(promptDir);
+  const marketplacePath = path.join(root, ".agents", "plugins", "marketplace.json");
+  const pluginRoot = path.join(root, "plugins", "cw-workflow");
+  const pluginManifestPath = path.join(pluginRoot, ".codex-plugin", "plugin.json");
+  const skillsRoot = path.join(pluginRoot, "skills");
+
+  await ensureDir(path.dirname(marketplacePath));
+  await ensureDir(path.dirname(pluginManifestPath));
+  await ensureDir(skillsRoot);
+
+  await writeGenerated(root, marketplacePath, renderCodexMarketplace(), options, generic);
+  await writeGenerated(root, pluginManifestPath, renderCodexPluginManifest(), options, generic);
 
   for (const command of AGENT_COMMANDS) {
-    const filePath = path.join(promptDir, `${command}.md`);
-    const content = renderCodexPrompt(command);
-    if (options.overwrite === true) {
-      await writeFile(filePath, content, "utf8");
-      generic.created.push(relative(root, filePath));
-    } else if (await writeFileIfMissing(filePath, content)) {
-      generic.created.push(relative(root, filePath));
-    } else {
-      generic.existing.push(relative(root, filePath));
-    }
+    const skillDir = path.join(skillsRoot, command);
+    await ensureDir(skillDir);
+    await writeGenerated(root, path.join(skillDir, "SKILL.md"), renderCodexSkill(command), options, generic);
   }
 
   return generic;
@@ -216,13 +218,80 @@ ${commandSteps[command].map((step, index) => `${index + 1}. ${step}`).join("\n")
 `;
 }
 
-function renderCodexPrompt(command: (typeof AGENT_COMMANDS)[number]): string {
+async function writeGenerated(
+  root: string,
+  filePath: string,
+  content: string,
+  options: AdapterOptions,
+  result: AdapterResult
+): Promise<void> {
+  if (options.overwrite === true) {
+    await writeFile(filePath, content, "utf8");
+    result.created.push(relative(root, filePath));
+  } else if (await writeFileIfMissing(filePath, content)) {
+    result.created.push(relative(root, filePath));
+  } else {
+    result.existing.push(relative(root, filePath));
+  }
+}
+
+function renderCodexMarketplace(): string {
+  return `${JSON.stringify({
+    name: "cw-repo",
+    interface: {
+      displayName: "CW Repository Plugins"
+    },
+    plugins: [
+      {
+        name: "cw-workflow",
+        source: {
+          source: "local",
+          path: "./plugins/cw-workflow"
+        },
+        policy: {
+          installation: "AVAILABLE",
+          authentication: "ON_INSTALL"
+        },
+        category: "Productivity"
+      }
+    ]
+  }, null, 2)}\n`;
+}
+
+function renderCodexPluginManifest(): string {
+  return `${JSON.stringify({
+    name: "cw-workflow",
+    version: "0.1.0",
+    description: "Codex skills for the CW coding workflow kernel.",
+    author: {
+      name: "CW"
+    },
+    skills: "./skills/",
+    interface: {
+      displayName: "CW Workflow",
+      shortDescription: "Run CW workflow actions from Codex.",
+      longDescription: "CW Workflow provides Codex skills that use repository-local .cw task state, project baseline files, and kernel helpers.",
+      developerName: "CW",
+      category: "Productivity",
+      capabilities: ["Interactive", "Write"],
+      defaultPrompt: [
+        "Use CW to start a task.",
+        "Use CW to check the current task.",
+        "Use CW to finish verified work."
+      ]
+    }
+  }, null, 2)}\n`;
+}
+
+function renderCodexSkill(command: (typeof AGENT_COMMANDS)[number]): string {
   return `---
+name: ${command}
 description: ${commandPurposes[command]}
-argument-hint: "[--task <task-id>] [--root <path>] [workflow flags]"
 ---
 
-Use CW's repository-local workflow state to run ${command}.
+Use this skill when the user asks Codex to run \`${command}\` or the matching CW workflow action in this repository.
+
+Before acting, read the repository's \`.cw\` files relevant to the current task. Treat \`.cw\` as Repo Truth, generated plugin skills as invocation surfaces, and Git as the source of truth for code changes.
 
 ${renderGenericCommand(command)}
 `;

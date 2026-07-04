@@ -1,13 +1,15 @@
 ---
-description: Run the closure gate, handle dirty worktree state, sync accepted baseline delta, consume resume notes, and close the task.
-argument-hint: "[--task <task-id>] [--root <path>] [workflow flags]"
+name: cw-understand
+description: Draft project baseline updates for an existing repository, then ask the user what to merge.
 ---
 
-Use CW's repository-local workflow state to run cw-finish.
+Use this skill when the user asks Codex to run `cw-understand` or the matching CW workflow action in this repository.
 
-# cw-finish
+Before acting, read the repository's `.cw` files relevant to the current task. Treat `.cw` as Repo Truth, generated plugin skills as invocation surfaces, and Git as the source of truth for code changes.
 
-Run the closure gate, handle dirty worktree state, sync accepted baseline delta, consume resume notes, and close the task.
+# cw-understand
+
+Draft project baseline updates for an existing repository, then ask the user what to merge.
 
 ## Required Reading
 
@@ -29,12 +31,11 @@ Run the closure gate, handle dirty worktree state, sync accepted baseline delta,
 
 ## Workflow Steps
 
-1. Run `cw preflight --action finish --task <task-id>`.
-2. Confirm dirty worktree handling when needed.
-3. If baseline-delta.md exists, preview it and ask whether to accept, edit, or skip it.
-4. After confirmation, run `cw internal sync-baseline-delta --task <task-id> --decision accepted|edited|skipped` when applicable.
-5. Run `cw internal finish-task --task <task-id> --summary <summary> --dirty-worktree <covered|acknowledged|clean> --baseline <accepted|edited|skipped|none>`.
-6. Report the closed task id and any project baseline files updated.
+1. Run `cw preflight --action understand`.
+2. Inspect repository structure, package files, commands, and existing docs.
+3. Draft candidate updates for .cw/project/overview.md, architecture.md, rules.md, and commands.md.
+4. Ask the user what to merge before editing project baseline files.
+5. After accepted edits, run `cw internal append-trace --task <task-id> --type baseline.updated --summary <summary>` only if this is tied to a task.
 
 ## Helper Commands
 

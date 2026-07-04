@@ -1,13 +1,15 @@
 ---
-description: Clarify the task contract and update spec.md with user-confirmed goal, scope, constraints, decisions, and acceptance criteria.
-argument-hint: "[--task <task-id>] [--root <path>] [workflow flags]"
+name: cw-check
+description: Run verification and review, reconcile drift, and update task.md before finish is allowed.
 ---
 
-Use CW's repository-local workflow state to run cw-clarify.
+Use this skill when the user asks Codex to run `cw-check` or the matching CW workflow action in this repository.
 
-# cw-clarify
+Before acting, read the repository's `.cw` files relevant to the current task. Treat `.cw` as Repo Truth, generated plugin skills as invocation surfaces, and Git as the source of truth for code changes.
 
-Clarify the task contract and update spec.md with user-confirmed goal, scope, constraints, decisions, and acceptance criteria.
+# cw-check
+
+Run verification and review, reconcile drift, and update task.md before finish is allowed.
 
 ## Required Reading
 
@@ -29,12 +31,15 @@ Clarify the task contract and update spec.md with user-confirmed goal, scope, co
 
 ## Workflow Steps
 
-1. Run `cw preflight --action clarify --task <task-id>` when a task id is known.
-2. Read the current spec.md and relevant project baseline files.
-3. Ask only the questions needed to settle goal, scope, non-goals, constraints, decisions, and acceptance criteria.
-4. Edit spec.md with the accepted task contract.
-5. Run `cw internal set-state --task <task-id> --phase plan --next-action <text>` when the spec is accepted.
-6. If required information is missing, run `cw internal set-state --task <task-id> --lifecycle blocked --phase clarify --blocked-reason <reason> --next-action <text>`.
+1. Run `cw preflight --action check --task <task-id>`.
+2. Run the relevant commands from .cw/project/commands.md.
+3. For deterministic verification commands, the executable shim may be called with repeated `cw-check --task <task-id> --command <cmd>` flags.
+4. Review the implementation against spec.md, plan.md, and task.md.
+5. Fix small local defects when the task contract is unchanged.
+6. If spec drift appears, stop for user confirmation and update spec.md only after confirmation.
+7. Update task.md verification and check items.
+8. Append a check trace event with `cw internal append-trace --task <task-id> --type check.passed --summary <summary>` or `check.failed`.
+9. When check passes, run `cw internal set-state --task <task-id> --phase finish --next-action <text>`.
 
 ## Helper Commands
 

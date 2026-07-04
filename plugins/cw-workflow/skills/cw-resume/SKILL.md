@@ -1,13 +1,15 @@
 ---
-description: Inspect repository workflow health with cw doctor and report issues or warnings.
-argument-hint: "[--task <task-id>] [--root <path>] [workflow flags]"
+name: cw-resume
+description: Use a task-local resume.md only when the user explicitly asks to resume from it, then consume it after progress is recorded.
 ---
 
-Use CW's repository-local workflow state to run cw-doctor.
+Use this skill when the user asks Codex to run `cw-resume` or the matching CW workflow action in this repository.
 
-# cw-doctor
+Before acting, read the repository's `.cw` files relevant to the current task. Treat `.cw` as Repo Truth, generated plugin skills as invocation surfaces, and Git as the source of truth for code changes.
 
-Inspect repository workflow health with cw doctor and report issues or warnings.
+# cw-resume
+
+Use a task-local resume.md only when the user explicitly asks to resume from it, then consume it after progress is recorded.
 
 ## Required Reading
 
@@ -29,10 +31,10 @@ Inspect repository workflow health with cw doctor and report issues or warnings.
 
 ## Workflow Steps
 
-1. Run `cw doctor`.
-2. Report issues first, then warnings.
-3. For malformed or missing files, recommend the smallest repair.
-4. Do not change project baseline or task artifacts unless the user asks for repair.
+1. Run `cw preflight --action resume --task <task-id>`.
+2. Read resume.md together with task.json, trace.jsonl, spec.md, plan.md, and task.md.
+3. Continue from the task artifacts, using resume.md only as a pointer.
+4. After recording progress, run `cw internal consume-resume --task <task-id>`.
 
 ## Helper Commands
 

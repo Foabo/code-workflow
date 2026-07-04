@@ -1,13 +1,15 @@
 ---
-description: Use a task-local resume.md only when the user explicitly asks to resume from it, then consume it after progress is recorded.
-argument-hint: "[--task <task-id>] [--root <path>] [workflow flags]"
+name: cw-finish
+description: Run the closure gate, handle dirty worktree state, sync accepted baseline delta, consume resume notes, and close the task.
 ---
 
-Use CW's repository-local workflow state to run cw-resume.
+Use this skill when the user asks Codex to run `cw-finish` or the matching CW workflow action in this repository.
 
-# cw-resume
+Before acting, read the repository's `.cw` files relevant to the current task. Treat `.cw` as Repo Truth, generated plugin skills as invocation surfaces, and Git as the source of truth for code changes.
 
-Use a task-local resume.md only when the user explicitly asks to resume from it, then consume it after progress is recorded.
+# cw-finish
+
+Run the closure gate, handle dirty worktree state, sync accepted baseline delta, consume resume notes, and close the task.
 
 ## Required Reading
 
@@ -29,10 +31,12 @@ Use a task-local resume.md only when the user explicitly asks to resume from it,
 
 ## Workflow Steps
 
-1. Run `cw preflight --action resume --task <task-id>`.
-2. Read resume.md together with task.json, trace.jsonl, spec.md, plan.md, and task.md.
-3. Continue from the task artifacts, using resume.md only as a pointer.
-4. After recording progress, run `cw internal consume-resume --task <task-id>`.
+1. Run `cw preflight --action finish --task <task-id>`.
+2. Confirm dirty worktree handling when needed.
+3. If baseline-delta.md exists, preview it and ask whether to accept, edit, or skip it.
+4. After confirmation, run `cw internal sync-baseline-delta --task <task-id> --decision accepted|edited|skipped` when applicable.
+5. Run `cw internal finish-task --task <task-id> --summary <summary> --dirty-worktree <covered|acknowledged|clean> --baseline <accepted|edited|skipped|none>`.
+6. Report the closed task id and any project baseline files updated.
 
 ## Helper Commands
 

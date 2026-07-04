@@ -1,13 +1,15 @@
 ---
-description: Read the accepted spec and project baseline, then update plan.md and task.md without writing implementation code.
-argument-hint: "[--task <task-id>] [--root <path>] [workflow flags]"
+name: cw-run
+description: Execute the next checklist items from task.md, modify repository code, update progress, and append trace events through helpers.
 ---
 
-Use CW's repository-local workflow state to run cw-plan.
+Use this skill when the user asks Codex to run `cw-run` or the matching CW workflow action in this repository.
 
-# cw-plan
+Before acting, read the repository's `.cw` files relevant to the current task. Treat `.cw` as Repo Truth, generated plugin skills as invocation surfaces, and Git as the source of truth for code changes.
 
-Read the accepted spec and project baseline, then update plan.md and task.md without writing implementation code.
+# cw-run
+
+Execute the next checklist items from task.md, modify repository code, update progress, and append trace events through helpers.
 
 ## Required Reading
 
@@ -29,12 +31,14 @@ Read the accepted spec and project baseline, then update plan.md and task.md wit
 
 ## Workflow Steps
 
-1. Run `cw preflight --action plan --task <task-id>`.
-2. Read spec.md and relevant project baseline files.
-3. If the spec is unclear, return to cw-clarify behavior.
-4. Edit plan.md with the implementation approach, key decisions, risks, and validation strategy.
-5. Edit task.md with executable implementation, verification, and check items.
-6. Run `cw internal set-state --task <task-id> --phase run --next-action <text>`.
+1. Run `cw preflight --action run --task <task-id>`.
+2. Read spec.md, plan.md, task.md, and relevant code.
+3. Implement the next unchecked implementation items in task.md.
+4. For simple file creation or replacement tasks, the executable shim may be called with `cw-run --task <task-id> --write-file <path> --content <text>`.
+5. Update task.md checklist progress.
+6. Record material progress with `cw internal append-trace --task <task-id> --type run.updated --summary <summary>`.
+7. Run `cw internal ensure-baseline-delta --task <task-id>` when stable reusable project facts are discovered.
+8. Run `cw internal set-state --task <task-id> --phase check --next-action <text>` when implementation items are complete enough to verify.
 
 ## Helper Commands
 
