@@ -7,4 +7,6 @@ export * from "./schema.js";
 export * from "./task-store.js";
 export * from "./tasks.js";
 export * from "./types.js";
+export * from "./update.js";
 export * from "./validate.js";
+export * from "./workflow.js";

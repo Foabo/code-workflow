@@ -1,4 +1,5 @@
 import path from "node:path";
+import { writeFile } from "node:fs/promises";
 import { ensureDir, writeFileIfMissing } from "./fs.js";
 import { getCwPaths } from "./paths.js";
 import { AGENT_COMMANDS } from "./templates.js";
@@ -9,6 +10,10 @@ export type AdapterResult = {
   harness: HarnessName;
   created: string[];
   existing: string[];
+};
+
+export type AdapterOptions = {
+  overwrite?: boolean;
 };
 
 const commandPurposes: Record<(typeof AGENT_COMMANDS)[number], string> = {
@@ -106,7 +111,11 @@ const commandSteps: Record<(typeof AGENT_COMMANDS)[number], string[]> = {
   ]
 };
 
-export async function generateAdapter(root: string, harness: HarnessName = "generic"): Promise<AdapterResult> {
+export async function generateAdapter(
+  root: string,
+  harness: HarnessName = "generic",
+  options: AdapterOptions = {}
+): Promise<AdapterResult> {
   const paths = getCwPaths(root);
   const created: string[] = [];
   const existing: string[] = [];
@@ -114,7 +123,10 @@ export async function generateAdapter(root: string, harness: HarnessName = "gene
 
   for (const command of AGENT_COMMANDS) {
     const filePath = path.join(paths.agentCommands, `${command}.md`);
-    if (await writeFileIfMissing(filePath, renderGenericCommand(command))) {
+    if (options.overwrite === true) {
+      await writeFile(filePath, renderGenericCommand(command), "utf8");
+      created.push(relative(root, filePath));
+    } else if (await writeFileIfMissing(filePath, renderGenericCommand(command))) {
       created.push(relative(root, filePath));
     } else {
       existing.push(relative(root, filePath));

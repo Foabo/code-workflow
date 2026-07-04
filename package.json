@@ -6,7 +6,17 @@
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
   "bin": {
-    "cw": "./dist/src/cli.js"
+    "cw": "./dist/src/cli.js",
+    "cw-work": "./dist/src/agent-command.js",
+    "cw-clarify": "./dist/src/agent-command.js",
+    "cw-plan": "./dist/src/agent-command.js",
+    "cw-run": "./dist/src/agent-command.js",
+    "cw-check": "./dist/src/agent-command.js",
+    "cw-finish": "./dist/src/agent-command.js",
+    "cw-resume": "./dist/src/agent-command.js",
+    "cw-discard": "./dist/src/agent-command.js",
+    "cw-doctor": "./dist/src/agent-command.js",
+    "cw-understand": "./dist/src/agent-command.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

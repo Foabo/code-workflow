@@ -15,6 +15,7 @@ import { doctorProject, validateProject } from "./validate.js";
 import { TaskLifecycle, TraceEvent } from "./types.js";
 import { HarnessName } from "./adapters.js";
 import { BaselineDecision, ensureBaselineDelta, syncBaselineDelta } from "./baseline.js";
+import { updateProject } from "./update.js";
 
 type Flags = Record<string, string | boolean>;
 
@@ -40,6 +41,11 @@ async function main(argv: string[]): Promise<number> {
         const report = await doctorProject(root);
         printJson(report);
         return report.ok ? 0 : 1;
+      }
+      case "update": {
+        const result = await updateProject(root, [optionalHarness(publicFlags, "harness") ?? "generic"]);
+        printJson(result);
+        return result.validation.ok ? 0 : 1;
       }
       case "tasks": {
         printJson({ tasks: await listTasks(root) });
@@ -309,6 +315,7 @@ function printUsage(): void {
   cw init [--root <path>] [--harness generic]
   cw validate [--root <path>]
   cw doctor [--root <path>]
+  cw update [--root <path>] [--harness generic]
   cw tasks [--root <path>]
   cw preflight --action <action> [--task <id>] [--root <path>]
   cw internal <helper> [flags]`);

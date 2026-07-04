@@ -15,6 +15,7 @@ import {
   listTasks,
   preflight,
   readTaskState,
+  runWorkflowAction,
   selectTask,
   syncBaselineDelta,
   updateTaskState,
@@ -203,6 +204,87 @@ describe("cw kernel", () => {
 
     await discardTask(root, "task-discard", { confirmed: true, worktreeHandling: "none" });
     await assert.rejects(access(path.join(root, ".cw/tasks/task-discard")));
+  });
+
+  it("runs the version 1 workflow completion path end to end", async () => {
+    const root = await tempRoot();
+    await writeFile(path.join(root, "package.json"), JSON.stringify({
+      name: "fixture",
+      scripts: {
+        test: "node --test",
+        typecheck: "tsc --noEmit",
+        build: "tsc"
+      }
+    }, null, 2));
+
+    const init = await initProject(root);
+    assert.ok(init.adapters.some((adapter) => adapter.created.includes(".cw/agent-commands/cw-work.md")));
+
+    const work = await runWorkflowAction(root, "work", {
+      taskId: "task-create-readme",
+      title: "Create README"
+    });
+    assert.equal(work.task?.phase, "clarify");
+
+    const clarify = await runWorkflowAction(root, "clarify", {
+      taskId: "task-create-readme",
+      goal: "Create a README file for the fixture project.",
+      scope: "Add concise project documentation.",
+      acceptance: ["README.md exists", "README explains how to test"]
+    });
+    assert.equal(clarify.task?.phase, "plan");
+
+    const plan = await runWorkflowAction(root, "plan", { taskId: "task-create-readme" });
+    assert.equal(plan.task?.phase, "run");
+
+    await writeFile(path.join(root, "README.md"), "# Fixture\n\nRun `npm test`.\n", "utf8");
+    const run = await runWorkflowAction(root, "run", {
+      taskId: "task-create-readme",
+      summary: "README.md created."
+    });
+    assert.equal(run.task?.phase, "check");
+
+    const check = await runWorkflowAction(root, "check", {
+      taskId: "task-create-readme",
+      summary: "README.md reviewed against spec."
+    });
+    assert.equal(check.task?.phase, "finish");
+
+    await ensureBaselineDelta(root, "task-create-readme");
+    await writeFile(
+      path.join(root, ".cw/tasks/task-create-readme/baseline-delta.md"),
+      "# Baseline Delta\n\n## commands.md\n\nUse `npm test` to verify fixture behavior.\n",
+      "utf8"
+    );
+    const finish = await runWorkflowAction(root, "finish", {
+      taskId: "task-create-readme",
+      summary: "README task complete.",
+      decision: "accepted",
+      dirtyWorktree: "covered"
+    });
+    assert.equal(finish.task?.lifecycle, "closed");
+    assert.match(await readFile(path.join(root, ".cw/project/commands.md"), "utf8"), /verify fixture behavior/);
+
+    await createTask(root, { id: "task-resume-flow", title: "Resume flow" });
+    await createResumeNote(root, "task-resume-flow", "# Resume\n\nContinue.\n");
+    const resume = await runWorkflowAction(root, "resume", { taskId: "task-resume-flow" });
+    assert.equal(resume.task?.artifacts.resume, null);
+
+    await createTask(root, { id: "task-discard-flow", title: "Discard flow" });
+    const discard = await runWorkflowAction(root, "discard", {
+      taskId: "task-discard-flow",
+      confirm: true,
+      worktreeHandling: "none"
+    });
+    assert.equal(discard.task, null);
+    await assert.rejects(access(path.join(root, ".cw/tasks/task-discard-flow")));
+
+    const understand = await runWorkflowAction(root, "understand");
+    assert.equal(understand.details?.draft_dir, ".cw/understand-draft");
+    assert.match(await readFile(path.join(root, ".cw/understand-draft/commands.md"), "utf8"), /npm test/);
+
+    const doctor = await runWorkflowAction(root, "doctor");
+    assert.equal(doctor.action, "doctor");
   });
 });
 
