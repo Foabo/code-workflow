@@ -1,37 +1,37 @@
-# CW Design
+# CW 设计说明
 
-CW is a workflow tool for coding harnesses. It gives a repository a shared task truth, agent-native workflow actions, concise project baseline files, and deterministic helper operations so Claude Code, Codex, Cursor, OpenCode, Pi, and similar tools can follow the same coding workflow without becoming a single unified harness manager.
+CW 是面向 coding harness 的工作流工具。它给一个仓库提供共享的任务事实、agent 原生工作流动作、简洁的项目基线文件，以及可预测的 helper 操作，让 Claude Code、Codex、Cursor、OpenCode、Pi 等工具可以沿用同一套开发流程。CW 不试图把这些工具统一成一个大型 harness 管理器。
 
-## Mission
+## 目标
 
-CW helps coding agents move development work from fuzzy request to finished task without losing the task contract, implementation plan, verification state, or reusable project knowledge.
+CW 帮助 coding agent 把一个模糊请求推进到可负责地完成任务，中间不丢失任务约定、实现计划、验证状态和可复用的项目知识。
 
-Its product center is task progress quality and context efficiency:
+产品重点放在两件事上：任务推进质量和上下文效率。
 
-- Keep task facts recoverable across sessions and coding harnesses.
-- Let users work mainly through agent commands, not a heavy CLI.
-- Keep files small enough to read and maintain.
-- Let task specs evolve during real work.
-- Promote stable task learnings into project baseline files only at finish.
-- Rely on Git for actual code changes.
+- 任务事实需要能跨会话、跨 coding harness 恢复。
+- 用户日常应主要通过 agent 命令工作，CLI 保持轻量。
+- 文件要足够小，便于 agent 读取，也便于人维护。
+- 任务 spec 可以在真实开发过程中演进。
+- 稳定的任务经验只在 finish 阶段提升到项目基线。
+- 代码改动仍然以 Git 为准。
 
-## Non-goals
+## 非目标
 
-CW does not:
+CW 不承担这些职责：
 
-- Replace coding harnesses.
-- Manage model routing as a core feature.
-- Track token usage, costs, or provider accounting.
-- Maintain a second code-change ledger beside Git.
-- Store raw chat history or full terminal logs.
-- Require external memory, code intelligence, or spec frameworks.
-- Force every task through many large documents.
+- 替代 Claude Code、Codex、Cursor、OpenCode、Pi 等 coding harness。
+- 把模型路由做成核心功能。
+- 记录 token、费用或 provider 账本。
+- 在 Git 之外维护另一套代码改动账本。
+- 保存原始聊天记录或完整终端日志。
+- 强依赖外部记忆、代码智能工具或 spec 框架。
+- 要求每个任务都写很多大型文档。
 
-Reference frameworks such as Trellis, OpenSpec, Superpowers, GSD, Gentle-AI, and Oh My OpenCode Slim may inspire adapters or heuristics, but they do not define CW's runtime or canonical `.cw` format.
+Trellis、OpenSpec、Superpowers、GSD、Gentle-AI、Oh My OpenCode Slim 等框架可以作为参考，影响 adapter 或启发式规则，但不能定义 CW 的运行时和 `.cw` 标准格式。
 
-## Invocation Model
+## 调用模型
 
-Daily usage happens through coding-harness-native agent commands. Generated agent commands use a `cw-` prefix to avoid collisions:
+日常使用发生在 coding harness 原生的 agent 命令里。生成的 agent 命令统一使用 `cw-` 前缀，避免和其他插件或命令冲突：
 
 ```text
 cw-work
@@ -46,7 +46,7 @@ cw-doctor
 cw-understand
 ```
 
-The public CLI is small and focused on setup and maintenance:
+公开 CLI 聚焦初始化、诊断、更新和校验：
 
 ```text
 cw init
@@ -55,15 +55,15 @@ cw update
 cw validate
 ```
 
-Deterministic state mutations live behind internal helpers:
+确定性的状态修改放在 internal helper 后面：
 
 ```text
 cw internal ...
 ```
 
-Agent commands decide intent and perform semantic edits. Kernel helpers validate structure, append trace events, update task state, consume resume notes, and provide transactional safeguards where practical.
+agent 命令负责判断意图和编辑 Markdown。kernel helper 负责校验结构、追加 trace、更新 task state、消费 resume note，并在可行时提供更稳的状态变更边界。
 
-## Repository Layout
+## 仓库结构
 
 ```text
 .cw/
@@ -82,8 +82,8 @@ Agent commands decide intent and perform semantic edits. Kernel helpers validate
       spec.md
       plan.md
       task.md
-      baseline-delta.md  # optional
-      resume.md          # optional, user-triggered, consumed after use
+      baseline-delta.md  # 可选
+      resume.md          # 可选，由用户触发，使用后消费
 
   templates/
     spec.md
@@ -93,38 +93,38 @@ Agent commands decide intent and perform semantic edits. Kernel helpers validate
     resume.md
 ```
 
-Git remains the source of truth for actual code changes. CW stores workflow state, task intent, plan, checklist progress, and project baseline knowledge.
+Git 仍然是代码改动的事实来源。CW 只保存工作流状态、任务意图、计划、清单进度和项目基线知识。
 
 ## Project Baseline
 
-Project baseline files are stable repository-level knowledge reused across tasks:
+Project Baseline 是仓库级的稳定知识，供多个任务复用：
 
-- `overview.md`: project purpose, current shape, major capabilities, important non-goals.
-- `architecture.md`: tech stack, modules, data flow, integration points, architectural constraints.
-- `rules.md`: coding rules, testing rules, review rules, agent rules, do-not rules.
-- `commands.md`: setup, run, test, lint, typecheck, build, troubleshooting commands.
+- `overview.md`：项目目的、当前形态、主要能力、重要非目标。
+- `architecture.md`：技术栈、模块、数据流、集成点、架构约束。
+- `rules.md`：编码规则、测试规则、review 规则、agent 规则、禁止事项。
+- `commands.md`：安装、运行、测试、lint、typecheck、build、排障命令。
 
-`cw init` creates short templates for these files. It does not try to fully understand a new project upfront.
+`cw init` 只创建简短模板，不会在初始化时尝试完整理解一个新项目。
 
-New projects use:
+新项目的常见路径：
 
 ```text
 cw init -> cw-work
 ```
 
-Existing projects may use:
+已有项目的常见路径：
 
 ```text
 cw init -> cw-understand -> cw-work
 ```
 
-`cw-understand` writes drafts first, then the user confirms what should be merged into `.cw/project/*`. It must not directly overwrite project baseline files from an automatic scan.
+`cw-understand` 先写草稿，再由用户确认哪些内容合并进 `.cw/project/*`。自动扫描结果不能直接覆盖 Project Baseline。
 
 ## Task State
 
-Each task has a machine-readable `task.json` and an append-only `trace.jsonl`.
+每个任务都有一个机器可读的 `task.json` 和一个只追加的 `trace.jsonl`。
 
-Minimal `task.json` shape:
+`task.json` 的最小形态：
 
 ```json
 {
@@ -151,18 +151,18 @@ Minimal `task.json` shape:
 }
 ```
 
-There is no `ready` state and no result field.
+任务没有 `ready` 状态，也没有 `result` 字段。
 
-Lifecycle values:
+Lifecycle 取值：
 
-- `open`: the task can start or continue attempting progress.
-- `blocked`: a necessary condition is missing, so the task cannot continue responsibly.
-- `parked`: the user intentionally paused the task; it should not be treated as an active problem.
-- `closed`: the task is finished.
+- `open`：任务可以开始或继续推进。
+- `blocked`：缺少必要条件，继续推进会不负责任。
+- `parked`：用户有意暂停，doctor 不应把它当作异常。
+- `closed`：任务已经完成。
 
-`discard` is not a lifecycle state. It is a maintenance action that removes an abandoned task record after worktree handling.
+`discard` 不是 lifecycle。它是维护动作，用于在处理 worktree 后删除废弃任务记录。
 
-`trace.jsonl` is append-only chronological event history:
+`trace.jsonl` 是按时间追加的事件历史：
 
 ```jsonl
 {"ts":"2026-07-03T10:15:00+08:00","type":"spec.accepted","summary":"Task spec accepted by user."}
@@ -170,17 +170,17 @@ Lifecycle values:
 {"ts":"2026-07-03T11:10:00+08:00","type":"check.passed","summary":"Tests passed and checklist review completed."}
 ```
 
-Helpers append trace events. If a trace event is wrong, append a correction event instead of rewriting history.
+helper 负责追加 trace event。trace 写错时，追加一个修正事件，不回写旧历史。
 
 ## Task Artifacts
 
-First-version task artifacts are intentionally small.
+v1 的任务文档刻意保持简短。
 
 ### `spec.md`
 
-The task contract. It evolves during the task when clarification, implementation, check, or drift changes the contract.
+任务约定。澄清、实现、检查或漂移处理改变任务约定时，它可以更新。
 
-Suggested structure:
+建议结构：
 
 ```md
 # Spec
@@ -201,9 +201,9 @@ Suggested structure:
 
 ### `plan.md`
 
-The implementation approach, not a checklist.
+实现思路，不承担 checklist 的职责。
 
-Suggested structure:
+建议结构：
 
 ```md
 # Plan
@@ -219,9 +219,9 @@ Suggested structure:
 
 ### `task.md`
 
-The executable checklist. Finish depends on this being accurate.
+可执行清单。finish 是否可以通过，依赖这个文件是否准确。
 
-Suggested structure:
+建议结构：
 
 ```md
 # Task
@@ -242,9 +242,9 @@ Suggested structure:
 
 ### `baseline-delta.md`
 
-Optional task-local candidate updates for Project Baseline. It is not project truth until finish-time sync.
+任务级的候选 Project Baseline 更新。finish 同步前，它还不是项目事实。
 
-Suggested structure:
+建议结构：
 
 ```md
 # Baseline Delta
@@ -260,253 +260,260 @@ Suggested structure:
 
 ### `resume.md`
 
-Optional user-triggered continuation note. Each task has at most one current `resume.md`. It is read only when the user invokes `cw-resume` or explicitly asks to continue from it. After the first subsequent workflow action records progress, CW deletes it.
+由用户触发的继续工作笔记。每个任务最多有一个当前 `resume.md`。只有用户运行 `cw-resume` 或明确要求从 resume 继续时才读取。后续第一个成功记录进展的工作流动作会删除它。
 
-## Workflow Actions
+## 工作流动作
 
 ### `cw-work`
 
-Default task progress action.
+默认的任务推进动作。
 
-It may:
+它可以：
 
-- Create or select a task.
-- Run preflight.
-- Clarify and update `spec.md`.
-- Update `plan.md` and `task.md`.
-- Run the next executable checklist items.
-- Run `cw-check`.
+- 创建或选择任务。
+- 运行 preflight。
+- 澄清需求并更新 `spec.md`。
+- 更新 `plan.md` 和 `task.md`。
+- 执行下一个 checklist 项。
+- 运行 `cw-check`。
 
-It stops after check passes and asks whether to run `cw-finish`.
+check 通过后，`cw-work` 会停下来，询问是否运行 `cw-finish`。
 
 ### `cw-clarify`
 
-Clarifies the task and updates `spec.md`. It does not write code, update project baseline files, or create implementation checklist items. It completes when the user accepts the current task spec. If required information is missing, the task becomes `blocked` with a clear `blocked_reason` and `next_action`.
+澄清任务并更新 `spec.md`。它不写代码，不更新 Project Baseline，也不创建实现 checklist。用户接受当前任务 spec 后，clarify 完成。必要信息缺失时，任务进入 `blocked`，并写清楚 `blocked_reason` 和 `next_action`。
 
 ### `cw-plan`
 
-Reads `spec.md` and relevant project baseline files, then updates:
+读取 `spec.md` 和相关 Project Baseline，然后更新：
 
 - `plan.md`
 - `task.md`
 
-It does not write implementation code. If the spec is unclear, it returns to `cw-clarify` or blocks the task.
+它不写实现代码。spec 还不清楚时，回到 `cw-clarify` 或阻塞任务。
 
 ### `cw-run`
 
-Executes the next appropriate checklist items from `task.md`. It reads `spec.md`, `plan.md`, and `task.md`, modifies code, updates checklist status, and appends trace events.
+执行 `task.md` 里合适的下一个 checklist 项。它读取 `spec.md`、`plan.md` 和 `task.md`，修改代码，更新 checklist 状态，并追加 trace event。
 
 ### `cw-check`
 
-Combines verification and review. It may run tests, lint, typecheck, or manual checks. It also verifies:
+把验证和 review 放在同一个动作里。它可以运行测试、lint、typecheck 或手工检查，同时确认：
 
-- The implementation satisfies `spec.md`.
-- The work follows `plan.md` where still valid.
-- `task.md` accurately reflects completed implementation, verification, and review work.
-- There is no unresolved drift.
+- 实现满足 `spec.md`。
+- 代码路径仍然符合当前有效的 `plan.md`。
+- `task.md` 准确反映实现、验证和检查进度。
+- 没有未处理的漂移。
 
-If check finds drift, it updates or requests updates to `spec.md`, `plan.md`, or `task.md` before finish can proceed.
+发现漂移时，需要先更新或请求更新 `spec.md`、`plan.md`、`task.md`，然后才能 finish。
 
 ### `cw-finish`
 
-Completes a task. It runs the Closure Gate, handles dirty worktree state, syncs accepted baseline deltas, deletes consumed `resume.md`, and sets `lifecycle` to `closed`.
+完成任务。它运行 Closure Gate，处理 dirty worktree，同步已确认的 baseline delta，删除已消费的 `resume.md`，最后把 `lifecycle` 设为 `closed`。
 
-There is no separate close or archive action.
+CW 没有单独的 close 或 archive 动作。
 
 ### `cw-resume`
 
-Uses a task-local `resume.md` when the user explicitly asks to resume from it. Resume notes are not the main recovery mechanism; normal recovery uses `task.json`, `trace.jsonl`, and task artifacts.
+当用户明确要求从 `resume.md` 继续时，读取任务级 resume note。resume note 不是主要恢复机制；正常恢复依赖 `task.json`、`trace.jsonl` 和任务文档。
 
 ### `cw-discard`
 
-Abandons a task by removing its task record and handling code changes:
+放弃任务，删除任务记录，并处理代码改动：
 
-- If the task uses an isolated Git worktree, CW can delete that worktree after confirmation.
-- If the task shares the current worktree, CW asks whether to keep, revert, or stash uncommitted changes.
+- 任务使用独立 Git worktree 时，可以在确认后删除该 worktree。
+- 任务共享当前 worktree 时，需要询问未提交改动是保留、回滚还是 stash。
 
-Discard does not produce a closed task.
+discard 不会产生 closed task。
 
 ### `cw-doctor`
 
-Manual repository-level workflow health check.
+手动运行的仓库级工作流健康检查。
 
-It checks issues such as:
+它检查的问题包括：
 
-- malformed `.cw` files
-- stale or blocked tasks
-- missing `next_action`
-- closed tasks with leftover `resume.md`
-- schema version mismatch
-- missing project baseline files
-- dirty worktree concerns
-- stale generated platform entry files
+- `.cw` 文件格式错误
+- 过期或阻塞的任务
+- 缺少 `next_action`
+- closed 任务仍有 `resume.md`
+- schema version 不匹配
+- 缺少 Project Baseline 文件
+- dirty worktree 风险
+- 生成的 harness 入口文件过期
 
-Action-local automatic checks are handled by preflight. `cw-doctor` is the broader manual diagnostic.
+action-local 自动检查由 preflight 负责。`cw-doctor` 用于更宽的人工诊断。
 
 ### `cw-understand`
 
-Optional existing-repo understanding action. It writes drafts, then the user confirms what should be merged into Project Baseline. It is not required for new projects.
+可选的已有仓库理解动作。它先写草稿，再由用户确认哪些内容合并进 Project Baseline。新项目不需要先运行它。
 
-## Agent Orchestration
+## Agent 编排
 
-Agent orchestration is an execution strategy layer, not a different workflow. The same `cw-*` commands and `.cw` files must work across all strategies.
+Agent 编排属于执行策略层，不改变工作流本身。所有策略都使用同一组 `cw-*` 命令和 `.cw` 文件。
 
-CW supports three execution strategies:
+CW 支持三种执行策略：
 
-- `inline`: the main session performs every workflow action.
-- `subagent`: role-specific agents perform selected workflow actions.
-- `hybrid`: the main session coordinates the task while subagents perform implementation and checking where supported.
+- `inline`：主会话完成所有工作流动作。
+- `subagent`：某些动作交给角色化 agent。
+- `hybrid`：主会话负责协调，支持时把实现和检查交给 subagent。
 
-Hybrid is the recommended default. Inline remains mandatory because some coding harnesses do not support subagents or hooks.
+默认推荐 hybrid。inline 必须完整可用，因为有些 coding harness 没有 subagent 或 hook。
 
-Workflow roles:
+工作流角色：
 
-- `clarifier`: asks questions, investigates enough to update `spec.md`.
-- `planner`: updates `plan.md` and `task.md`.
-- `implementer`: executes checklist items from `task.md`.
-- `checker`: runs verification and review, then updates `task.md`.
-- `baseline-writer`: helps sync accepted `baseline-delta.md` into Project Baseline during finish.
+- `clarifier`：提问并调查到足以更新 `spec.md`。
+- `planner`：更新 `plan.md` 和 `task.md`。
+- `implementer`：执行 `task.md` 的 checklist。
+- `checker`：运行验证和 review，然后更新 `task.md`。
+- `baseline-writer`：finish 阶段把已接受的 `baseline-delta.md` 同步进 Project Baseline。
 
-Rules:
+规则：
 
-- Agent orchestration is selected per harness and per command, not baked into task state.
-- Subagents receive constructed context, not full chat history.
-- Subagents should read only the task artifacts, relevant Project Baseline files, and necessary code.
-- Subagents must not treat external memory as repo truth.
-- Implementer subagents write code but do not close tasks.
-- Checker subagents may fix small issues, but spec drift or product behavior changes return to the main session for user confirmation.
-- Baseline sync requires user confirmation before Project Baseline changes are applied.
-- If a subagent fails or is unavailable, the command can fall back to inline execution.
+- agent 编排按 harness 和命令选择，不写入 task state。
+- subagent 接收构造好的上下文，不接收完整聊天历史。
+- subagent 只读取任务文档、相关 Project Baseline 和必要代码。
+- 外部记忆不能作为 repo truth。
+- implementer subagent 可以写代码，但不能关闭任务。
+- checker subagent 可以修小问题；spec 漂移或产品行为变化必须回到主会话，让用户确认。
+- Baseline sync 必须经过用户确认。
+- subagent 不可用或失败时，命令可以退回 inline 执行。
 
 ## Preflight
 
-Preflight is an action-local quick check, not a full doctor run.
+Preflight 是动作本地的快速检查，不是完整 doctor。
 
-It runs before key actions such as `cw-work`, `cw-run`, `cw-check`, `cw-finish`, `cw-resume`, and `cw-discard`.
+它在这些关键动作前运行：
 
-It may inspect:
+- `cw-work`
+- `cw-run`
+- `cw-check`
+- `cw-finish`
+- `cw-resume`
+- `cw-discard`
+
+它可以检查：
 
 - task state
-- missing or invalid artifacts
-- stale `resume.md`
-- lifecycle and phase consistency
-- dirty Git worktree state
-- obvious drift concerns
+- 缺失或无效的 artifact
+- 过期的 `resume.md`
+- lifecycle 和 phase 是否一致
+- dirty Git worktree
+- 明显的漂移风险
 
-Optional hooks can improve freshness on harnesses that support them, but preflight is the reliable cross-harness mechanism.
+支持 hook 的 harness 可以通过 hook 提高新鲜度。跨 harness 的可靠机制仍然是 preflight。
 
-## Finish And Closure Gate
+## Finish 和 Closure Gate
 
-`cw-finish` is the only normal path to `lifecycle: closed`.
+`cw-finish` 是正常关闭任务的唯一路径。
 
-Closure Gate checks:
+Closure Gate 检查：
 
-- task is in a finishable lifecycle and phase
-- `spec.md` acceptance criteria are covered
-- `task.md` implementation, verification, and check items are complete enough
-- unresolved drift is absent
-- dirty worktree state is handled
-- baseline delta sync has been accepted, edited, or skipped
+- 任务 lifecycle 和 phase 可 finish。
+- `spec.md` 的 acceptance criteria 已覆盖。
+- `task.md` 的实现、验证和检查项足够完整。
+- 没有未解决的漂移。
+- dirty worktree 状态已经处理。
+- baseline delta 已接受、编辑或跳过。
 
-Dirty worktree handling:
+Dirty worktree 处理：
 
-- If the dirty worktree is the current task implementation, finish may continue only when check covers the current diff.
-- If dirty worktree changes are unrelated, finish may continue only after the finish flow acknowledges they are outside this task.
-- If the relationship is ambiguous, finish is blocked until the user or agent cleans up, commits, stashes, or clarifies the worktree state.
+- dirty worktree 属于当前任务实现时，只有 check 覆盖当前 diff 后才可以 finish。
+- dirty worktree 属于无关改动时，finish 流程需要明确承认它不属于当前任务。
+- 关系不清楚时，finish 阻塞，直到用户或 agent 清理、提交、stash，或解释清楚 worktree 状态。
 
 ## Baseline Sync
 
-Project Baseline updates happen only through:
+Project Baseline 只通过两个动作更新：
 
 - `cw-understand`
 - `cw-finish`
 
-During a task, candidate project facts go into `baseline-delta.md`. During finish:
+任务进行中，候选项目事实写入 `baseline-delta.md`。finish 阶段的流程：
 
-1. CW previews the baseline delta.
-2. The user confirms, selects, edits, or skips.
-3. The agent semantically edits `.cw/project/*`.
-4. Helpers validate and append trace events.
-5. The task can close.
+1. CW 预览 baseline delta。
+2. 用户确认、选择、编辑或跳过。
+3. agent 语义编辑 `.cw/project/*`。
+4. helper 校验并追加 trace event。
+5. 任务关闭。
 
-First version does not auto-apply baseline deltas without user confirmation. High-impact updates such as architecture changes, product capability changes, conflicts, deletions, or low-confidence edits require explicit confirmation.
+v1 不自动应用 baseline delta。架构变化、产品能力变化、冲突、删除或低置信度编辑等高影响更新，需要明确确认。
 
 ## Init
 
-`cw init` creates:
+`cw init` 创建：
 
 - `.cw/version.json`
-- short Project Baseline templates
+- 简短的 Project Baseline 模板
 - `.cw/tasks/`
 - `.cw/templates/`
-- selected coding harness entry files and agent commands
+- 选定 coding harness 的入口文件和 agent commands
 
-It asks:
+它会询问：
 
-1. Which coding harness entries to generate.
-2. Whether to configure code intelligence enhancements.
-3. Whether to detect external memory or context tools.
+1. 要生成哪些 coding harness 入口。
+2. 是否配置代码智能增强。
+3. 是否检测外部记忆或上下文工具。
 
-Enhancements are skippable. CW remains fully usable without them.
+增强项都可以跳过。没有这些增强，CW 仍然完整可用。
 
-`cw init` does not:
+`cw init` 不会：
 
-- generate a complete Project Baseline
-- run `cw-understand` automatically
-- ask about model routing
-- ask about token accounting
-- ask users to choose a subagent pack
-- create a required bootstrap task
+- 生成完整 Project Baseline
+- 自动运行 `cw-understand`
+- 询问模型路由
+- 询问 token 账本
+- 要求用户选择 subagent pack
+- 创建必需的 bootstrap task
 
 ## Platform Adapters
 
-CW generates native files for each selected coding harness. It does not force a single shared frontmatter format across harnesses.
+CW 会为选定的 coding harness 生成原生文件，不强制所有 harness 共用同一种 frontmatter 格式。
 
-Adapters must express:
+adapter 必须表达这些事实：
 
-- `.cw` is the repo truth
-- `cw-*` commands are the workflow entry points
-- agent commands should use kernel helpers for deterministic state mutation
-- project baseline and task artifacts should be read before implementation
-- external memory is never repo truth
+- `.cw` 是 repo truth。
+- `cw-*` 命令是工作流入口。
+- agent 命令应通过 kernel helper 做确定性的状态修改。
+- 实现前需要读取 Project Baseline 和任务文档。
+- 外部记忆不能作为 repo truth。
 
-Generated platform files are entry points, not canonical truth.
+生成的 platform 文件是入口，不是事实来源。
 
 ## Optional Enhancements
 
-Optional code intelligence tools can support project understanding and task planning. Examples include codebase-memory-mcp, CodeGraph, LSP, or harness-native search.
+可选代码智能工具可以辅助项目理解和任务规划，例如 codebase-memory-mcp、CodeGraph、LSP 或 harness 自带搜索。
 
-Optional memory/context tools can be detected and warned about. They may inform a session, but they cannot overwrite Project Baseline, task state, or task artifacts.
+可选记忆和上下文工具可以被检测并提示。它们可以为一次会话提供参考，但不能覆盖 Project Baseline、task state 或 task artifacts。
 
-## Implementation Stack
+## 实现技术栈
 
-CW version 1 is implemented in TypeScript on Node.js.
+CW v1 使用 TypeScript 和 Node.js 实现。
 
-Recommended stack:
+推荐技术栈：
 
-- TypeScript for workflow kernel, CLI, adapter generation, schemas, and helpers.
-- Node.js runtime and npm package distribution.
-- A public `cw` CLI with `cw internal ...` helper commands for deterministic state mutation.
-- Vitest or an equivalent TypeScript test runner.
-- Zod or JSON Schema for validating `.cw/version.json` and task state records.
-- Conservative Markdown editing helpers for templates, task artifacts, and project baseline files.
-- Git integration through shelling out to `git`, because Git remains the source of truth for code changes.
+- TypeScript：workflow kernel、CLI、adapter generation、schema 和 helper。
+- Node.js runtime 和 npm package distribution。
+- 公开 `cw` CLI，以及用于确定性状态修改的 `cw internal ...` helper。
+- Vitest 或等价的 TypeScript test runner。
+- Zod 或 JSON Schema，用于校验 `.cw/version.json` 和 task state。
+- 保守的 Markdown 编辑 helper，用于模板、任务文档和 Project Baseline。
+- 通过 shell 调用 Git；代码改动仍以 Git 为事实来源。
 
-## Completion Criteria For Version 1
+## v1 完成标准
 
-Version 1 is complete when a user can:
+用户应当可以完成这些动作：
 
-1. Run `cw init` and generate at least one harness entry.
-2. Start a new task with `cw-work`.
-3. Use `cw-clarify` to produce an accepted `spec.md`.
-4. Use `cw-plan` to create `plan.md` and `task.md`.
-5. Use `cw-run` to implement checklist items.
-6. Use `cw-check` to verify and review work against the task.
-7. Use `cw-finish` to close a task with Closure Gate checks.
-8. Use `cw-resume` for a user-triggered continuation note.
-9. Use `cw-discard` to abandon a task safely.
-10. Use `cw-understand` to draft Project Baseline updates for an existing repo.
-11. Use `cw-doctor` to inspect repository workflow health.
-12. Promote stable task learnings through `baseline-delta.md` at finish.
+1. 运行 `cw init`，生成至少一个 harness 入口。
+2. 用 `cw-work` 开始新任务。
+3. 用 `cw-clarify` 生成已接受的 `spec.md`。
+4. 用 `cw-plan` 创建 `plan.md` 和 `task.md`。
+5. 用 `cw-run` 实现 checklist 项。
+6. 用 `cw-check` 按任务约定验证和 review。
+7. 用 `cw-finish` 通过 Closure Gate 关闭任务。
+8. 用 `cw-resume` 处理用户触发的继续工作笔记。
+9. 用 `cw-discard` 安全放弃任务。
+10. 用 `cw-understand` 为已有仓库生成 Project Baseline 草稿。
+11. 用 `cw-doctor` 检查仓库工作流健康状态。
+12. 在 finish 阶段通过 `baseline-delta.md` 提升稳定任务经验。
 
-The workflow should remain useful without external code intelligence, external memory, hooks, isolated worktrees, or subagent support.
+没有外部代码智能、外部记忆、hook、独立 worktree 或 subagent 支持时，工作流仍然应当可用。
