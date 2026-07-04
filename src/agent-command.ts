@@ -55,6 +55,7 @@ function optionsFromFlags(flags: Flags): WorkflowOptions {
     note: stringFlag(flags, "note"),
     writeFile: stringFlag(flags, "write-file"),
     content: stringFlag(flags, "content"),
+    commands: arrayFlag(flags, "command"),
     decision: decisionFlag(flags, "baseline") ?? decisionFlag(flags, "decision"),
     dirtyWorktree: dirtyFlag(flags, "dirty-worktree"),
     worktreeHandling: worktreeFlag(flags, "worktree"),

@@ -70,6 +70,7 @@ const commandSteps: Record<(typeof AGENT_COMMANDS)[number], string[]> = {
   "cw-check": [
     "Run `cw preflight --action check --task <task-id>`.",
     "Run the relevant commands from .cw/project/commands.md.",
+    "For deterministic verification commands, the executable shim may be called with repeated `cw-check --task <task-id> --command <cmd>` flags.",
     "Review the implementation against spec.md, plan.md, and task.md.",
     "Fix small local defects when the task contract is unchanged.",
     "If spec drift appears, stop for user confirmation and update spec.md only after confirmation.",

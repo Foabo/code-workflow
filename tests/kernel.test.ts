@@ -248,9 +248,11 @@ describe("cw kernel", () => {
 
     const check = await runWorkflowAction(root, "check", {
       taskId: "task-create-readme",
-      summary: "README.md reviewed against spec."
+      summary: "README.md reviewed against spec.",
+      commands: ["test -f README.md"]
     });
     assert.equal(check.task?.phase, "finish");
+    assert.deepEqual((check.details?.commands as Array<{ command: string }>).map((result) => result.command), ["test -f README.md"]);
 
     await ensureBaselineDelta(root, "task-create-readme");
     await writeFile(

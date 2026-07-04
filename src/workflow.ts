@@ -1,5 +1,7 @@
 import path from "node:path";
+import { exec } from "node:child_process";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { promisify } from "node:util";
 import { ensureBaselineDelta, syncBaselineDelta } from "./baseline.js";
 import { doctorProject } from "./validate.js";
 import { appendTrace, consumeResumeNote, createTask, discardTask, finishTask, readTaskState, updateTaskState } from "./tasks.js";
@@ -7,6 +9,8 @@ import { getCwPaths, taskDir } from "./paths.js";
 import { preflight, WorkflowAction } from "./preflight.js";
 import { selectTask } from "./task-store.js";
 import { TaskStateRecord } from "./types.js";
+
+const execAsync = promisify(exec);
 
 export type WorkflowCommandAction = WorkflowAction | "doctor";
 
@@ -20,6 +24,7 @@ export type WorkflowOptions = {
   note?: string;
   writeFile?: string;
   content?: string;
+  commands?: string[];
   decision?: "accepted" | "edited" | "skipped" | "none";
   dirtyWorktree?: "covered" | "acknowledged" | "clean";
   worktreeHandling?: "keep" | "stash" | "revert" | "delete-worktree" | "none";
@@ -158,6 +163,11 @@ async function runRun(root: string, options: WorkflowOptions): Promise<WorkflowR
 async function runCheck(root: string, options: WorkflowOptions): Promise<WorkflowResult> {
   const task = await selected(root, options);
   await preflight(root, { action: "check", taskId: task.id });
+  const commandResults = [];
+  for (const command of options.commands ?? []) {
+    const { stdout, stderr } = await execAsync(command, { cwd: root });
+    commandResults.push({ command, stdout, stderr });
+  }
   const taskPath = path.join(taskDir(root, task.id), task.artifacts.task);
   const content = await readFile(taskPath, "utf8");
   await writeFile(taskPath, checkSection(checkSection(content, "Verification"), "Check"), "utf8");
@@ -168,9 +178,15 @@ async function runCheck(root: string, options: WorkflowOptions): Promise<Workflo
   await appendTrace(root, task.id, {
     ts: updated.updated_at,
     type: "check.passed",
-    summary: options.summary ?? "Verification and review passed."
+    summary: options.summary ?? "Verification and review passed.",
+    data: commandResults.length > 0 ? { commands: commandResults.map((result) => result.command) } : undefined
   });
-  return { action: "check", task: updated, message: `Check passed for ${task.id}.` };
+  return {
+    action: "check",
+    task: updated,
+    message: `Check passed for ${task.id}.`,
+    details: commandResults.length > 0 ? { commands: commandResults } : undefined
+  };
 }
 
 async function runFinish(root: string, options: WorkflowOptions): Promise<WorkflowResult> {
