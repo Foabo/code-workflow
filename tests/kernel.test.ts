@@ -1,4 +1,5 @@
-import { access, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { access, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import assert from "node:assert/strict";
@@ -96,6 +97,68 @@ describe("cw kernel", () => {
     assert.equal(update.validation.ok, true);
     assert.match(await readFile(path.join(root, "plugins/cw-workflow/skills/cw-work/SKILL.md"), "utf8"), /cw preflight --action work/);
     assert.match(await readFile(path.join(root, ".codex/skills/cw-work/SKILL.md"), "utf8"), /cw preflight --action work/);
+  });
+
+  it("accepts a positional root for CLI init", async () => {
+    const parent = await tempRoot();
+    const target = path.join(parent, "target");
+    await mkdir(target);
+
+    const cli = await runCli(["init", "target"], { cwd: parent });
+
+    assert.equal(cli.code, 0, cli.stderr);
+    const result = parseCliJson(cli.stdout);
+    assert.ok((result.created as string[]).includes(".cw/version.json"));
+    await access(path.join(target, ".cw/version.json"));
+    await assert.rejects(access(path.join(parent, ".cw/version.json")));
+  });
+
+  it("prompts for missing init choices in an interactive CLI session", async () => {
+    const root = await tempRoot();
+
+    const cli = await runCli(["init", "."], {
+      cwd: root,
+      env: { CW_FORCE_INTERACTIVE: "1" },
+      answers: ["2", "3", "2"]
+    });
+
+    assert.equal(cli.code, 0, cli.stderr);
+    assert.match(cli.stdout, /Select coding harness/);
+    assert.match(cli.stdout, /Code intelligence/);
+    assert.match(cli.stdout, /External context/);
+    const result = parseCliJson(cli.stdout);
+    assert.equal(((result.adapters as Array<{ harness: string }>)[0]?.harness), "codex");
+    assert.ok(((result.adapters as Array<{ created: string[] }>)[0]?.created ?? []).includes(".agents/plugins/marketplace.json"));
+    const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
+    assert.equal(enhancements.code_intelligence, "configured");
+    assert.equal(enhancements.external_context, "detected");
+  });
+
+  it("skips init prompts when explicit CLI flags are provided", async () => {
+    const root = await tempRoot();
+
+    const cli = await runCli(
+      [
+        "init",
+        "--root",
+        root,
+        "--harness",
+        "codex",
+        "--code-intelligence",
+        "configured",
+        "--external-context",
+        "detected"
+      ],
+      { env: { CW_FORCE_INTERACTIVE: "1" } }
+    );
+
+    assert.equal(cli.code, 0, cli.stderr);
+    assert.doesNotMatch(cli.stdout, /Select coding harness|Code intelligence|External context/);
+    const result = parseCliJson(cli.stdout);
+    assert.equal(((result.adapters as Array<{ harness: string }>)[0]?.harness), "codex");
+    const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
+    assert.equal(enhancements.code_intelligence, "configured");
+    assert.equal(enhancements.external_context, "detected");
   });
 
   it("creates a task with core artifacts and append-only trace events", async () => {
@@ -517,6 +580,58 @@ describe("cw kernel", () => {
 
 async function tempRoot(): Promise<string> {
   return mkdtemp(path.join(os.tmpdir(), "cw-kernel-"));
+}
+
+async function runCli(
+  args: string[],
+  options: { cwd?: string; env?: Record<string, string>; input?: string; answers?: string[] } = {}
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  const child = spawn(process.execPath, [path.join(process.cwd(), "dist/src/cli.js"), ...args], {
+    cwd: options.cwd,
+    env: { ...process.env, ...options.env },
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  const answers = [...(options.answers ?? [])];
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+    if (stdout.endsWith("Choose [1]: ") && answers.length > 0) {
+      child.stdin.write(`${answers.shift()}\n`);
+    }
+  });
+  child.stderr.on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+  if (options.answers === undefined) {
+    child.stdin.end(options.input ?? "");
+  }
+
+  return await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error(`CLI timed out: ${args.join(" ")}`));
+    }, 5000);
+
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      child.stdin.destroy();
+      resolve({ code, stdout, stderr });
+    });
+  });
+}
+
+function parseCliJson(stdout: string): Record<string, unknown> {
+  const start = stdout.indexOf("{");
+  assert.notEqual(start, -1, stdout);
+  return JSON.parse(stdout.slice(start)) as Record<string, unknown>;
 }
 
 async function readTrace(root: string, taskId: string): Promise<Array<Record<string, unknown>>> {

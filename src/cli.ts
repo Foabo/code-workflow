@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createInterface } from "node:readline/promises";
 import { initProject } from "./init.js";
 import { preflight, WorkflowAction } from "./preflight.js";
 import { listTasks, selectTask } from "./task-store.js";
@@ -19,23 +20,49 @@ import { BaselineDecision, ensureBaselineDelta, syncBaselineDelta } from "./base
 import { updateProject } from "./update.js";
 
 type Flags = Record<string, string | boolean>;
+type Choice<T extends string> = {
+  value: T;
+  label: string;
+  detail: string;
+};
+type PromptSession = {
+  choice<T extends string>(question: string, choices: readonly Choice<T>[]): Promise<T>;
+  close(): void;
+};
+
+const HARNESS_CHOICES = [
+  { value: "generic", label: "Generic", detail: "Generate .cw agent command entries." },
+  { value: "codex", label: "Codex", detail: "Generate Codex plugin skills and generic command entries." }
+] as const satisfies readonly Choice<HarnessName>[];
+
+const ENHANCEMENT_CHOICES = [
+  { value: "skipped", label: "Skip", detail: "Leave this enhancement disabled for now." },
+  { value: "detected", label: "Detect", detail: "Record that an existing tool was detected." },
+  { value: "configured", label: "Configure", detail: "Record that this enhancement is configured." }
+] as const satisfies readonly Choice<EnhancementChoice>[];
 
 async function main(argv: string[]): Promise<number> {
   const [command, subcommand, ...rest] = argv;
-  const publicFlags = parseFlags(argv.slice(1)).flags;
+  const publicArgs = parseFlags(argv.slice(1));
+  const publicFlags = publicArgs.flags;
   const internalFlags = parseFlags(rest).flags;
-  const root = String((command === "internal" ? internalFlags.root : publicFlags.root) ?? process.cwd());
+  const root = initRoot(command, publicFlags, publicArgs.positional, internalFlags);
 
   try {
     switch (command) {
       case "init": {
-        const result = await initProject(root, {
-          harnesses: [optionalHarness(publicFlags, "harness") ?? "generic"],
-          codeIntelligence: optionalEnhancementChoice(publicFlags, "code-intelligence") ?? "skipped",
-          externalContext: optionalEnhancementChoice(publicFlags, "external-context") ?? "skipped"
-        });
-        printJson(result);
-        return 0;
+        const prompts = createPromptSession();
+        try {
+          const result = await initProject(root, {
+            harnesses: [await initHarness(publicFlags, prompts)],
+            codeIntelligence: await initEnhancement(publicFlags, prompts, "code-intelligence", "Code intelligence"),
+            externalContext: await initEnhancement(publicFlags, prompts, "external-context", "External context")
+          });
+          printJson(result);
+          return 0;
+        } finally {
+          prompts?.close();
+        }
       }
       case "validate": {
         const issues = await validateProject(root);
@@ -217,6 +244,87 @@ function parseFlags(args: string[]): { flags: Flags; positional: string[] } {
   return { flags, positional };
 }
 
+function initRoot(command: string | undefined, publicFlags: Flags, publicPositionals: string[], internalFlags: Flags): string {
+  if (command === "internal") {
+    return String(internalFlags.root ?? process.cwd());
+  }
+  if (command === "init") {
+    return String(publicFlags.root ?? publicPositionals[0] ?? process.cwd());
+  }
+  return String(publicFlags.root ?? process.cwd());
+}
+
+async function initHarness(flags: Flags, prompts: PromptSession | null): Promise<HarnessName> {
+  const value = optionalHarness(flags, "harness");
+  if (value !== undefined) {
+    return value;
+  }
+  return promptChoice(prompts, "Select coding harness", HARNESS_CHOICES);
+}
+
+async function initEnhancement(
+  flags: Flags,
+  prompts: PromptSession | null,
+  key: string,
+  label: string
+): Promise<EnhancementChoice> {
+  const value = optionalEnhancementChoice(flags, key);
+  if (value !== undefined) {
+    return value;
+  }
+  return promptChoice(prompts, label, ENHANCEMENT_CHOICES);
+}
+
+function createPromptSession(): PromptSession | null {
+  if (!isInteractive()) {
+    return null;
+  }
+
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return {
+    async choice<T extends string>(question: string, choices: readonly Choice<T>[]): Promise<T> {
+      for (;;) {
+        process.stdout.write(`\n${question}\n`);
+        choices.forEach((choice, index) => {
+          process.stdout.write(`  ${index + 1}. ${choice.label} (${choice.value}) - ${choice.detail}\n`);
+        });
+
+        const answer = (await rl.question(`Choose [1]: `)).trim();
+        if (answer.length === 0) {
+          return choices[0].value;
+        }
+
+        const numbered = Number(answer);
+        if (Number.isInteger(numbered) && numbered >= 1 && numbered <= choices.length) {
+          return choices[numbered - 1].value;
+        }
+
+        const named = choices.find((choice) => choice.value === answer);
+        if (named !== undefined) {
+          return named.value;
+        }
+
+        process.stdout.write(`Please choose 1-${choices.length} or one of: ${choices.map((choice) => choice.value).join(", ")}.\n`);
+      }
+    },
+    close(): void {
+      rl.close();
+    }
+  };
+}
+
+async function promptChoice<T extends string>(
+  prompts: PromptSession | null,
+  question: string,
+  choices: readonly Choice<T>[]
+): Promise<T> {
+  return prompts === null ? choices[0].value : await prompts.choice(question, choices);
+}
+
+function isInteractive(): boolean {
+  return process.env.CW_FORCE_INTERACTIVE === "1" || Boolean(process.stdin.isTTY && process.stdout.isTTY);
+}
+
 function requiredString(flags: Flags, key: string): string {
   const value = flags[key];
   if (typeof value !== "string" || value.length === 0) {
@@ -362,7 +470,7 @@ function printJson(value: unknown): void {
 
 function printUsage(): void {
   console.log(`Usage:
-  cw init [--root <path>] [--harness generic|codex] [--code-intelligence skipped|detected|configured] [--external-context skipped|detected|configured]
+  cw init [path] [--root <path>] [--harness generic|codex] [--code-intelligence skipped|detected|configured] [--external-context skipped|detected|configured]
   cw validate [--root <path>]
   cw doctor [--root <path>]
   cw update [--root <path>] [--harness generic|codex]
