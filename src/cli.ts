@@ -238,7 +238,10 @@ function optionalHarness(flags: Flags, key: string): HarnessName | undefined {
   if (value === "generic") {
     return value;
   }
-  throw new Error(`--${key} must be generic`);
+  if (value === "codex") {
+    return value;
+  }
+  throw new Error(`--${key} must be generic or codex`);
 }
 
 function requiredWorkflowAction(flags: Flags, key: string): WorkflowAction {
@@ -312,10 +315,10 @@ function printJson(value: unknown): void {
 
 function printUsage(): void {
   console.log(`Usage:
-  cw init [--root <path>] [--harness generic]
+  cw init [--root <path>] [--harness generic|codex]
   cw validate [--root <path>]
   cw doctor [--root <path>]
-  cw update [--root <path>] [--harness generic]
+  cw update [--root <path>] [--harness generic|codex]
   cw tasks [--root <path>]
   cw preflight --action <action> [--task <id>] [--root <path>]
   cw internal <helper> [flags]`);

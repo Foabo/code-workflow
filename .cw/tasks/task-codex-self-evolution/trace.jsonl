@@ -1,0 +1,12 @@
+{"ts":"2026-07-04T02:44:19.544Z","type":"task.created","summary":"Task created: Adapt CW for Codex self-evolution"}
+{"ts":"2026-07-04T02:44:19.584Z","type":"task.state.updated","summary":"phase clarify -> plan; next action updated"}
+{"ts":"2026-07-04T02:44:19.584Z","type":"spec.accepted","summary":"Task spec accepted."}
+{"ts":"2026-07-04T02:44:19.627Z","type":"task.state.updated","summary":"phase plan -> run; next action updated"}
+{"ts":"2026-07-04T02:44:19.627Z","type":"plan.updated","summary":"Plan and executable checklist created."}
+{"ts":"2026-07-04T02:45:35.566Z","type":"task.state.updated","summary":"phase run -> check; next action updated"}
+{"ts":"2026-07-04T02:45:35.566Z","type":"run.updated","summary":"Implemented Codex harness adapter, PRD, tests, and project-local prompt generation."}
+{"ts":"2026-07-04T02:45:38.094Z","type":"task.state.updated","summary":"phase check -> finish; next action updated"}
+{"ts":"2026-07-04T02:45:38.094Z","type":"check.passed","summary":"Codex adapter verified with typecheck, test, and build.","data":{"commands":["npm run typecheck","npm test","npm run build"]}}
+{"ts":"2026-07-04T02:45:50.766Z","type":"baseline_delta.created","summary":"Baseline delta created."}
+{"ts":"2026-07-04T02:46:03.369Z","type":"baseline_delta.synced","summary":"Baseline delta synced to .cw/project/architecture.md, .cw/project/rules.md, .cw/project/commands.md.","data":{"decision":"accepted","updated":[".cw/project/architecture.md",".cw/project/rules.md",".cw/project/commands.md"]}}
+{"ts":"2026-07-04T02:46:03.384Z","type":"task.finished","summary":"Codex adapter and self-evolution flow completed.","data":{"baseline_decision":"accepted","dirty_worktree_handling":"covered"}}

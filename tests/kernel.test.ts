@@ -18,6 +18,7 @@ import {
   runWorkflowAction,
   selectTask,
   syncBaselineDelta,
+  updateProject,
   updateTaskState,
   validateProject
 } from "../src/index.js";
@@ -36,6 +37,25 @@ describe("cw kernel", () => {
     assert.match(await readFile(path.join(root, ".cw/agent-commands/cw-work.md"), "utf8"), /repo truth/);
     assert.deepEqual(await validateProject(root), []);
     assert.equal((await doctorProject(root)).ok, true);
+  });
+
+  it("generates Codex prompt entries for the Codex harness", async () => {
+    const root = await tempRoot();
+
+    const result = await initProject(root, { harnesses: ["codex"] });
+
+    assert.equal(result.adapters[0]?.harness, "codex");
+    assert.ok(result.adapters[0]?.created.includes(".codex/prompts/cw-work.md"));
+    assert.ok(result.adapters[0]?.created.includes(".cw/agent-commands/cw-work.md"));
+    const prompt = await readFile(path.join(root, ".codex/prompts/cw-work.md"), "utf8");
+    assert.match(prompt, /^---\ndescription:/);
+    assert.match(prompt, /Use CW's repository-local workflow state/);
+    assert.match(prompt, /cw preflight --action work/);
+
+    await writeFile(path.join(root, ".codex/prompts/cw-work.md"), "stale", "utf8");
+    const update = await updateProject(root, ["codex"]);
+    assert.equal(update.validation.ok, true);
+    assert.match(await readFile(path.join(root, ".codex/prompts/cw-work.md"), "utf8"), /cw preflight --action work/);
   });
 
   it("creates a task with core artifacts and append-only trace events", async () => {

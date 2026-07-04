@@ -4,7 +4,7 @@ import { ensureDir, writeFileIfMissing } from "./fs.js";
 import { getCwPaths } from "./paths.js";
 import { AGENT_COMMANDS } from "./templates.js";
 
-export type HarnessName = "generic";
+export type HarnessName = "generic" | "codex";
 
 export type AdapterResult = {
   harness: HarnessName;
@@ -118,6 +118,17 @@ export async function generateAdapter(
   harness: HarnessName = "generic",
   options: AdapterOptions = {}
 ): Promise<AdapterResult> {
+  if (harness === "codex") {
+    return generateCodexAdapter(root, options);
+  }
+  return generateGenericAdapter(root, harness, options);
+}
+
+async function generateGenericAdapter(
+  root: string,
+  harness: HarnessName,
+  options: AdapterOptions
+): Promise<AdapterResult> {
   const paths = getCwPaths(root);
   const created: string[] = [];
   const existing: string[] = [];
@@ -136,6 +147,27 @@ export async function generateAdapter(
   }
 
   return { harness, created, existing };
+}
+
+async function generateCodexAdapter(root: string, options: AdapterOptions): Promise<AdapterResult> {
+  const generic = await generateGenericAdapter(root, "codex", options);
+  const promptDir = path.join(root, ".codex", "prompts");
+  await ensureDir(promptDir);
+
+  for (const command of AGENT_COMMANDS) {
+    const filePath = path.join(promptDir, `${command}.md`);
+    const content = renderCodexPrompt(command);
+    if (options.overwrite === true) {
+      await writeFile(filePath, content, "utf8");
+      generic.created.push(relative(root, filePath));
+    } else if (await writeFileIfMissing(filePath, content)) {
+      generic.created.push(relative(root, filePath));
+    } else {
+      generic.existing.push(relative(root, filePath));
+    }
+  }
+
+  return generic;
 }
 
 function renderGenericCommand(command: (typeof AGENT_COMMANDS)[number]): string {
@@ -181,6 +213,18 @@ ${commandSteps[command].map((step, index) => `${index + 1}. ${step}`).join("\n")
 - cw internal ensure-baseline-delta --task <task-id>
 - cw internal sync-baseline-delta --task <task-id> --decision accepted|edited|skipped
 - cw internal consume-resume --task <task-id>
+`;
+}
+
+function renderCodexPrompt(command: (typeof AGENT_COMMANDS)[number]): string {
+  return `---
+description: ${commandPurposes[command]}
+argument-hint: "[--task <task-id>] [--root <path>] [workflow flags]"
+---
+
+Use CW's repository-local workflow state to run ${command}.
+
+${renderGenericCommand(command)}
 `;
 }
 

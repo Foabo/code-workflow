@@ -42,7 +42,7 @@ export async function preflight(root: string, input: PreflightInput): Promise<Pr
       task = await selectTask(root, { taskId: input.taskId });
       warnings.push(...(await taskWarnings(root, task, input.action)));
     } catch (error) {
-      if (input.action === "work" && input.taskId === undefined) {
+      if (input.action === "work") {
         warnings.push({ path: ".cw/tasks", message: formatError(error) });
       } else {
         issues.push({ path: ".cw/tasks", message: formatError(error) });
