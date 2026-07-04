@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { initProject } from "./init.js";
+import { preflight, WorkflowAction } from "./preflight.js";
+import { listTasks, selectTask } from "./task-store.js";
 import {
   appendTrace,
   consumeResumeNote,
@@ -12,6 +14,7 @@ import {
 import { doctorProject, validateProject } from "./validate.js";
 import { TaskLifecycle, TraceEvent } from "./types.js";
 import { HarnessName } from "./adapters.js";
+import { BaselineDecision, ensureBaselineDelta, syncBaselineDelta } from "./baseline.js";
 
 type Flags = Record<string, string | boolean>;
 
@@ -35,6 +38,18 @@ async function main(argv: string[]): Promise<number> {
       }
       case "doctor": {
         const report = await doctorProject(root);
+        printJson(report);
+        return report.ok ? 0 : 1;
+      }
+      case "tasks": {
+        printJson({ tasks: await listTasks(root) });
+        return 0;
+      }
+      case "preflight": {
+        const report = await preflight(root, {
+          action: requiredWorkflowAction(publicFlags, "action"),
+          taskId: optionalString(publicFlags, "task")
+        });
         printJson(report);
         return report.ok ? 0 : 1;
       }
@@ -66,6 +81,11 @@ async function runInternal(subcommand: string | undefined, args: string[], root:
       printJson(task);
       return 0;
     }
+    case "select-task": {
+      const task = await selectTask(root, { taskId: optionalString(flags, "task") });
+      printJson(task);
+      return 0;
+    }
     case "append-trace": {
       const taskId = requiredString(flags, "task");
       const event: TraceEvent = {
@@ -92,10 +112,14 @@ async function runInternal(subcommand: string | undefined, args: string[], root:
     }
     case "finish-task": {
       const taskId = requiredString(flags, "task");
+      const baselineDecision = optionalBaselineDecision(flags, "baseline");
+      if (baselineDecision === "accepted" || baselineDecision === "edited" || baselineDecision === "skipped") {
+        await syncBaselineDelta(root, taskId, baselineDecision);
+      }
       const task = await finishTask(root, taskId, {
         summary: requiredString(flags, "summary"),
         dirtyWorktreeHandling: optionalDirtyWorktreeHandling(flags, "dirty-worktree"),
-        baselineDecision: optionalBaselineDecision(flags, "baseline")
+        baselineDecision
       });
       printJson(task);
       return 0;
@@ -114,6 +138,18 @@ async function runInternal(subcommand: string | undefined, args: string[], root:
       const content = requiredString(flags, "content");
       const task = await createResumeNote(root, taskId, content, optionalNullableString(flags, "resume-condition"));
       printJson(task);
+      return 0;
+    }
+    case "ensure-baseline-delta": {
+      const taskId = requiredString(flags, "task");
+      const task = await ensureBaselineDelta(root, taskId);
+      printJson(task);
+      return 0;
+    }
+    case "sync-baseline-delta": {
+      const taskId = requiredString(flags, "task");
+      const result = await syncBaselineDelta(root, taskId, requiredBaselineDecision(flags, "decision"));
+      printJson(result);
       return 0;
     }
     case "consume-resume": {
@@ -199,6 +235,24 @@ function optionalHarness(flags: Flags, key: string): HarnessName | undefined {
   throw new Error(`--${key} must be generic`);
 }
 
+function requiredWorkflowAction(flags: Flags, key: string): WorkflowAction {
+  const value = requiredString(flags, key);
+  if (
+    value === "work" ||
+    value === "clarify" ||
+    value === "plan" ||
+    value === "run" ||
+    value === "check" ||
+    value === "finish" ||
+    value === "resume" ||
+    value === "discard" ||
+    value === "understand"
+  ) {
+    return value;
+  }
+  throw new Error(`--${key} must be a workflow action`);
+}
+
 function optionalDirtyWorktreeHandling(
   flags: Flags,
   key: string
@@ -224,6 +278,14 @@ function optionalBaselineDecision(flags: Flags, key: string): "accepted" | "edit
   throw new Error(`--${key} must be accepted, edited, skipped, or none`);
 }
 
+function requiredBaselineDecision(flags: Flags, key: string): BaselineDecision {
+  const value = requiredString(flags, key);
+  if (value === "accepted" || value === "edited" || value === "skipped") {
+    return value;
+  }
+  throw new Error(`--${key} must be accepted, edited, or skipped`);
+}
+
 function optionalDiscardWorktreeHandling(
   flags: Flags,
   key: string
@@ -247,17 +309,22 @@ function printUsage(): void {
   cw init [--root <path>] [--harness generic]
   cw validate [--root <path>]
   cw doctor [--root <path>]
+  cw tasks [--root <path>]
+  cw preflight --action <action> [--task <id>] [--root <path>]
   cw internal <helper> [flags]`);
 }
 
 function printInternalUsage(): void {
   console.log(`Internal helpers:
   cw internal create-task --id <id> --title <title> [--phase <phase>] [--next-action <text>]
+  cw internal select-task [--task <id>]
   cw internal append-trace --task <id> --type <type> --summary <text>
   cw internal set-state --task <id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
   cw internal finish-task --task <id> --summary <text> [--dirty-worktree covered|acknowledged|clean] [--baseline accepted|edited|skipped|none]
   cw internal discard-task --task <id> --confirm [--worktree keep|stash|revert|delete-worktree|none]
   cw internal create-resume --task <id> --content <markdown>
+  cw internal ensure-baseline-delta --task <id>
+  cw internal sync-baseline-delta --task <id> --decision accepted|edited|skipped
   cw internal consume-resume --task <id>`);
 }
 

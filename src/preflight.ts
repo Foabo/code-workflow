@@ -1,0 +1,103 @@
+import path from "node:path";
+import { access } from "node:fs/promises";
+import { getGitStatus, GitStatus } from "./git.js";
+import { taskDir } from "./paths.js";
+import { selectTask } from "./task-store.js";
+import { validateProject } from "./validate.js";
+import { TaskStateRecord, ValidationIssue } from "./types.js";
+
+export type WorkflowAction =
+  | "work"
+  | "clarify"
+  | "plan"
+  | "run"
+  | "check"
+  | "finish"
+  | "resume"
+  | "discard"
+  | "understand";
+
+export type PreflightInput = {
+  action: WorkflowAction;
+  taskId?: string;
+};
+
+export type PreflightReport = {
+  ok: boolean;
+  action: WorkflowAction;
+  task: TaskStateRecord | null;
+  issues: ValidationIssue[];
+  warnings: ValidationIssue[];
+  git: GitStatus;
+};
+
+export async function preflight(root: string, input: PreflightInput): Promise<PreflightReport> {
+  const issues = await validateProject(root);
+  const warnings: ValidationIssue[] = [];
+  const git = await getGitStatus(root);
+  let task: TaskStateRecord | null = null;
+
+  if (input.action !== "understand") {
+    try {
+      task = await selectTask(root, { taskId: input.taskId });
+      warnings.push(...(await taskWarnings(root, task, input.action)));
+    } catch (error) {
+      if (input.action === "work" && input.taskId === undefined) {
+        warnings.push({ path: ".cw/tasks", message: formatError(error) });
+      } else {
+        issues.push({ path: ".cw/tasks", message: formatError(error) });
+      }
+    }
+  }
+
+  if (git.kind === "dirty") {
+    warnings.push({ path: "git", message: `dirty worktree has ${git.entries.length} entries` });
+  }
+
+  return {
+    ok: issues.length === 0,
+    action: input.action,
+    task,
+    issues,
+    warnings,
+    git
+  };
+}
+
+async function taskWarnings(root: string, task: TaskStateRecord, action: WorkflowAction): Promise<ValidationIssue[]> {
+  const warnings: ValidationIssue[] = [];
+
+  if (task.lifecycle === "closed" && action !== "discard") {
+    warnings.push({ path: `.cw/tasks/${task.id}/task.json.lifecycle`, message: "task is already closed" });
+  }
+  if (task.lifecycle === "blocked" && action !== "clarify" && action !== "discard") {
+    warnings.push({ path: `.cw/tasks/${task.id}/task.json.lifecycle`, message: "task is blocked" });
+  }
+  if (task.lifecycle === "parked" && action !== "resume" && action !== "discard") {
+    warnings.push({ path: `.cw/tasks/${task.id}/task.json.lifecycle`, message: "task is parked" });
+  }
+  if (task.artifacts.resume !== null && action !== "resume" && action !== "finish" && action !== "discard") {
+    warnings.push({ path: `.cw/tasks/${task.id}/${task.artifacts.resume}`, message: "resume note exists but action is not resume" });
+  }
+
+  for (const artifact of Object.values(task.artifacts)) {
+    if (artifact !== null && !(await exists(path.join(taskDir(root, task.id), artifact)))) {
+      warnings.push({ path: `.cw/tasks/${task.id}/${artifact}`, message: "artifact is referenced but missing" });
+    }
+  }
+
+  return warnings;
+}
+
+async function exists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}

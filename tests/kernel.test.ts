@@ -9,9 +9,14 @@ import {
   createTask,
   discardTask,
   doctorProject,
+  ensureBaselineDelta,
   finishTask,
   initProject,
+  listTasks,
+  preflight,
   readTaskState,
+  selectTask,
+  syncBaselineDelta,
   updateTaskState,
   validateProject
 } from "../src/index.js";
@@ -96,6 +101,30 @@ describe("cw kernel", () => {
     );
   });
 
+  it("lists tasks, selects a single task, and reports ambiguous selection", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await createTask(root, { id: "task-one", title: "One", now: new Date("2026-07-03T01:00:00.000Z") });
+
+    assert.equal((await selectTask(root)).id, "task-one");
+    assert.deepEqual((await listTasks(root)).map((task) => task.id), ["task-one"]);
+
+    await createTask(root, { id: "task-two", title: "Two", now: new Date("2026-07-03T02:00:00.000Z") });
+    await assert.rejects(selectTask(root), /multiple matching tasks/);
+    assert.equal((await selectTask(root, { taskId: "task-two" })).id, "task-two");
+  });
+
+  it("runs preflight for a selected task", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await createTask(root, { id: "task-preflight", title: "Preflight test" });
+
+    const report = await preflight(root, { action: "run", taskId: "task-preflight" });
+
+    assert.equal(report.ok, true);
+    assert.equal(report.task?.id, "task-preflight");
+  });
+
   it("creates and consumes a task-local resume note", async () => {
     const root = await tempRoot();
     await initProject(root);
@@ -111,6 +140,24 @@ describe("cw kernel", () => {
     const stored = await readTaskState(root, "task-resume");
     assert.equal(stored.artifacts.resume, null);
     assert.equal(stored.resume_condition, null);
+  });
+
+  it("creates and syncs a baseline delta", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await createTask(root, { id: "task-baseline", title: "Baseline test" });
+
+    const withDelta = await ensureBaselineDelta(root, "task-baseline");
+    assert.equal(withDelta.artifacts.baseline_delta, "baseline-delta.md");
+    await writeFile(
+      path.join(root, ".cw/tasks/task-baseline/baseline-delta.md"),
+      "# Baseline Delta\n\n## commands.md\n\nRun `npm test` before finish.\n",
+      "utf8"
+    );
+
+    const result = await syncBaselineDelta(root, "task-baseline", "accepted");
+    assert.deepEqual(result.updated, [".cw/project/commands.md"]);
+    assert.match(await readFile(path.join(root, ".cw/project/commands.md"), "utf8"), /Run `npm test` before finish\./);
   });
 
   it("finishes a task only through the closure gate", async () => {
