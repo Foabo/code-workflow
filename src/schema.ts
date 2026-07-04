@@ -1,7 +1,9 @@
 import {
   CW_SCHEMA_VERSION,
+  EnhancementCategory,
   EnhancementChoice,
   EnhancementConfigRecord,
+  EnhancementSetupStatus,
   TaskLifecycle,
   TaskStateRecord,
   ValidationIssue,
@@ -10,6 +12,8 @@ import {
 
 const lifecycles = new Set<TaskLifecycle>(["open", "blocked", "parked", "closed"]);
 const enhancementChoices = new Set<EnhancementChoice>(["skipped", "detected", "configured"]);
+const enhancementCategories = new Set<EnhancementCategory>(["code_index", "context_memory"]);
+const enhancementSetupStatuses = new Set<EnhancementSetupStatus>(["skipped", "pending", "configured", "failed"]);
 
 export function validateVersionRecord(value: unknown, pathName = ".cw/version.json"): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
@@ -80,6 +84,12 @@ export function validateEnhancementConfigRecord(
   }
   requireEnhancementChoice(value, "code_intelligence", pathName, issues);
   requireEnhancementChoice(value, "external_context", pathName, issues);
+  if (value.code_index !== undefined) {
+    requireEnhancementProviderRecord(value.code_index, "code_index", `${pathName}.code_index`, issues);
+  }
+  if (value.context_memory !== undefined) {
+    requireEnhancementProviderRecord(value.context_memory, "context_memory", `${pathName}.context_memory`, issues);
+  }
   requireString(value, "updated_at", pathName, issues);
   return issues;
 }
@@ -159,6 +169,68 @@ function requireEnhancementChoice(
 ): void {
   if (typeof record[key] !== "string" || !enhancementChoices.has(record[key] as EnhancementChoice)) {
     issues.push({ path: `${pathName}.${key}`, message: "must be skipped, detected, or configured" });
+  }
+}
+
+function requireEnhancementProviderRecord(
+  value: unknown,
+  expectedCategory: EnhancementCategory,
+  pathName: string,
+  issues: ValidationIssue[]
+): void {
+  if (!isRecord(value)) {
+    issues.push({ path: pathName, message: "must be a JSON object" });
+    return;
+  }
+
+  requireString(value, "provider_id", pathName, issues);
+  requireString(value, "message", pathName, issues);
+  requireString(value, "updated_at", pathName, issues);
+  requireStringArray(value, "commands", pathName, issues);
+  requireStringArray(value, "commands_run", pathName, issues);
+  requireStringArray(value, "touched_files", pathName, issues);
+
+  if (typeof value.category !== "string" || !enhancementCategories.has(value.category as EnhancementCategory)) {
+    issues.push({ path: `${pathName}.category`, message: "must be code_index or context_memory" });
+  } else if (value.category !== expectedCategory) {
+    issues.push({ path: `${pathName}.category`, message: `must be ${expectedCategory}` });
+  }
+
+  if (typeof value.status !== "string" || !enhancementSetupStatuses.has(value.status as EnhancementSetupStatus)) {
+    issues.push({ path: `${pathName}.status`, message: "must be skipped, pending, configured, or failed" });
+  }
+
+  if (value.verification !== null) {
+    if (!isRecord(value.verification)) {
+      issues.push({ path: `${pathName}.verification`, message: "must be a JSON object or null" });
+    } else {
+      requireString(value.verification, "command", `${pathName}.verification`, issues);
+      requireBoolean(value.verification, "ok", `${pathName}.verification`, issues);
+      requireNullableNumber(value.verification, "exit_code", `${pathName}.verification`, issues);
+    }
+  }
+}
+
+function requireBoolean(
+  record: Record<string, unknown>,
+  key: string,
+  pathName: string,
+  issues: ValidationIssue[]
+): void {
+  if (typeof record[key] !== "boolean") {
+    issues.push({ path: `${pathName}.${key}`, message: "must be a boolean" });
+  }
+}
+
+function requireNullableNumber(
+  record: Record<string, unknown>,
+  key: string,
+  pathName: string,
+  issues: ValidationIssue[]
+): void {
+  const value = record[key];
+  if (value !== null && typeof value !== "number") {
+    issues.push({ path: `${pathName}.${key}`, message: "must be a number or null" });
   }
 }
 

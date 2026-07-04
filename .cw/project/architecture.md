@@ -12,5 +12,5 @@
 
 ## From task-codex-self-evolution
 
-- CW supports a Codex harness adapter that generates a repository-local plugin marketplace entry and `cw-workflow` plugin skills under `plugins/cw-workflow/skills/`.
-- The Codex adapter reuses the same workflow action semantics as generic `.cw/agent-commands/`; `.cw` remains Repo Truth.
+- CW harness adapters generate repo-local skills as the default invocation surface. Codex, OpenCode, and Pi use `.agents/skills/`; Claude uses `.claude/skills/`.
+- Generated skills reuse the same workflow action semantics and point back to `.cw` as Repo Truth.

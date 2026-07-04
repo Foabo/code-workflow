@@ -1,10 +1,9 @@
 import path from "node:path";
 import { writeFile } from "node:fs/promises";
 import { ensureDir, writeFileIfMissing } from "./fs.js";
-import { getCwPaths } from "./paths.js";
 import { AGENT_COMMANDS } from "./templates.js";
 
-export type HarnessName = "generic" | "codex";
+export type HarnessName = "codex" | "claude" | "opencode" | "pi";
 
 export type AdapterResult = {
   harness: HarnessName;
@@ -117,69 +116,57 @@ const commandSteps: Record<(typeof AGENT_COMMANDS)[number], string[]> = {
 
 export async function generateAdapter(
   root: string,
-  harness: HarnessName = "generic",
+  harness: HarnessName,
   options: AdapterOptions = {}
 ): Promise<AdapterResult> {
   if (harness === "codex") {
-    return generateCodexAdapter(root, options);
+    return generateAgentSkillAdapter(root, harness, options);
   }
-  return generateGenericAdapter(root, harness, options);
+  if (harness === "claude") {
+    return generateClaudeAdapter(root, options);
+  }
+  if (harness === "opencode") {
+    return generateAgentSkillAdapter(root, harness, options);
+  }
+  if (harness === "pi") {
+    return generateAgentSkillAdapter(root, harness, options);
+  }
+  throw new Error(`unsupported harness: ${harness satisfies never}`);
 }
 
-async function generateGenericAdapter(
+async function generateAgentSkillAdapter(
   root: string,
   harness: HarnessName,
   options: AdapterOptions
 ): Promise<AdapterResult> {
-  const paths = getCwPaths(root);
-  const created: string[] = [];
-  const existing: string[] = [];
-  await ensureDir(paths.agentCommands);
-
-  for (const command of AGENT_COMMANDS) {
-    const filePath = path.join(paths.agentCommands, `${command}.md`);
-    if (options.overwrite === true) {
-      await writeFile(filePath, renderGenericCommand(command), "utf8");
-      created.push(relative(root, filePath));
-    } else if (await writeFileIfMissing(filePath, renderGenericCommand(command))) {
-      created.push(relative(root, filePath));
-    } else {
-      existing.push(relative(root, filePath));
-    }
-  }
-
-  return { harness, created, existing };
-}
-
-async function generateCodexAdapter(root: string, options: AdapterOptions): Promise<AdapterResult> {
-  const generic = await generateGenericAdapter(root, "codex", options);
-  const marketplacePath = path.join(root, ".agents", "plugins", "marketplace.json");
-  const pluginRoot = path.join(root, "plugins", "cw-workflow");
-  const pluginManifestPath = path.join(pluginRoot, ".codex-plugin", "plugin.json");
-  const skillsRoot = path.join(pluginRoot, "skills");
-  const repoSkillsRoot = path.join(root, ".codex", "skills");
-
-  await ensureDir(path.dirname(marketplacePath));
-  await ensureDir(path.dirname(pluginManifestPath));
+  const result: AdapterResult = { harness, created: [], existing: [] };
+  const skillsRoot = path.join(root, ".agents", "skills");
   await ensureDir(skillsRoot);
-  await ensureDir(repoSkillsRoot);
-
-  await writeGenerated(root, marketplacePath, renderCodexMarketplace(), options, generic);
-  await writeGenerated(root, pluginManifestPath, renderCodexPluginManifest(), options, generic);
 
   for (const command of AGENT_COMMANDS) {
     const skillDir = path.join(skillsRoot, command);
-    const repoSkillDir = path.join(repoSkillsRoot, command);
     await ensureDir(skillDir);
-    await ensureDir(repoSkillDir);
-    await writeGenerated(root, path.join(skillDir, "SKILL.md"), renderCodexSkill(command), options, generic);
-    await writeGenerated(root, path.join(repoSkillDir, "SKILL.md"), renderCodexSkill(command), options, generic);
+    await writeGenerated(root, path.join(skillDir, "SKILL.md"), renderHarnessSkill(command, harness), options, result);
   }
 
-  return generic;
+  return result;
 }
 
-function renderGenericCommand(command: (typeof AGENT_COMMANDS)[number]): string {
+async function generateClaudeAdapter(root: string, options: AdapterOptions): Promise<AdapterResult> {
+  const result: AdapterResult = { harness: "claude", created: [], existing: [] };
+  const skillsRoot = path.join(root, ".claude", "skills");
+  await ensureDir(skillsRoot);
+
+  for (const command of AGENT_COMMANDS) {
+    const skillDir = path.join(skillsRoot, command);
+    await ensureDir(skillDir);
+    await writeGenerated(root, path.join(skillDir, "SKILL.md"), renderHarnessSkill(command, "claude"), options, result);
+  }
+
+  return result;
+}
+
+function renderWorkflowInstructions(command: (typeof AGENT_COMMANDS)[number]): string {
   return `${GENERATED_MARKER}
 
 # ${command}
@@ -235,6 +222,20 @@ ${commandSteps[command].map((step, index) => `${index + 1}. ${step}`).join("\n")
 `;
 }
 
+function renderHarnessSkill(command: (typeof AGENT_COMMANDS)[number], harness: HarnessName): string {
+  return `---
+name: ${command}
+description: ${commandPurposes[command]}
+---
+
+Use this skill when the user asks ${harnessLabel(harness)} to run \`${command}\` or the matching CW workflow action in this repository.
+
+Before acting, read the repository's \`.cw\` files relevant to the current task. Treat \`.cw\` as Repo Truth, generated skills as invocation surfaces, and Git as the source of truth for code changes.
+
+${renderWorkflowInstructions(command)}
+`;
+}
+
 async function writeGenerated(
   root: string,
   filePath: string,
@@ -252,66 +253,14 @@ async function writeGenerated(
   }
 }
 
-function renderCodexMarketplace(): string {
-  return `${JSON.stringify({
-    name: "cw-repo",
-    interface: {
-      displayName: "CW Repository Plugins"
-    },
-    plugins: [
-      {
-        name: "cw-workflow",
-        source: {
-          source: "local",
-          path: "./plugins/cw-workflow"
-        },
-        policy: {
-          installation: "AVAILABLE",
-          authentication: "ON_INSTALL"
-        },
-        category: "Productivity"
-      }
-    ]
-  }, null, 2)}\n`;
-}
-
-function renderCodexPluginManifest(): string {
-  return `${JSON.stringify({
-    name: "cw-workflow",
-    version: "0.1.0",
-    description: "Codex skills for the CW coding workflow kernel.",
-    author: {
-      name: "CW"
-    },
-    skills: "./skills/",
-    interface: {
-      displayName: "CW Workflow",
-      shortDescription: "Run CW workflow actions from Codex.",
-      longDescription: "CW Workflow provides Codex skills that use repository-local .cw task state, project baseline files, and kernel helpers.",
-      developerName: "CW",
-      category: "Productivity",
-      capabilities: ["Interactive", "Write"],
-      defaultPrompt: [
-        "Use CW to start a task.",
-        "Use CW to check the current task.",
-        "Use CW to finish verified work."
-      ]
-    }
-  }, null, 2)}\n`;
-}
-
-function renderCodexSkill(command: (typeof AGENT_COMMANDS)[number]): string {
-  return `---
-name: ${command}
-description: ${commandPurposes[command]}
----
-
-Use this skill when the user asks Codex to run \`${command}\` or the matching CW workflow action in this repository.
-
-Before acting, read the repository's \`.cw\` files relevant to the current task. Treat \`.cw\` as Repo Truth, generated plugin skills as invocation surfaces, and Git as the source of truth for code changes.
-
-${renderGenericCommand(command)}
-`;
+function harnessLabel(harness: HarnessName): string {
+  if (harness === "opencode") {
+    return "OpenCode";
+  }
+  if (harness === "pi") {
+    return "Pi";
+  }
+  return harness[0].toUpperCase() + harness.slice(1);
 }
 
 function relative(root: string, filePath: string): string {

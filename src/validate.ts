@@ -101,10 +101,17 @@ async function readEnhancementStatus(root: string): Promise<DoctorReport["enhanc
   }
   try {
     const config = await readJsonFile<EnhancementConfigRecord>(enhancementsPath);
-    return {
+    const status: NonNullable<DoctorReport["enhancements"]> = {
       code_intelligence: config.code_intelligence,
       external_context: config.external_context
     };
+    if (config.code_index !== undefined) {
+      status.code_index = config.code_index;
+    }
+    if (config.context_memory !== undefined) {
+      status.context_memory = config.context_memory;
+    }
+    return status;
   } catch {
     return { code_intelligence: null, external_context: null };
   }
@@ -124,43 +131,27 @@ async function validateTaskArtifacts(root: string, taskId: string, state: TaskSt
 
 async function generatedAdapterWarnings(root: string): Promise<ValidationIssue[]> {
   const warnings: ValidationIssue[] = [];
-  const paths = getCwPaths(root);
-  if (!(await exists(paths.agentCommands))) {
-    return warnings;
+  if (await exists(path.join(root, ".agents", "skills"))) {
+    warnings.push(...(await generatedSkillWarnings(root, ".agents/skills")));
   }
-  for (const command of AGENT_COMMANDS) {
-    const filePath = path.join(paths.agentCommands, `${command}.md`);
-    if (!(await exists(filePath))) {
-      warnings.push({ path: `.cw/agent-commands/${command}.md`, message: "generated command entry is missing" });
-      continue;
-    }
-    const content = await readFile(filePath, "utf8");
-    if (!content.includes(GENERATED_MARKER)) {
-      warnings.push({ path: `.cw/agent-commands/${command}.md`, message: "generated command entry appears stale" });
-    }
-  }
-  if (await codexAdapterExists(root)) {
-    warnings.push(...(await generatedCodexSkillWarnings(root)));
+  if (await exists(path.join(root, ".claude", "skills"))) {
+    warnings.push(...(await generatedSkillWarnings(root, ".claude/skills")));
   }
   return warnings;
 }
 
-async function codexAdapterExists(root: string): Promise<boolean> {
-  return exists(path.join(root, "plugins", "cw-workflow", ".codex-plugin", "plugin.json"));
-}
-
-async function generatedCodexSkillWarnings(root: string): Promise<ValidationIssue[]> {
+async function generatedSkillWarnings(root: string, skillsPath: ".agents/skills" | ".claude/skills"): Promise<ValidationIssue[]> {
   const warnings: ValidationIssue[] = [];
   for (const command of AGENT_COMMANDS) {
-    const filePath = path.join(root, ".codex", "skills", command, "SKILL.md");
-    const displayPath = `.codex/skills/${command}/SKILL.md`;
+    const filePath = path.join(root, skillsPath, command, "SKILL.md");
+    const displayPath = `${skillsPath}/${command}/SKILL.md`;
     if (!(await exists(filePath))) {
-      warnings.push({ path: displayPath, message: "generated Codex skill entry is missing" });
+      warnings.push({ path: displayPath, message: "generated skill entry is missing" });
       continue;
     }
     const content = await readFile(filePath, "utf8");
     if (!content.includes(GENERATED_MARKER)) {
-      warnings.push({ path: displayPath, message: "generated Codex skill entry appears stale" });
+      warnings.push({ path: displayPath, message: "generated skill entry appears stale" });
     }
   }
   return warnings;

@@ -1,5 +1,6 @@
 export * from "./adapters.js";
 export * from "./baseline.js";
+export * from "./enhancements.js";
 export * from "./git.js";
 export * from "./init.js";
 export * from "./preflight.js";

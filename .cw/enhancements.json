@@ -1,6 +1,53 @@
 {
   "schema_version": 1,
   "code_intelligence": "skipped",
-  "external_context": "skipped",
-  "updated_at": "2026-07-04T09:50:21.294Z"
+  "external_context": "configured",
+  "updated_at": "2026-07-04T17:20:36.254Z",
+  "code_index": {
+    "category": "code_index",
+    "provider_id": "aft",
+    "status": "failed",
+    "commands": [
+      "npx @cortexkit/aft@latest setup --harness opencode"
+    ],
+    "commands_run": [
+      "npx @cortexkit/aft@latest setup --harness opencode"
+    ],
+    "touched_files": [
+      ".cortexkit/aft.jsonc",
+      "opencode.jsonc",
+      "~/.config/opencode/opencode.jsonc"
+    ],
+    "message": "┌  AFT doctor\n│\n●  Detected OpenCode — using it for diagnose.",
+    "verification": {
+      "command": "npx @cortexkit/aft@latest doctor",
+      "ok": false,
+      "exit_code": 1
+    },
+    "updated_at": "2026-07-04T17:20:11.389Z"
+  },
+  "context_memory": {
+    "category": "context_memory",
+    "provider_id": "magic-context",
+    "status": "configured",
+    "commands": [
+      "npx @cortexkit/magic-context@latest setup --harness opencode"
+    ],
+    "commands_run": [
+      "npx @cortexkit/magic-context@latest setup --harness opencode"
+    ],
+    "touched_files": [
+      ".cortexkit/magic-context.jsonc",
+      "opencode.jsonc",
+      "~/.config/opencode/opencode.jsonc",
+      "~/.local/share/cortexkit/magic-context/context.db"
+    ],
+    "message": "Provider setup completed.",
+    "verification": {
+      "command": "npx @cortexkit/magic-context@latest doctor",
+      "ok": true,
+      "exit_code": 0
+    },
+    "updated_at": "2026-07-04T17:20:36.254Z"
+  }
 }

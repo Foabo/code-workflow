@@ -1,5 +1,17 @@
 #!/usr/bin/env node
 import { createInterface } from "node:readline/promises";
+import {
+  applyEnhancementSetup,
+  buildEnhancementSetupPlan,
+  CodebaseMemoryMcpDetection,
+  CodebaseMemoryMcpSetupMode,
+  commandToString,
+  defaultProviderFor,
+  detectCodebaseMemoryMcp,
+  EnhancementProviderId,
+  providerChoicesFor,
+  validateProviderSelection
+} from "./enhancements.js";
 import { initProject } from "./init.js";
 import { preflight, WorkflowAction } from "./preflight.js";
 import { listTasks, selectTask } from "./task-store.js";
@@ -14,7 +26,7 @@ import {
   updateTaskState
 } from "./tasks.js";
 import { doctorProject, validateProject } from "./validate.js";
-import { DirtyWorktreeDecision, EnhancementChoice, TaskLifecycle, TraceEvent } from "./types.js";
+import { DirtyWorktreeDecision, EnhancementCategory, EnhancementChoice, EnhancementProviderRecord, TaskLifecycle, TraceEvent } from "./types.js";
 import { HarnessName } from "./adapters.js";
 import { BaselineDecision, ensureBaselineDelta, syncBaselineDelta } from "./baseline.js";
 import { updateProject } from "./update.js";
@@ -27,19 +39,27 @@ type Choice<T extends string> = {
 };
 type PromptSession = {
   choice<T extends string>(question: string, choices: readonly Choice<T>[]): Promise<T>;
+  confirm(question: string, defaultValue?: boolean): Promise<boolean>;
   close(): void;
 };
+type InitEnhancementSelection = {
+  category: EnhancementCategory;
+  providerId: EnhancementProviderId;
+  codebaseMemoryMode?: CodebaseMemoryMcpSetupMode;
+  codebaseMemoryDetection?: CodebaseMemoryMcpDetection;
+  legacyChoice: EnhancementChoice;
+  legacyOnly: boolean;
+};
+type ProviderPromptValue =
+  | EnhancementProviderId
+  | "codebase-memory-mcp:existing";
 
 const HARNESS_CHOICES = [
-  { value: "generic", label: "Generic", detail: "Generate .cw agent command entries." },
-  { value: "codex", label: "Codex", detail: "Generate Codex plugin skills and generic command entries." }
+  { value: "codex", label: "Codex", detail: "Generate repo-local agent skills." },
+  { value: "claude", label: "Claude", detail: "Generate repo-local Claude skills." },
+  { value: "opencode", label: "OpenCode", detail: "Generate repo-local agent skills." },
+  { value: "pi", label: "Pi", detail: "Generate repo-local agent skills." }
 ] as const satisfies readonly Choice<HarnessName>[];
-
-const ENHANCEMENT_CHOICES = [
-  { value: "skipped", label: "Skip", detail: "Leave this enhancement disabled for now." },
-  { value: "detected", label: "Detect", detail: "Record that an existing tool was detected." },
-  { value: "configured", label: "Configure", detail: "Record that this enhancement is configured." }
-] as const satisfies readonly Choice<EnhancementChoice>[];
 
 async function main(argv: string[]): Promise<number> {
   const [command, subcommand, ...rest] = argv;
@@ -51,14 +71,34 @@ async function main(argv: string[]): Promise<number> {
   try {
     switch (command) {
       case "init": {
-        const prompts = createPromptSession();
+        const prompts = flagEnabled(publicFlags, "yes") ? null : createPromptSession();
         try {
+          const harness = await initHarness(publicFlags, prompts);
+          const codeIndex = await initProvider(
+            publicFlags,
+            prompts,
+            "code-index",
+            "code-intelligence",
+            "Code index tool",
+            "code_index",
+            harness
+          );
+          const contextMemory = await initProvider(
+            publicFlags,
+            prompts,
+            "context-memory",
+            "external-context",
+            "Context memory tool",
+            "context_memory",
+            harness
+          );
           const result = await initProject(root, {
-            harnesses: [await initHarness(publicFlags, prompts)],
-            codeIntelligence: await initEnhancement(publicFlags, prompts, "code-intelligence", "Code intelligence"),
-            externalContext: await initEnhancement(publicFlags, prompts, "external-context", "External context")
+            harnesses: [harness],
+            codeIntelligence: codeIndex.legacyChoice,
+            externalContext: contextMemory.legacyChoice
           });
-          printJson(result);
+          const setup = await runInitSetup(root, harness, [codeIndex, contextMemory], prompts);
+          printJson({ ...result, setup });
           return 0;
         } finally {
           prompts?.close();
@@ -75,7 +115,7 @@ async function main(argv: string[]): Promise<number> {
         return report.ok ? 0 : 1;
       }
       case "update": {
-        const result = await updateProject(root, [optionalHarness(publicFlags, "harness") ?? "generic"]);
+        const result = await updateProject(root, [optionalHarness(publicFlags, "harness") ?? "codex"]);
         printJson(result);
         return result.validation.ok ? 0 : 1;
       }
@@ -262,17 +302,112 @@ async function initHarness(flags: Flags, prompts: PromptSession | null): Promise
   return promptChoice(prompts, "Select coding harness", HARNESS_CHOICES);
 }
 
-async function initEnhancement(
+async function initProvider(
   flags: Flags,
   prompts: PromptSession | null,
   key: string,
-  label: string
-): Promise<EnhancementChoice> {
-  const value = optionalEnhancementChoice(flags, key);
-  if (value !== undefined) {
-    return value;
+  legacyKey: string,
+  label: string,
+  category: EnhancementCategory,
+  harness: HarnessName
+): Promise<InitEnhancementSelection> {
+  const explicit = optionalProviderSelection(flags, key, legacyKey, category, harness);
+  if (explicit !== undefined) {
+    return explicit;
   }
-  return promptChoice(prompts, label, ENHANCEMENT_CHOICES);
+  if (prompts === null) {
+    return defaultProviderSelection(category, harness);
+  }
+  const prompt = await providerPromptChoices(category, harness);
+  const value = await promptChoice(prompts, label, prompt.choices);
+  return providerSelectionFromPromptValue(value, category, harness, prompt.codebaseMemoryDetection);
+}
+
+async function runInitSetup(
+  root: string,
+  harness: HarnessName,
+  selections: InitEnhancementSelection[],
+  prompts: PromptSession | null
+): Promise<EnhancementProviderRecord[]> {
+  const results: EnhancementProviderRecord[] = [];
+  for (const selection of selections) {
+    if (selection.legacyOnly) {
+      results.push({
+        category: selection.category,
+        provider_id: "legacy-configured",
+        status: selection.legacyChoice === "skipped" ? "skipped" : "configured",
+        commands: [],
+        commands_run: [],
+        touched_files: [],
+        message: "Legacy enhancement flag accepted; no provider setup was run.",
+        verification: null,
+        updated_at: new Date().toISOString()
+      });
+      continue;
+    }
+
+    const plan = await buildEnhancementSetupPlan({
+      root,
+      harness,
+      category: selection.category,
+      providerId: selection.providerId,
+      codebaseMemoryMode: selection.codebaseMemoryMode,
+      codebaseMemoryDetection: selection.codebaseMemoryDetection
+    });
+    const confirmed = await confirmSetupPlan(plan, prompts);
+    results.push(await applyEnhancementSetup(root, plan, { confirmed }));
+  }
+  return results;
+}
+
+async function confirmSetupPlan(
+  plan: Awaited<ReturnType<typeof buildEnhancementSetupPlan>>,
+  prompts: PromptSession | null
+): Promise<boolean> {
+  if (plan.provider_id === "skipped") {
+    return false;
+  }
+  if (prompts === null) {
+    return false;
+  }
+  printSetupPlan(plan);
+  return await prompts.confirm(`Apply ${plan.label} setup now?`, false);
+}
+
+function printSetupPlan(plan: Awaited<ReturnType<typeof buildEnhancementSetupPlan>>): void {
+  process.stdout.write(`\n${plan.label} setup preview\n`);
+  process.stdout.write(`Category: ${plan.category}\n`);
+  process.stdout.write(`Intrusion: ${plan.intrusion}\n`);
+  if (plan.experimental) {
+    process.stdout.write("Experimental: yes\n");
+  }
+  if (plan.notes.length > 0) {
+    process.stdout.write("Notes:\n");
+    plan.notes.forEach((note) => {
+      process.stdout.write(`  - ${note}\n`);
+    });
+  }
+  if (plan.touched_files.length > 0) {
+    process.stdout.write("Files that may change:\n");
+    plan.touched_files.forEach((filePath) => {
+      process.stdout.write(`  - ${filePath}\n`);
+    });
+  }
+  if (plan.config_patches.length > 0) {
+    process.stdout.write("Config patches:\n");
+    plan.config_patches.forEach((patch) => {
+      process.stdout.write(`  - ${patch.file_path}: ${patch.description}\n`);
+    });
+  }
+  if (plan.commands.length > 0) {
+    process.stdout.write("Commands:\n");
+    plan.commands.forEach((command) => {
+      process.stdout.write(`  - ${commandToString(command)}\n`);
+    });
+  }
+  if (plan.verification !== null) {
+    process.stdout.write(`Verification: ${commandToString(plan.verification)}\n`);
+  }
 }
 
 function createPromptSession(): PromptSession | null {
@@ -286,7 +421,7 @@ function createPromptSession(): PromptSession | null {
       for (;;) {
         process.stdout.write(`\n${question}\n`);
         choices.forEach((choice, index) => {
-          process.stdout.write(`  ${index + 1}. ${choice.label} (${choice.value}) - ${choice.detail}\n`);
+          process.stdout.write(`  ${index + 1}. ${choice.label} - ${choice.detail}\n`);
         });
 
         const answer = (await rl.question(`Choose [1]: `)).trim();
@@ -299,12 +434,28 @@ function createPromptSession(): PromptSession | null {
           return choices[numbered - 1].value;
         }
 
-        const named = choices.find((choice) => choice.value === answer);
+        const named = choices.find((choice) => choice.value === answer || choice.label.toLowerCase() === answer.toLowerCase());
         if (named !== undefined) {
           return named.value;
         }
 
         process.stdout.write(`Please choose 1-${choices.length} or one of: ${choices.map((choice) => choice.value).join(", ")}.\n`);
+      }
+    },
+    async confirm(question: string, defaultValue = false): Promise<boolean> {
+      const suffix = defaultValue ? "Y/n" : "y/N";
+      for (;;) {
+        const answer = (await rl.question(`${question} [${suffix}]: `)).trim().toLowerCase();
+        if (answer.length === 0) {
+          return defaultValue;
+        }
+        if (answer === "y" || answer === "yes") {
+          return true;
+        }
+        if (answer === "n" || answer === "no") {
+          return false;
+        }
+        process.stdout.write("Please answer yes or no.\n");
       }
     },
     close(): void {
@@ -323,6 +474,11 @@ async function promptChoice<T extends string>(
 
 function isInteractive(): boolean {
   return process.env.CW_FORCE_INTERACTIVE === "1" || Boolean(process.stdin.isTTY && process.stdout.isTTY);
+}
+
+function flagEnabled(flags: Flags, key: string): boolean {
+  const value = flags[key];
+  return value === true || value === "true" || value === "1";
 }
 
 function requiredString(flags: Flags, key: string): string {
@@ -368,13 +524,10 @@ function optionalHarness(flags: Flags, key: string): HarnessName | undefined {
   if (value === undefined) {
     return undefined;
   }
-  if (value === "generic") {
+  if (value === "codex" || value === "claude" || value === "opencode" || value === "pi") {
     return value;
   }
-  if (value === "codex") {
-    return value;
-  }
-  throw new Error(`--${key} must be generic or codex`);
+  throw new Error(`--${key} must be codex, claude, opencode, or pi`);
 }
 
 function requiredWorkflowAction(flags: Flags, key: string): WorkflowAction {
@@ -425,15 +578,136 @@ function requiredBaselineDecision(flags: Flags, key: string): BaselineDecision {
   throw new Error(`--${key} must be accepted, selected, edited, or skipped`);
 }
 
-function optionalEnhancementChoice(flags: Flags, key: string): EnhancementChoice | undefined {
+function optionalProviderSelection(
+  flags: Flags,
+  key: string,
+  legacyKey: string,
+  category: EnhancementCategory,
+  harness: HarnessName
+): InitEnhancementSelection | undefined {
   const value = optionalString(flags, key);
-  if (value === undefined) {
-    return undefined;
+  if (value !== undefined) {
+    return providerSelectionFromValue(value, key, category, harness);
   }
-  if (value === "skipped" || value === "detected" || value === "configured") {
-    return value;
+
+  const legacyValue = optionalString(flags, legacyKey);
+  if (legacyValue !== undefined) {
+    return providerSelectionFromValue(legacyValue, legacyKey, category, harness);
   }
-  throw new Error(`--${key} must be skipped, detected, or configured`);
+
+  return undefined;
+}
+
+function providerSelectionFromValue(
+  value: string,
+  key: string,
+  category: EnhancementCategory,
+  harness: HarnessName
+): InitEnhancementSelection {
+  if (value === "configured" || (key !== "code-index" && key !== "context-memory" && value === "detected")) {
+    return { category, providerId: "skipped", legacyChoice: value as EnhancementChoice, legacyOnly: true };
+  }
+  const codebaseMode = codebaseMemoryModeFromValue(value, category);
+  if (codebaseMode !== null) {
+    return {
+      category,
+      providerId: "codebase-memory-mcp",
+      codebaseMemoryMode: codebaseMode,
+      legacyChoice: "skipped",
+      legacyOnly: false
+    };
+  }
+  const providerId = validateProviderSelection(value, category, harness);
+  return {
+    category,
+    providerId,
+    legacyChoice: "skipped",
+    legacyOnly: false
+  };
+}
+
+async function providerPromptChoices(
+  category: EnhancementCategory,
+  harness: HarnessName
+): Promise<{ choices: Choice<ProviderPromptValue>[]; codebaseMemoryDetection?: CodebaseMemoryMcpDetection }> {
+  const choices = providerChoicesFor(category, harness) as Choice<ProviderPromptValue>[];
+  if (category !== "code_index" || (harness !== "codex" && harness !== "claude")) {
+    return { choices };
+  }
+
+  const detection = await detectCodebaseMemoryMcp();
+  if (!detection.installed) {
+    return { choices };
+  }
+
+  const experimentalChoices = choices.filter((choice) => choice.value !== "codebase-memory-mcp" && choice.value !== "skipped");
+  return {
+    codebaseMemoryDetection: detection,
+    choices: [
+      {
+        value: "codebase-memory-mcp",
+        label: "codebase-memory-mcp (installed)",
+        detail: `${detection.version ?? "existing install"} found; use it and index this repository.`
+      },
+      ...experimentalChoices,
+      { value: "skipped", label: "Skip", detail: "Do not set this up now." }
+    ]
+  };
+}
+
+function providerSelectionFromPromptValue(
+  value: ProviderPromptValue,
+  category: EnhancementCategory,
+  harness: HarnessName,
+  codebaseMemoryDetection: CodebaseMemoryMcpDetection | undefined
+): InitEnhancementSelection {
+  if (value === "codebase-memory-mcp" && codebaseMemoryDetection?.installed === true) {
+    return {
+      category,
+      providerId: "codebase-memory-mcp",
+      codebaseMemoryMode: "use-existing",
+      codebaseMemoryDetection,
+      legacyChoice: "skipped",
+      legacyOnly: false
+    };
+  }
+  const codebaseMode = codebaseMemoryModeFromValue(value, category);
+  if (codebaseMode !== null) {
+    return {
+      category,
+      providerId: "codebase-memory-mcp",
+      codebaseMemoryMode: codebaseMode,
+      codebaseMemoryDetection,
+      legacyChoice: "skipped",
+      legacyOnly: false
+    };
+  }
+  const providerId = validateProviderSelection(value, category, harness);
+  return {
+    category,
+    providerId,
+    legacyChoice: "skipped",
+    legacyOnly: false
+  };
+}
+
+function defaultProviderSelection(category: EnhancementCategory, harness: HarnessName): InitEnhancementSelection {
+  return {
+    category,
+    providerId: defaultProviderFor(category, harness),
+    legacyChoice: "skipped",
+    legacyOnly: false
+  };
+}
+
+function codebaseMemoryModeFromValue(value: string, category: EnhancementCategory): CodebaseMemoryMcpSetupMode | null {
+  if (category !== "code_index") {
+    return null;
+  }
+  if (value === "codebase-memory-mcp:existing") {
+    return "use-existing";
+  }
+  return null;
 }
 
 function optionalBaselineFiles(flags: Flags, key: string): Array<"overview.md" | "architecture.md" | "rules.md" | "commands.md"> | undefined {
@@ -470,10 +744,10 @@ function printJson(value: unknown): void {
 
 function printUsage(): void {
   console.log(`Usage:
-  cw init [path] [--root <path>] [--harness generic|codex] [--code-intelligence skipped|detected|configured] [--external-context skipped|detected|configured]
+  cw init [path] [--root <path>] [--harness codex|claude|opencode|pi] [--code-index skipped|codebase-memory-mcp|aft|codegraph|graphify] [--context-memory skipped|codex-native-memories|claude-mem|magic-context] [--yes]
   cw validate [--root <path>]
   cw doctor [--root <path>]
-  cw update [--root <path>] [--harness generic|codex]
+  cw update [--root <path>] [--harness codex|claude|opencode|pi]
   cw tasks [--root <path>]
   cw preflight --action <action> [--task <id>] [--root <path>]
   cw internal <helper> [flags]`);

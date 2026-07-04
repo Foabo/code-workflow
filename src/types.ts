@@ -2,6 +2,8 @@ export const CW_SCHEMA_VERSION = 1;
 
 export type TaskLifecycle = "open" | "blocked" | "parked" | "closed";
 export type EnhancementChoice = "skipped" | "detected" | "configured";
+export type EnhancementCategory = "code_index" | "context_memory";
+export type EnhancementSetupStatus = "skipped" | "pending" | "configured" | "failed";
 export type DirtyWorktreeDecision = "clean" | "covered" | "unrelated";
 export type BaselineDecision = "accepted" | "selected" | "edited" | "skipped";
 
@@ -40,6 +42,24 @@ export type EnhancementConfigRecord = {
   schema_version: 1;
   code_intelligence: EnhancementChoice;
   external_context: EnhancementChoice;
+  code_index?: EnhancementProviderRecord;
+  context_memory?: EnhancementProviderRecord;
+  updated_at: string;
+};
+
+export type EnhancementProviderRecord = {
+  category: EnhancementCategory;
+  provider_id: string;
+  status: EnhancementSetupStatus;
+  commands: string[];
+  commands_run: string[];
+  touched_files: string[];
+  message: string;
+  verification: {
+    command: string;
+    ok: boolean;
+    exit_code: number | null;
+  } | null;
   updated_at: string;
 };
 
@@ -62,5 +82,7 @@ export type DoctorReport = {
   enhancements?: {
     code_intelligence: EnhancementChoice | null;
     external_context: EnhancementChoice | null;
+    code_index?: EnhancementProviderRecord | null;
+    context_memory?: EnhancementProviderRecord | null;
   };
 };

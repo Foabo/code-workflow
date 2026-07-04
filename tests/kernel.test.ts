@@ -1,20 +1,25 @@
 import { spawn } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  applyEnhancementSetup,
   consumeResumeNote,
   createResumeNote,
   createTask,
   discardTask,
   doctorProject,
+  enableCodexMemoriesConfig,
   ensureBaselineDelta,
   finishTask,
+  buildEnhancementSetupPlan,
   initProject,
   listTasks,
+  normalizeEnhancementProviderRecord,
   preflight,
+  providerChoicesFor,
   readTaskState,
   runWorkflowAction,
   selectTask,
@@ -23,6 +28,7 @@ import {
   updateTaskState,
   validateProject
 } from "../src/index.js";
+import type { CommandRunner } from "../src/index.js";
 
 describe("cw kernel", () => {
   it("initializes a project with version, baseline, task templates, and valid structure", async () => {
@@ -34,13 +40,8 @@ describe("cw kernel", () => {
     assert.ok(result.created.includes(".cw/project/overview.md"));
     assert.ok(result.created.includes(".cw/enhancements.json"));
     assert.ok(result.created.includes(".cw/templates/spec.md"));
-    assert.equal(result.adapters[0]?.harness, "generic");
-    assert.ok(result.adapters[0]?.created.includes(".cw/agent-commands/cw-work.md"));
-    const command = await readFile(path.join(root, ".cw/agent-commands/cw-work.md"), "utf8");
-    assert.match(command, /generated-by-cw:v1/);
-    assert.match(command, /repo truth/);
-    assert.match(command, /cw preflight --action work/);
-    assert.match(command, /Hybrid execution is recommended/);
+    assert.deepEqual(result.adapters, []);
+    await assert.rejects(access(path.join(root, ".cw/agent-commands")));
     assert.deepEqual(await validateProject(root), []);
     const doctor = await doctorProject(root);
     assert.equal(doctor.ok, true);
@@ -62,41 +63,69 @@ describe("cw kernel", () => {
     assert.equal((await doctorProject(root)).ok, true);
   });
 
-  it("generates a Codex plugin and skills for the Codex harness", async () => {
+  it("generates repo-local agent skills for the Codex harness", async () => {
     const root = await tempRoot();
 
     const result = await initProject(root, { harnesses: ["codex"] });
 
     assert.equal(result.adapters[0]?.harness, "codex");
-    assert.ok(result.adapters[0]?.created.includes(".agents/plugins/marketplace.json"));
-    assert.ok(result.adapters[0]?.created.includes("plugins/cw-workflow/.codex-plugin/plugin.json"));
-    assert.ok(result.adapters[0]?.created.includes("plugins/cw-workflow/skills/cw-work/SKILL.md"));
-    assert.ok(result.adapters[0]?.created.includes(".codex/skills/cw-work/SKILL.md"));
-    assert.ok(result.adapters[0]?.created.includes(".cw/agent-commands/cw-work.md"));
-    const marketplace = await readFile(path.join(root, ".agents/plugins/marketplace.json"), "utf8");
-    assert.match(marketplace, /"name": "cw-workflow"/);
-    const manifest = await readFile(path.join(root, "plugins/cw-workflow/.codex-plugin/plugin.json"), "utf8");
-    assert.match(manifest, /"skills": "\.\/skills\/"/);
-    const skill = await readFile(path.join(root, "plugins/cw-workflow/skills/cw-work/SKILL.md"), "utf8");
+    assert.ok(result.adapters[0]?.created.includes(".agents/skills/cw-work/SKILL.md"));
+    await assert.rejects(access(path.join(root, ".cw/agent-commands")));
+    await assert.rejects(access(path.join(root, ".agents/plugins/marketplace.json")));
+    await assert.rejects(access(path.join(root, ".codex/skills/cw-work/SKILL.md")));
+    await assert.rejects(access(path.join(root, "plugins/cw-workflow/.codex-plugin/plugin.json")));
+    const skill = await readFile(path.join(root, ".agents/skills/cw-work/SKILL.md"), "utf8");
     assert.match(skill, /^---\nname: cw-work/m);
     assert.match(skill, /Treat `\.cw` as Repo Truth/);
     assert.match(skill, /cw preflight --action work/);
     assert.match(skill, /Implementer subagents may write code/);
     assert.match(skill, /Checker subagents must return spec drift/);
-    const repoSkill = await readFile(path.join(root, ".codex/skills/cw-work/SKILL.md"), "utf8");
-    assert.match(repoSkill, /^---\nname: cw-work/m);
-    assert.match(repoSkill, /cw preflight --action work/);
 
-    await writeFile(path.join(root, "plugins/cw-workflow/skills/cw-work/SKILL.md"), "stale", "utf8");
-    await writeFile(path.join(root, ".codex/skills/cw-work/SKILL.md"), "stale", "utf8");
+    await writeFile(path.join(root, ".agents/skills/cw-work/SKILL.md"), "stale", "utf8");
     const staleReport = await doctorProject(root);
     assert.equal(staleReport.ok, false);
-    assert.ok(staleReport.warnings.some((warning) => warning.path === ".codex/skills/cw-work/SKILL.md"));
+    assert.ok(staleReport.warnings.some((warning) => warning.path === ".agents/skills/cw-work/SKILL.md"));
 
     const update = await updateProject(root, ["codex"]);
     assert.equal(update.validation.ok, true);
-    assert.match(await readFile(path.join(root, "plugins/cw-workflow/skills/cw-work/SKILL.md"), "utf8"), /cw preflight --action work/);
-    assert.match(await readFile(path.join(root, ".codex/skills/cw-work/SKILL.md"), "utf8"), /cw preflight --action work/);
+    assert.match(await readFile(path.join(root, ".agents/skills/cw-work/SKILL.md"), "utf8"), /cw preflight --action work/);
+  });
+
+  it("generates Claude, OpenCode, and Pi harness entries", async () => {
+    const claudeRoot = await tempRoot();
+    const opencodeRoot = await tempRoot();
+    const piRoot = await tempRoot();
+
+    const claude = await initProject(claudeRoot, { harnesses: ["claude"] });
+    const opencode = await initProject(opencodeRoot, { harnesses: ["opencode"] });
+    const pi = await initProject(piRoot, { harnesses: ["pi"] });
+
+    assert.equal(claude.adapters[0]?.harness, "claude");
+    assert.ok(claude.adapters[0]?.created.includes(".claude/skills/cw-work/SKILL.md"));
+    await assert.rejects(access(path.join(claudeRoot, ".cw/agent-commands")));
+    await assert.rejects(access(path.join(claudeRoot, ".claude/commands")));
+    const claudeSkill = await readFile(path.join(claudeRoot, ".claude/skills/cw-work/SKILL.md"), "utf8");
+    assert.match(claudeSkill, /^---\nname: cw-work/m);
+    assert.match(claudeSkill, /Claude/);
+    assert.match(claudeSkill, /cw preflight --action work/);
+
+    assert.equal(opencode.adapters[0]?.harness, "opencode");
+    assert.ok(opencode.adapters[0]?.created.includes(".agents/skills/cw-work/SKILL.md"));
+    await assert.rejects(access(path.join(opencodeRoot, ".cw/agent-commands")));
+    await assert.rejects(access(path.join(opencodeRoot, ".opencode/commands")));
+    const opencodeSkill = await readFile(path.join(opencodeRoot, ".agents/skills/cw-work/SKILL.md"), "utf8");
+    assert.match(opencodeSkill, /^---\nname: cw-work/m);
+    assert.match(opencodeSkill, /OpenCode/);
+    assert.match(opencodeSkill, /cw preflight --action work/);
+
+    assert.equal(pi.adapters[0]?.harness, "pi");
+    assert.ok(pi.adapters[0]?.created.includes(".agents/skills/cw-work/SKILL.md"));
+    await assert.rejects(access(path.join(piRoot, ".cw/agent-commands")));
+    await assert.rejects(access(path.join(piRoot, ".pi/skills")));
+    const piSkill = await readFile(path.join(piRoot, ".agents/skills/cw-work/SKILL.md"), "utf8");
+    assert.match(piSkill, /^---\nname: cw-work/m);
+    assert.match(piSkill, /Pi/);
+    assert.match(piSkill, /cw preflight --action work/);
   });
 
   it("accepts a positional root for CLI init", async () => {
@@ -115,23 +144,100 @@ describe("cw kernel", () => {
 
   it("prompts for missing init choices in an interactive CLI session", async () => {
     const root = await tempRoot();
+    const emptyPath = await tempRoot();
 
     const cli = await runCli(["init", "."], {
       cwd: root,
-      env: { CW_FORCE_INTERACTIVE: "1" },
-      answers: ["2", "3", "2"]
+      env: { CW_FORCE_INTERACTIVE: "1", PATH: emptyPath },
+      answers: ["1", "1", "1", "n", "n"]
     });
 
     assert.equal(cli.code, 0, cli.stderr);
     assert.match(cli.stdout, /Select coding harness/);
-    assert.match(cli.stdout, /Code intelligence/);
-    assert.match(cli.stdout, /External context/);
+    assert.match(cli.stdout, /Codex/);
+    assert.match(cli.stdout, /Claude/);
+    assert.match(cli.stdout, /OpenCode/);
+    assert.match(cli.stdout, /Pi/);
+    assert.doesNotMatch(cli.stdout, /Generic|Detect|Configure|Use existing/);
+    assert.match(cli.stdout, /Code index tool/);
+    assert.match(cli.stdout, /Context memory tool/);
+    assert.match(cli.stdout, /codebase-memory-mcp/);
+    assert.match(cli.stdout, /Graphify \(experimental, intrusive\)/);
+    assert.match(cli.stdout, /CodeGraph \(experimental, intrusive\)/);
+    assert.match(cli.stdout, /Codex native memories/);
+    assert.match(cli.stdout, /setup preview/);
+    assert.match(cli.stdout, /Apply codebase-memory-mcp setup now/);
     const result = parseCliJson(cli.stdout);
     assert.equal(((result.adapters as Array<{ harness: string }>)[0]?.harness), "codex");
-    assert.ok(((result.adapters as Array<{ created: string[] }>)[0]?.created ?? []).includes(".agents/plugins/marketplace.json"));
+    assert.ok(((result.adapters as Array<{ created: string[] }>)[0]?.created ?? []).includes(".agents/skills/cw-work/SKILL.md"));
     const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
-    assert.equal(enhancements.code_intelligence, "configured");
-    assert.equal(enhancements.external_context, "detected");
+    assert.equal(enhancements.code_intelligence, "skipped");
+    assert.equal(enhancements.external_context, "skipped");
+    assert.equal((enhancements.code_index as Record<string, unknown>).provider_id, "codebase-memory-mcp");
+    assert.equal((enhancements.code_index as Record<string, unknown>).status, "pending");
+    assert.equal((enhancements.context_memory as Record<string, unknown>).provider_id, "codex-native-memories");
+    assert.equal((enhancements.context_memory as Record<string, unknown>).status, "pending");
+  });
+
+  it("offers existing codebase-memory-mcp without update or reinstall choices when installed", async () => {
+    const root = await tempRoot();
+    const fakeBin = await tempRoot();
+    const fakeCodebaseMemory = path.join(fakeBin, "codebase-memory-mcp");
+    await writeFile(fakeCodebaseMemory, "#!/bin/sh\necho 0.8.1\n", "utf8");
+    await chmod(fakeCodebaseMemory, 0o755);
+
+    const cli = await runCli(["init", "."], {
+      cwd: root,
+      env: { CW_FORCE_INTERACTIVE: "1", PATH: fakeBin },
+      answers: ["1", "1", "1", "n", "n"]
+    });
+
+    assert.equal(cli.code, 0, cli.stderr);
+    assert.match(cli.stdout, /codebase-memory-mcp \(installed\)/);
+    assert.doesNotMatch(cli.stdout, /codebase-memory-mcp update/);
+    assert.doesNotMatch(cli.stdout, /codebase-memory-mcp reinstall/);
+    assert.match(cli.stdout, /Graphify \(experimental, intrusive\)/);
+    assert.match(cli.stdout, /CodeGraph \(experimental, intrusive\)/);
+    assert.doesNotMatch(cli.stdout, /install\.sh/);
+    assert.match(cli.stdout, /Uses the existing install and does not run the installer/);
+
+    const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
+    const codeIndex = enhancements.code_index as Record<string, unknown>;
+    assert.equal(codeIndex.provider_id, "codebase-memory-mcp");
+    assert.equal(codeIndex.status, "pending");
+    assert.equal(JSON.stringify(codeIndex).includes(root), false);
+    assert.doesNotMatch(JSON.stringify(codeIndex.commands), /install\.sh/);
+    assert.match(JSON.stringify(codeIndex.commands), /index_repository/);
+  });
+
+  it("reuses installed codebase-memory-mcp detection for Claude init", async () => {
+    const root = await tempRoot();
+    const fakeBin = await tempRoot();
+    const fakeCodebaseMemory = path.join(fakeBin, "codebase-memory-mcp");
+    await writeFile(fakeCodebaseMemory, "#!/bin/sh\necho 0.8.1\n", "utf8");
+    await chmod(fakeCodebaseMemory, 0o755);
+
+    const cli = await runCli(["init", ".", "--harness", "claude"], {
+      cwd: root,
+      env: { CW_FORCE_INTERACTIVE: "1", PATH: fakeBin },
+      answers: ["1", "1", "n", "n"]
+    });
+
+    assert.equal(cli.code, 0, cli.stderr);
+    assert.match(cli.stdout, /codebase-memory-mcp \(installed\)/);
+    assert.doesNotMatch(cli.stdout, /codebase-memory-mcp update|codebase-memory-mcp reinstall/);
+    assert.match(cli.stdout, /claude-mem \(intrusive\)/);
+    assert.match(cli.stdout, /Apply claude-mem setup now/);
+    assert.doesNotMatch(cli.stdout, /install\.sh/);
+
+    const result = parseCliJson(cli.stdout);
+    assert.equal(((result.adapters as Array<{ harness: string }>)[0]?.harness), "claude");
+    const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
+    const codeIndex = enhancements.code_index as Record<string, unknown>;
+    assert.equal(codeIndex.provider_id, "codebase-memory-mcp");
+    assert.equal(codeIndex.status, "pending");
+    assert.doesNotMatch(JSON.stringify(codeIndex.commands), /install\.sh/);
+    assert.equal((enhancements.context_memory as Record<string, unknown>).provider_id, "claude-mem");
   });
 
   it("skips init prompts when explicit CLI flags are provided", async () => {
@@ -144,21 +250,437 @@ describe("cw kernel", () => {
         root,
         "--harness",
         "codex",
-        "--code-intelligence",
-        "configured",
-        "--external-context",
-        "detected"
+        "--code-index",
+        "skipped",
+        "--context-memory",
+        "skipped"
       ],
       { env: { CW_FORCE_INTERACTIVE: "1" } }
     );
 
     assert.equal(cli.code, 0, cli.stderr);
-    assert.doesNotMatch(cli.stdout, /Select coding harness|Code intelligence|External context/);
+    assert.doesNotMatch(cli.stdout, /Select coding harness|Code index tool|Context memory tool/);
     const result = parseCliJson(cli.stdout);
     assert.equal(((result.adapters as Array<{ harness: string }>)[0]?.harness), "codex");
     const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
+    assert.equal(enhancements.code_intelligence, "skipped");
+    assert.equal(enhancements.external_context, "skipped");
+    assert.equal((enhancements.code_index as Record<string, unknown>).status, "skipped");
+    assert.equal((enhancements.context_memory as Record<string, unknown>).status, "skipped");
+  });
+
+  it("accepts explicit Claude, OpenCode, and Pi harness flags", async () => {
+    const cases = [
+      { harness: "claude", generatedPath: ".claude/skills/cw-work/SKILL.md" },
+      { harness: "opencode", generatedPath: ".agents/skills/cw-work/SKILL.md" },
+      { harness: "pi", generatedPath: ".agents/skills/cw-work/SKILL.md" }
+    ] as const;
+
+    for (const testCase of cases) {
+      const root = await tempRoot();
+      const cli = await runCli(
+        [
+          "init",
+          "--root",
+          root,
+          "--harness",
+          testCase.harness,
+          "--code-index",
+          "skipped",
+          "--context-memory",
+          "skipped"
+        ],
+        { env: { CW_FORCE_INTERACTIVE: "1" } }
+      );
+
+      assert.equal(cli.code, 0, cli.stderr);
+      assert.doesNotMatch(cli.stdout, /Select coding harness|Code index tool|Context memory tool/);
+      const result = parseCliJson(cli.stdout);
+      assert.equal(((result.adapters as Array<{ harness: string }>)[0]?.harness), testCase.harness);
+      await access(path.join(root, testCase.generatedPath));
+      const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
+      assert.equal((enhancements.code_index as Record<string, unknown>).status, "skipped");
+      assert.equal((enhancements.context_memory as Record<string, unknown>).status, "skipped");
+      assert.deepEqual(await validateProject(root), []);
+    }
+  });
+
+  it("keeps provider setup pending for --yes init", async () => {
+    const root = await tempRoot();
+    const home = await tempRoot();
+
+    const cli = await runCli(
+      [
+        "init",
+        "--root",
+        root,
+        "--harness",
+        "codex",
+        "--code-index",
+        "codebase-memory-mcp",
+        "--context-memory",
+        "codex-native-memories",
+        "--yes"
+      ],
+      { env: { CW_FORCE_INTERACTIVE: "1", HOME: home } }
+    );
+
+    assert.equal(cli.code, 0, cli.stderr);
+    assert.doesNotMatch(cli.stdout, /Select coding harness|Code index tool|Context memory tool|Apply .* setup now/);
+    await assert.rejects(access(path.join(home, ".codex", "config.toml")));
+    const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
+    assert.equal(enhancements.code_intelligence, "skipped");
+    assert.equal(enhancements.external_context, "skipped");
+    assert.equal((enhancements.code_index as Record<string, unknown>).status, "pending");
+    assert.equal((enhancements.context_memory as Record<string, unknown>).status, "pending");
+    assert.deepEqual(await validateProject(root), []);
+  });
+
+  it("records default pending setup for --yes init on Claude, OpenCode, and Pi", async () => {
+    const cases = [
+      {
+        harness: "claude",
+        codeIndex: "codebase-memory-mcp",
+        contextMemory: "claude-mem",
+        absentPath: [".claude-mem"]
+      },
+      {
+        harness: "opencode",
+        codeIndex: "aft",
+        contextMemory: "magic-context",
+        absentPath: [".cortexkit"]
+      },
+      {
+        harness: "pi",
+        codeIndex: "aft",
+        contextMemory: "magic-context",
+        absentPath: [".cortexkit"]
+      }
+    ] as const;
+
+    for (const testCase of cases) {
+      const root = await tempRoot();
+      const home = await tempRoot();
+      const cli = await runCli(
+        ["init", "--root", root, "--harness", testCase.harness, "--yes"],
+        { env: { CW_FORCE_INTERACTIVE: "1", HOME: home } }
+      );
+
+      assert.equal(cli.code, 0, cli.stderr);
+      assert.doesNotMatch(cli.stdout, /Select coding harness|Code index tool|Context memory tool|Apply .* setup now/);
+      const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
+      const codeIndex = enhancements.code_index as Record<string, unknown>;
+      const contextMemory = enhancements.context_memory as Record<string, unknown>;
+      assert.equal(codeIndex.provider_id, testCase.codeIndex);
+      assert.equal(codeIndex.status, "pending");
+      assert.deepEqual(codeIndex.commands_run, []);
+      assert.equal(contextMemory.provider_id, testCase.contextMemory);
+      assert.equal(contextMemory.status, "pending");
+      assert.deepEqual(contextMemory.commands_run, []);
+      for (const absentPath of testCase.absentPath) {
+        await assert.rejects(access(path.join(home, absentPath)));
+        await assert.rejects(access(path.join(root, absentPath)));
+      }
+      assert.deepEqual(await validateProject(root), []);
+    }
+  });
+
+  it("patches Codex memories config and records context memory metadata", async () => {
+    const root = await tempRoot();
+    const home = await tempRoot();
+    const configPath = path.join(home, ".codex", "config.toml");
+    await mkdir(path.dirname(configPath), { recursive: true });
+    await writeFile(configPath, "[features]\nmodel_reasoning_effort = \"medium\"\nmemories = false\n", "utf8");
+    await initProject(root, { harnesses: ["codex"] });
+
+    const plan = await buildEnhancementSetupPlan({
+      root,
+      harness: "codex",
+      category: "context_memory",
+      providerId: "codex-native-memories",
+      homeDir: home
+    });
+    const result = await applyEnhancementSetup(root, plan, {
+      confirmed: true,
+      now: new Date("2026-07-04T00:00:00.000Z")
+    });
+
+    assert.equal(result.status, "configured");
+    assert.equal(await readFile(configPath, "utf8"), "[features]\nmodel_reasoning_effort = \"medium\"\nmemories = true\n");
+    const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
+    assert.equal(enhancements.external_context, "configured");
+    assert.equal((enhancements.context_memory as Record<string, unknown>).provider_id, "codex-native-memories");
+    assert.deepEqual((enhancements.context_memory as Record<string, unknown>).verification, {
+      command: "verify config patches were written",
+      ok: true,
+      exit_code: 0
+    });
+    assert.deepEqual(await validateProject(root), []);
+  });
+
+  it("runs codebase-memory-mcp setup through an injectable runner", async () => {
+    const root = await tempRoot();
+    await initProject(root, { harnesses: ["codex"] });
+    const commands: string[] = [];
+    const runner: CommandRunner = async (command) => {
+      commands.push([command.command, ...command.args].join(" "));
+      return { ok: true, stdout: "ok\n", stderr: "", exitCode: 0 };
+    };
+
+    const plan = await buildEnhancementSetupPlan({
+      root,
+      harness: "codex",
+      category: "code_index",
+      providerId: "codebase-memory-mcp"
+    });
+    const result = await applyEnhancementSetup(root, plan, {
+      confirmed: true,
+      runner,
+      now: new Date("2026-07-04T00:00:00.000Z")
+    });
+
+    assert.equal(result.status, "configured");
+    assert.equal(commands.length, 3);
+    assert.match(commands[0] ?? "", /install\.sh/);
+    assert.match(commands[1] ?? "", /index_repository/);
+    assert.match(commands[2] ?? "", /--version/);
+    assert.equal(result.commands.some((command) => command.includes(root)), false);
+    assert.equal(result.commands_run.some((command) => command.includes(root)), false);
+    const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
     assert.equal(enhancements.code_intelligence, "configured");
-    assert.equal(enhancements.external_context, "detected");
+    assert.equal((enhancements.code_index as Record<string, unknown>).provider_id, "codebase-memory-mcp");
+    assert.equal((enhancements.code_index as Record<string, unknown>).status, "configured");
+    assert.equal(JSON.stringify(enhancements.code_index).includes(root), false);
+    assert.deepEqual(await validateProject(root), []);
+  });
+
+  it("builds codebase-memory-mcp plans for install and use-existing flows", async () => {
+    const root = await tempRoot();
+    const detection = {
+      installed: true,
+      binary_path: "/tmp/bin/codebase-memory-mcp",
+      version: "0.8.1",
+      message: "Found codebase-memory-mcp 0.8.1."
+    };
+
+    const existing = await buildEnhancementSetupPlan({
+      root,
+      harness: "codex",
+      category: "code_index",
+      providerId: "codebase-memory-mcp",
+      codebaseMemoryMode: "use-existing",
+      codebaseMemoryDetection: detection
+    });
+    const install = await buildEnhancementSetupPlan({
+      root,
+      harness: "codex",
+      category: "code_index",
+      providerId: "codebase-memory-mcp"
+    });
+
+    assert.equal(existing.commands.length, 1);
+    assert.equal(existing.commands[0]?.command, "codebase-memory-mcp");
+    assert.equal(install.commands.length, 2);
+    assert.equal(install.commands[0]?.command, "bash");
+    assert.match(install.commands[0]?.args.join(" ") ?? "", /install\.sh/);
+  });
+
+  it("builds Claude, OpenCode, and Pi default provider choices and setup plans", async () => {
+    const root = await tempRoot();
+
+    assert.equal(providerChoicesFor("code_index", "claude")[0]?.value, "codebase-memory-mcp");
+    assert.equal(providerChoicesFor("context_memory", "claude")[0]?.value, "claude-mem");
+    assert.match(providerChoicesFor("context_memory", "claude")[0]?.label ?? "", /intrusive/i);
+    assert.equal(providerChoicesFor("code_index", "opencode")[0]?.value, "aft");
+    assert.match(providerChoicesFor("code_index", "opencode")[0]?.label ?? "", /intrusive/i);
+    assert.equal(providerChoicesFor("context_memory", "opencode")[0]?.value, "magic-context");
+    assert.match(providerChoicesFor("context_memory", "opencode")[0]?.label ?? "", /intrusive/i);
+    assert.equal(providerChoicesFor("code_index", "pi")[0]?.value, "aft");
+    assert.equal(providerChoicesFor("context_memory", "pi")[0]?.value, "magic-context");
+
+    const claudeMem = await buildEnhancementSetupPlan({
+      root,
+      harness: "claude",
+      category: "context_memory",
+      providerId: "claude-mem"
+    });
+    assert.equal(claudeMem.intrusion, "high");
+    assert.equal(claudeMem.commands[0]?.command, "npx");
+    assert.deepEqual(claudeMem.commands[0]?.args, ["claude-mem", "install"]);
+    assert.ok(claudeMem.touched_files.includes("~/.claude-mem/settings.json"));
+
+    const opencodeAft = await buildEnhancementSetupPlan({
+      root,
+      harness: "opencode",
+      category: "code_index",
+      providerId: "aft"
+    });
+    assert.equal(opencodeAft.intrusion, "high");
+    assert.deepEqual(opencodeAft.commands[0]?.args, ["@cortexkit/aft@latest", "setup", "--harness", "opencode"]);
+    assert.ok(opencodeAft.touched_files.includes(".cortexkit/aft.jsonc"));
+    assert.ok(opencodeAft.touched_files.includes("opencode.jsonc"));
+    assert.match(opencodeAft.notes.join("\n"), /Replaces built-in/);
+
+    const piMagicContext = await buildEnhancementSetupPlan({
+      root,
+      harness: "pi",
+      category: "context_memory",
+      providerId: "magic-context"
+    });
+    assert.equal(piMagicContext.intrusion, "high");
+    assert.deepEqual(piMagicContext.commands[0]?.args, ["@cortexkit/magic-context@latest", "setup", "--harness", "pi"]);
+    assert.ok(piMagicContext.touched_files.includes(".cortexkit/magic-context.jsonc"));
+    assert.ok(piMagicContext.touched_files.includes(".pi/"));
+    assert.match(piMagicContext.notes.join("\n"), /model configuration/);
+  });
+
+  it("marks CodeGraph and Graphify as experimental intrusive code index candidates", async () => {
+    const choices = providerChoicesFor("code_index", "codex");
+    assert.equal(choices[0]?.value, "codebase-memory-mcp");
+    assert.ok(choices.some((choice) => choice.value === "graphify" && /experimental, intrusive/i.test(choice.label)));
+    assert.ok(choices.some((choice) => choice.value === "codegraph" && /experimental, intrusive/i.test(choice.label)));
+
+    const root = await tempRoot();
+    const graphify = await buildEnhancementSetupPlan({
+      root,
+      harness: "codex",
+      category: "code_index",
+      providerId: "graphify"
+    });
+    const codegraph = await buildEnhancementSetupPlan({
+      root,
+      harness: "codex",
+      category: "code_index",
+      providerId: "codegraph"
+    });
+
+    assert.equal(graphify.experimental, true);
+    assert.equal(graphify.intrusion, "high");
+    assert.ok(graphify.touched_files.includes("AGENTS.md"));
+    assert.ok(graphify.touched_files.includes(".codex/hooks.json"));
+    assert.ok(graphify.touched_files.includes("graphify-out/"));
+    assert.match(graphify.notes.join("\n"), /Uninstall may leave an empty \.codex\/hooks\.json/);
+
+    assert.equal(codegraph.experimental, true);
+    assert.equal(codegraph.intrusion, "medium");
+    assert.ok(codegraph.touched_files.includes(".codegraph/"));
+    assert.ok(codegraph.touched_files.includes("~/.codegraph/telemetry.json"));
+    assert.match(codegraph.notes.join("\n"), /not been fully verified/);
+  });
+
+  it("normalizes repo and home paths in provider metadata", () => {
+    const root = "/Users/alice/work/project";
+    const home = "/Users/alice";
+    const record = normalizeEnhancementProviderRecord(
+      root,
+      {
+        category: "context_memory",
+        provider_id: "codex-native-memories",
+        status: "configured",
+        commands: [`tool --repo ${root} --config ${home}/.codex/config.toml`],
+        commands_run: [`tool --repo ${root}`],
+        touched_files: [`${home}/.codex/config.toml`, `${root}/.codex/AGENTS.md`],
+        message: "ok",
+        verification: {
+          command: `verify ${root}`,
+          ok: true,
+          exit_code: 0
+        },
+        updated_at: "2026-07-04T00:00:00.000Z"
+      },
+      home
+    );
+
+    assert.deepEqual(record.touched_files, ["~/.codex/config.toml", "./.codex/AGENTS.md"]);
+    assert.equal(record.commands[0], "tool --repo . --config ~/.codex/config.toml");
+    assert.equal(record.commands_run[0], "tool --repo .");
+    assert.equal(record.verification?.command, "verify .");
+  });
+
+  it("records failed provider setup metadata", async () => {
+    const root = await tempRoot();
+    await initProject(root, { harnesses: ["codex"] });
+    const runner: CommandRunner = async () => ({ ok: false, stdout: "", stderr: "install failed\n", exitCode: 1 });
+
+    const plan = await buildEnhancementSetupPlan({
+      root,
+      harness: "codex",
+      category: "code_index",
+      providerId: "codebase-memory-mcp"
+    });
+    const result = await applyEnhancementSetup(root, plan, {
+      confirmed: true,
+      runner,
+      now: new Date("2026-07-04T00:00:00.000Z")
+    });
+
+    assert.equal(result.status, "failed");
+    assert.equal(result.message, "install failed");
+    const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
+    assert.equal(enhancements.code_intelligence, "skipped");
+    assert.equal((enhancements.code_index as Record<string, unknown>).provider_id, "codebase-memory-mcp");
+    assert.equal((enhancements.code_index as Record<string, unknown>).status, "failed");
+    assert.deepEqual(await validateProject(root), []);
+  });
+
+  it("records thrown provider setup errors as failed metadata", async () => {
+    const root = await tempRoot();
+    await initProject(root, { harnesses: ["codex"] });
+    const runner: CommandRunner = async () => {
+      throw new Error("command not found");
+    };
+
+    const plan = await buildEnhancementSetupPlan({
+      root,
+      harness: "codex",
+      category: "code_index",
+      providerId: "codebase-memory-mcp"
+    });
+    const result = await applyEnhancementSetup(root, plan, {
+      confirmed: true,
+      runner,
+      now: new Date("2026-07-04T00:00:00.000Z")
+    });
+
+    assert.equal(result.status, "failed");
+    assert.equal(result.message, "command not found");
+    const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
+    assert.equal(enhancements.code_intelligence, "skipped");
+    assert.equal((enhancements.code_index as Record<string, unknown>).status, "failed");
+    assert.deepEqual(await validateProject(root), []);
+  });
+
+  it("does not overwrite malformed enhancement config during provider setup", async () => {
+    const root = await tempRoot();
+    const home = await tempRoot();
+    await initProject(root, { harnesses: ["codex"] });
+    const enhancementsPath = path.join(root, ".cw/enhancements.json");
+    await writeFile(enhancementsPath, "{", "utf8");
+
+    const plan = await buildEnhancementSetupPlan({
+      root,
+      harness: "codex",
+      category: "context_memory",
+      providerId: "codex-native-memories",
+      homeDir: home
+    });
+
+    await assert.rejects(
+      applyEnhancementSetup(root, plan, {
+        confirmed: true,
+        now: new Date("2026-07-04T00:00:00.000Z")
+      }),
+      /cannot read existing enhancement config/
+    );
+    assert.equal(await readFile(enhancementsPath, "utf8"), "{");
+    await assert.rejects(access(path.join(home, ".codex", "config.toml")));
+  });
+
+  it("preserves existing Codex config while enabling memories", () => {
+    assert.equal(
+      enableCodexMemoriesConfig("[model]\nname = \"gpt-5\"\n\n[features]\nweb_search = true\n\n[profiles.fast]\nmodel = \"gpt-5\"\n"),
+      "[model]\nname = \"gpt-5\"\n\n[features]\nweb_search = true\nmemories = true\n\n[profiles.fast]\nmodel = \"gpt-5\"\n"
+    );
   });
 
   it("creates a task with core artifacts and append-only trace events", async () => {
@@ -460,16 +982,16 @@ describe("cw kernel", () => {
     await assert.rejects(access(path.join(root, ".cw/tasks/task-discard")));
   });
 
-  it("doctor reports malformed task state and stale generated command entries", async () => {
+  it("doctor reports malformed task state and stale generated skills", async () => {
     const root = await tempRoot();
-    await initProject(root);
+    await initProject(root, { harnesses: ["codex"] });
     await createTask(root, { id: "task-unhealthy", title: "Unhealthy task" });
     const taskJsonPath = path.join(root, ".cw/tasks/task-unhealthy/task.json");
     const state = JSON.parse(await readFile(taskJsonPath, "utf8")) as Record<string, unknown>;
     state.next_action = "";
     state.result = "done";
     await writeFile(taskJsonPath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
-    await writeFile(path.join(root, ".cw/agent-commands/cw-work.md"), "stale", "utf8");
+    await writeFile(path.join(root, ".agents/skills/cw-work/SKILL.md"), "stale", "utf8");
 
     const report = await doctorProject(root);
 
@@ -504,7 +1026,7 @@ describe("cw kernel", () => {
     }, null, 2));
 
     const init = await initProject(root);
-    assert.ok(init.adapters.some((adapter) => adapter.created.includes(".cw/agent-commands/cw-work.md")));
+    assert.deepEqual(init.adapters, []);
 
     const work = await runWorkflowAction(root, "work", {
       taskId: "task-create-readme",
@@ -599,7 +1121,7 @@ async function runCli(
   const answers = [...(options.answers ?? [])];
   child.stdout.on("data", (chunk: string) => {
     stdout += chunk;
-    if (stdout.endsWith("Choose [1]: ") && answers.length > 0) {
+    if ((stdout.endsWith("Choose [1]: ") || stdout.endsWith("[y/N]: ") || stdout.endsWith("[Y/n]: ")) && answers.length > 0) {
       child.stdin.write(`${answers.shift()}\n`);
     }
   });
@@ -629,9 +1151,10 @@ async function runCli(
 }
 
 function parseCliJson(stdout: string): Record<string, unknown> {
-  const start = stdout.indexOf("{");
-  assert.notEqual(start, -1, stdout);
-  return JSON.parse(stdout.slice(start)) as Record<string, unknown>;
+  const marker = "{\n  \"created\"";
+  const offset = stdout.lastIndexOf(marker);
+  assert.notEqual(offset, -1, stdout);
+  return JSON.parse(stdout.slice(offset)) as Record<string, unknown>;
 }
 
 async function readTrace(root: string, taskId: string): Promise<Array<Record<string, unknown>>> {

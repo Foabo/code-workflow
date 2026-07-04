@@ -74,16 +74,18 @@ cw init --harness codex
 .cw/enhancements.json
 .cw/project/*.md
 .cw/templates/*.md
-.cw/agent-commands/cw-*.md
 ```
 
-选择 Codex harness 时，还会生成 Codex 适配器输出：
+选择 Codex、OpenCode 或 Pi harness 时，还会生成 repo-local agent skill：
 
 ```text
-.agents/plugins/marketplace.json
-plugins/cw-workflow/.codex-plugin/plugin.json
-plugins/cw-workflow/skills/cw-*/SKILL.md
-.codex/skills/cw-*/SKILL.md
+.agents/skills/cw-*/SKILL.md
+```
+
+选择 Claude harness 时，会生成 Claude skill：
+
+```text
+.claude/skills/cw-*/SKILL.md
 ```
 
 日常改代码后通常不用重新 `cw init`。`cw init` 是幂等的，但会保护已有用户文件，适合首次创建结构。已经初始化过的仓库需要刷新生成物时，使用：
@@ -95,9 +97,7 @@ cw update --harness codex
 改到这些内容时需要运行 `cw update --harness codex`：
 
 - `src/adapters.ts`
-- 生成的 `cw-*` 命令说明
-- 生成的 Codex skill 文案
-- Codex plugin manifest 或 marketplace 输出
+- 生成的 CW workflow skill 文案
 - agent 执行策略说明
 
 只有在 fresh fixture 仓库或手动测试首次安装流程时，才需要重新跑 `cw init --harness codex`。
@@ -131,16 +131,21 @@ cw update --harness codex
 
 agent 应该读取这里的 `task.json`、`trace.jsonl`、`spec.md`、`plan.md` 和 `task.md`，并通过 `cw internal ...` helper 修改结构化状态。
 
-## 如何注入到 Codex
+## 如何注入到 coding harness
 
-Codex 通过生成的 skill 获得 CW 工作流说明。Codex adapter 会写两份 skill：
+Codex、OpenCode 和 Pi 都可以读取 repo-local `.agents/skills`。对应 harness adapter 会写：
 
 ```text
-plugins/cw-workflow/skills/cw-*/SKILL.md
-.codex/skills/cw-*/SKILL.md
+.agents/skills/cw-*/SKILL.md
 ```
 
-`plugins/cw-workflow` 是仓库内的插件源码。`.codex/skills` 是当前项目里 Codex 可直接发现的 skill 入口。
+Claude 使用自己的 repo-local skill 目录：
+
+```text
+.claude/skills/cw-*/SKILL.md
+```
+
+Plugin、marketplace、custom command 等更重的入口只在将来明确需要分发或命令集成时生成；默认 `cw init` 不创建这些额外目录。
 
 目标仓库首次接入 Codex：
 
@@ -155,7 +160,7 @@ npm run build
 node dist/src/cli.js update --root . --harness codex
 ```
 
-生成 `.codex/skills` 后，如果当前 Codex 线程看不到新的 `cw-*` skill，开一个新线程或重载 workspace。Codex 运行中的线程可能沿用启动时加载的 skill 列表。
+生成 `.agents/skills` 后，如果当前 agent 线程看不到新的 `cw-*` skill，开一个新线程或重载 workspace。运行中的线程可能沿用启动时加载的 skill 列表。
 
 生成的 skill 会调用 npm 安装后的 `cw`、`cw-work`、`cw-check` 等命令。Codex 所在环境必须能找到这些二进制。开发阶段用 `npm link` 测试最直接：
 
@@ -203,7 +208,7 @@ cw update --root . --harness codex
 Codex 找不到 `cw-work` 时，先检查：
 
 ```bash
-ls .codex/skills/cw-work/SKILL.md
+ls .agents/skills/cw-work/SKILL.md
 node dist/src/cli.js doctor --root .
 ```
 

@@ -10,7 +10,7 @@ export type UpdateResult = {
   };
 };
 
-export async function updateProject(root: string, harnesses: HarnessName[] = ["generic"]): Promise<UpdateResult> {
+export async function updateProject(root: string, harnesses: HarnessName[] = ["codex"]): Promise<UpdateResult> {
   const adapters = [];
   for (const harness of harnesses) {
     adapters.push(await generateAdapter(root, harness, { overwrite: true }));

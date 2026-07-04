@@ -1,5 +1,5 @@
 import path from "node:path";
-import { generateAdapter, HarnessName } from "./adapters.js";
+import { AdapterResult, generateAdapter, HarnessName } from "./adapters.js";
 import { ensureDir, writeFileIfMissing } from "./fs.js";
 import { getCwPaths } from "./paths.js";
 import { PROJECT_BASELINE_TEMPLATES, TASK_ARTIFACT_TEMPLATES } from "./templates.js";
@@ -9,7 +9,7 @@ export type InitResult = {
   created: string[];
   existing: string[];
   adapters: Array<{
-    harness: HarnessName;
+    harness: AdapterResult["harness"];
     created: string[];
     existing: string[];
   }>;
@@ -20,6 +20,13 @@ export type InitOptions = {
   codeIntelligence?: EnhancementChoice;
   externalContext?: EnhancementChoice;
   now?: Date;
+};
+
+type NormalizedInitOptions = {
+  harnesses: HarnessName[];
+  codeIntelligence: EnhancementChoice;
+  externalContext: EnhancementChoice;
+  now: Date;
 };
 
 export async function initProject(root: string, options: InitOptions | Date = {}): Promise<InitResult> {
@@ -92,12 +99,12 @@ function relative(root: string, filePath: string): string {
   return path.relative(root, filePath);
 }
 
-function normalizeOptions(options: InitOptions | Date): Required<InitOptions> {
+function normalizeOptions(options: InitOptions | Date): NormalizedInitOptions {
   if (options instanceof Date) {
-    return { harnesses: ["generic"], codeIntelligence: "skipped", externalContext: "skipped", now: options };
+    return { harnesses: [], codeIntelligence: "skipped", externalContext: "skipped", now: options };
   }
   return {
-    harnesses: options.harnesses ?? ["generic"],
+    harnesses: options.harnesses ?? [],
     codeIntelligence: options.codeIntelligence ?? "skipped",
     externalContext: options.externalContext ?? "skipped",
     now: options.now ?? new Date()

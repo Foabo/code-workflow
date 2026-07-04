@@ -4,3 +4,44 @@
 {"ts":"2026-07-04T10:00:04.441Z","type":"check.passed","summary":"Verified with npm run typecheck, npm test, npm run build, and node dist/src/cli.js validate --root ."}
 {"ts":"2026-07-04T10:00:04.441Z","type":"run.updated","summary":"Implemented init positional root parsing, interactive prompts for omitted init choices, explicit flag bypass, and CLI tests."}
 {"ts":"2026-07-04T10:00:04.466Z","type":"task.state.updated","summary":"phase run -> check; next action updated"}
+{"ts":"2026-07-04T14:58:28.744Z","type":"correction.init_prompt","summary":"User rejected exposing Generic harness and vague detect/configure enhancement choices; init should use real harness language and clear code index/context memory setup choices."}
+{"ts":"2026-07-04T14:58:28.969Z","type":"task.state.updated","summary":"phase check -> run; next action updated"}
+{"ts":"2026-07-04T15:00:14.237Z","type":"check.passed","summary":"Verified revised init prompt behavior with npm run typecheck, npm test, npm run build, and node dist/src/cli.js validate --root ."}
+{"ts":"2026-07-04T15:00:14.238Z","type":"task.state.updated","summary":"phase run -> check; next action updated"}
+{"ts":"2026-07-04T15:00:14.238Z","type":"run.updated","summary":"Revised init prompts to expose Codex as the current supported harness and to ask about code index/context memory setup with skip/set up choices."}
+{"ts":"2026-07-04T15:02:47.258Z","type":"correction.init_prompt","summary":"Corrected enhancement prompt wording again: choices now record existing code index/context memory tools and explicitly say CW will not install anything."}
+{"ts":"2026-07-04T15:02:54.129Z","type":"check.passed","summary":"Verified no-install enhancement prompt wording with npm run typecheck, npm test, npm run build, and cw validate."}
+{"ts":"2026-07-04T15:05:20.197Z","type":"clarify.updated","summary":"User clarified that code index and context memory choices should install and initialize concrete tools, not merely record configured flags; spec now requires provider selection, command confirmation, verification, and metadata recording."}
+{"ts":"2026-07-04T15:05:20.226Z","type":"task.state.updated","summary":"phase check -> clarify; next action updated"}
+{"ts":"2026-07-04T15:54:09.226Z","type":"clarify.updated","summary":"Added user-provided candidate registry for code index providers and context memory providers, with harness compatibility and intrusion-risk notes pending provider selection."}
+{"ts":"2026-07-04T15:58:32.538Z","type":"clarify.updated","summary":"Downgraded Kage from memory default candidate to experimental option because adoption evidence is currently weak; context memory should default to skip until a provider is validated for the selected harness."}
+{"ts":"2026-07-04T16:07:56.326Z","type":"clarify.updated","summary":"Recorded v1 default setup strategy: Codex/Claude prefer codebase-memory-mcp; Codex memory uses native Codex memories; OpenCode/Pi prefer magic-context plus AFT with explicit config and intrusion warnings."}
+{"ts":"2026-07-04T16:08:06.462Z","type":"task.state.updated","summary":"next action updated"}
+{"ts":"2026-07-04T16:08:31.414Z","type":"clarify.updated","summary":"Settled v1 non-interactive and config-write policy: --yes/non-TTY never runs installers or global config writes; interactive setup may apply previewed config patches after confirmation."}
+{"ts":"2026-07-04T16:08:31.485Z","type":"task.state.updated","summary":"phase clarify -> plan; next action updated"}
+{"ts":"2026-07-04T16:13:40.747Z","type":"plan.updated","summary":"Planned provider-based init setup flow with registry, confirmation, metadata recording, Codex memory config patching, codebase-memory-mcp setup, and non-interactive safety rules."}
+{"ts":"2026-07-04T16:13:40.770Z","type":"task.state.updated","summary":"phase plan -> run; next action updated"}
+{"ts":"2026-07-04T16:21:59.244Z","type":"run.updated","summary":"Implemented provider-based init setup: provider registry, metadata schema, confirmation previews, Codex Memories config patching, codebase-memory-mcp command setup, non-interactive pending behavior, and tests."}
+{"ts":"2026-07-04T16:21:59.245Z","type":"task.state.updated","summary":"phase run -> check; next action updated"}
+{"ts":"2026-07-04T16:22:38.921Z","type":"run.updated","summary":"Added failed setup coverage so provider metadata is verified for success, skipped, pending, and failed outcomes."}
+{"ts":"2026-07-04T16:26:13.769Z","type":"check.passed","summary":"Verified provider-based init setup with typecheck, tests, build, and cw validate; fixed command-error metadata recording and malformed enhancement config handling during check."}
+{"ts":"2026-07-04T16:26:14.258Z","type":"task.state.updated","summary":"phase check -> finish; next action updated"}
+{"ts":"2026-07-04T16:29:38.578Z","type":"plan.updated","summary":"Added installed-provider detection plan for codebase-memory-mcp: use existing, update, reinstall, skip branches plus normalized provider metadata paths."}
+{"ts":"2026-07-04T16:29:38.752Z","type":"task.state.updated","summary":"phase finish -> run; next action updated"}
+{"ts":"2026-07-04T16:33:54.813Z","type":"plan.updated","summary":"Removed Serena from v1 Codex code index candidates; it is broader than code indexing and has a more involved MCP lifecycle."}
+{"ts":"2026-07-04T16:44:08.079Z","type":"plan.updated","summary":"Marked CodeGraph and Graphify as experimental intrusive Codex code index candidates based on isolated install tests."}
+{"ts":"2026-07-04T16:44:08.083Z","type":"task.state.updated","summary":"next action updated"}
+{"ts":"2026-07-04T16:50:40.516Z","type":"run.updated","summary":"Implemented installed codebase-memory-mcp detection, use-existing/update/reinstall setup modes, normalized provider metadata, and experimental intrusive CodeGraph/Graphify provider warnings."}
+{"ts":"2026-07-04T16:50:40.517Z","type":"task.state.updated","summary":"phase run -> check; next action updated"}
+{"ts":"2026-07-04T16:52:00.879Z","type":"clarify.updated","summary":"Expanded init contract to include Claude, OpenCode, and Pi harness choices with harness-specific default provider setup."}
+{"ts":"2026-07-04T16:52:00.886Z","type":"task.state.updated","summary":"phase check -> plan; next action updated"}
+{"ts":"2026-07-04T16:53:52.530Z","type":"run.updated","summary":"Removed installed codebase-memory-mcp update and reinstall choices; installed flow now offers use existing or skip."}
+{"ts":"2026-07-04T16:57:17.552Z","type":"plan.updated","summary":"Planned Claude, OpenCode, and Pi init support with harness adapters, provider defaults, high-intrusion warnings, and non-interactive safety tests."}
+{"ts":"2026-07-04T16:57:17.755Z","type":"task.state.updated","summary":"phase plan -> run; next action updated"}
+{"ts":"2026-07-04T17:05:42.686Z","type":"run.updated","summary":"Implemented Claude, OpenCode, and Pi init harness/provider support with tests."}
+{"ts":"2026-07-04T17:05:45.159Z","type":"task.state.updated","summary":"phase run -> check; next action updated"}
+{"ts":"2026-07-04T17:07:36.846Z","type":"run.updated","summary":"Split public HarnessName from internal generic adapter mode."}
+{"ts":"2026-07-04T17:18:25.049Z","type":"run.updated","summary":"Removed unused generic command surfaces and switched default harness output to repo-local skills."}
+{"ts":"2026-07-04T17:22:51.861Z","type":"check.passed","summary":"cw-check passed: typecheck, tests, build, validate, and doctor succeeded; adapter output matches accepted init design."}
+{"ts":"2026-07-04T17:22:52.041Z","type":"task.state.updated","summary":"phase check -> finish; next action updated"}
+{"ts":"2026-07-04T17:24:24.700Z","type":"task.finished","summary":"Implemented interactive init prompts, concrete provider setup, multi-harness defaults, and repo-local skill generation.","data":{"baseline_decision":"none","dirty_worktree_handling":"covered"}}
