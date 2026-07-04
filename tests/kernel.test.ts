@@ -237,12 +237,14 @@ describe("cw kernel", () => {
     const plan = await runWorkflowAction(root, "plan", { taskId: "task-create-readme" });
     assert.equal(plan.task?.phase, "run");
 
-    await writeFile(path.join(root, "README.md"), "# Fixture\n\nRun `npm test`.\n", "utf8");
     const run = await runWorkflowAction(root, "run", {
       taskId: "task-create-readme",
-      summary: "README.md created."
+      summary: "README.md created.",
+      writeFile: "README.md",
+      content: "# Fixture\n\nRun `npm test`.\n"
     });
     assert.equal(run.task?.phase, "check");
+    assert.match(await readFile(path.join(root, "README.md"), "utf8"), /Run `npm test`/);
 
     const check = await runWorkflowAction(root, "check", {
       taskId: "task-create-readme",

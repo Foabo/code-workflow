@@ -61,6 +61,7 @@ const commandSteps: Record<(typeof AGENT_COMMANDS)[number], string[]> = {
     "Run `cw preflight --action run --task <task-id>`.",
     "Read spec.md, plan.md, task.md, and relevant code.",
     "Implement the next unchecked implementation items in task.md.",
+    "For simple file creation or replacement tasks, the executable shim may be called with `cw-run --task <task-id> --write-file <path> --content <text>`.",
     "Update task.md checklist progress.",
     "Record material progress with `cw internal append-trace --task <task-id> --type run.updated --summary <summary>`.",
     "Run `cw internal ensure-baseline-delta --task <task-id>` when stable reusable project facts are discovered.",

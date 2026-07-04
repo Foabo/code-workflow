@@ -18,6 +18,8 @@ export type WorkflowOptions = {
   acceptance?: string[];
   summary?: string;
   note?: string;
+  writeFile?: string;
+  content?: string;
   decision?: "accepted" | "edited" | "skipped" | "none";
   dirtyWorktree?: "covered" | "acknowledged" | "clean";
   worktreeHandling?: "keep" | "stash" | "revert" | "delete-worktree" | "none";
@@ -128,6 +130,11 @@ async function runPlan(root: string, options: WorkflowOptions): Promise<Workflow
 async function runRun(root: string, options: WorkflowOptions): Promise<WorkflowResult> {
   const task = await selected(root, options);
   await preflight(root, { action: "run", taskId: task.id });
+  if (options.writeFile !== undefined) {
+    const target = path.join(root, options.writeFile);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, options.content ?? "", "utf8");
+  }
   const taskPath = path.join(taskDir(root, task.id), task.artifacts.task);
   const content = await readFile(taskPath, "utf8");
   await writeFile(taskPath, checkSection(content, "Implementation"), "utf8");
@@ -140,7 +147,12 @@ async function runRun(root: string, options: WorkflowOptions): Promise<WorkflowR
     type: "run.updated",
     summary: options.summary ?? "Implementation checklist items marked complete."
   });
-  return { action: "run", task: updated, message: `Updated run progress for ${task.id}.` };
+  return {
+    action: "run",
+    task: updated,
+    message: `Updated run progress for ${task.id}.`,
+    details: options.writeFile !== undefined ? { wrote: options.writeFile } : undefined
+  };
 }
 
 async function runCheck(root: string, options: WorkflowOptions): Promise<WorkflowResult> {
