@@ -1,6 +1,15 @@
-import { CW_SCHEMA_VERSION, TaskLifecycle, TaskStateRecord, ValidationIssue, VersionRecord } from "./types.js";
+import {
+  CW_SCHEMA_VERSION,
+  EnhancementChoice,
+  EnhancementConfigRecord,
+  TaskLifecycle,
+  TaskStateRecord,
+  ValidationIssue,
+  VersionRecord
+} from "./types.js";
 
 const lifecycles = new Set<TaskLifecycle>(["open", "blocked", "parked", "closed"]);
+const enhancementChoices = new Set<EnhancementChoice>(["skipped", "detected", "configured"]);
 
 export function validateVersionRecord(value: unknown, pathName = ".cw/version.json"): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
@@ -34,6 +43,9 @@ export function validateTaskStateRecord(value: unknown, pathName = "task.json"):
   if (typeof value.lifecycle !== "string" || !lifecycles.has(value.lifecycle as TaskLifecycle)) {
     issues.push({ path: `${pathName}.lifecycle`, message: "must be one of open, blocked, parked, closed" });
   }
+  if ("result" in value) {
+    issues.push({ path: `${pathName}.result`, message: "result field is not part of task state" });
+  }
 
   requireStringArray(value, "health_flags", pathName, issues);
   requireStringArray(value, "invalidated_artifacts", pathName, issues);
@@ -54,12 +66,37 @@ export function validateTaskStateRecord(value: unknown, pathName = "task.json"):
   return issues;
 }
 
+export function validateEnhancementConfigRecord(
+  value: unknown,
+  pathName = ".cw/enhancements.json"
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  if (!isRecord(value)) {
+    return [{ path: pathName, message: "must be a JSON object" }];
+  }
+  requireNumber(value, "schema_version", pathName, issues);
+  if (value.schema_version !== CW_SCHEMA_VERSION) {
+    issues.push({ path: `${pathName}.schema_version`, message: `must be ${CW_SCHEMA_VERSION}` });
+  }
+  requireEnhancementChoice(value, "code_intelligence", pathName, issues);
+  requireEnhancementChoice(value, "external_context", pathName, issues);
+  requireString(value, "updated_at", pathName, issues);
+  return issues;
+}
+
 export function assertVersionRecord(value: unknown, pathName?: string): asserts value is VersionRecord {
   throwIfIssues(validateVersionRecord(value, pathName));
 }
 
 export function assertTaskStateRecord(value: unknown, pathName?: string): asserts value is TaskStateRecord {
   throwIfIssues(validateTaskStateRecord(value, pathName));
+}
+
+export function assertEnhancementConfigRecord(
+  value: unknown,
+  pathName?: string
+): asserts value is EnhancementConfigRecord {
+  throwIfIssues(validateEnhancementConfigRecord(value, pathName));
 }
 
 function throwIfIssues(issues: ValidationIssue[]): void {
@@ -111,6 +148,17 @@ function requireStringArray(
   const value = record[key];
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
     issues.push({ path: `${pathName}.${key}`, message: "must be an array of strings" });
+  }
+}
+
+function requireEnhancementChoice(
+  record: Record<string, unknown>,
+  key: string,
+  pathName: string,
+  issues: ValidationIssue[]
+): void {
+  if (typeof record[key] !== "string" || !enhancementChoices.has(record[key] as EnhancementChoice)) {
+    issues.push({ path: `${pathName}.${key}`, message: "must be skipped, detected, or configured" });
   }
 }
 

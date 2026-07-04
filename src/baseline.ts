@@ -4,15 +4,25 @@ import { appendTrace, readTaskState } from "./tasks.js";
 import { getCwPaths, taskDir, taskJsonPath } from "./paths.js";
 import { TASK_ARTIFACT_TEMPLATES } from "./templates.js";
 import { writeJsonFile } from "./json.js";
-import { TaskStateRecord } from "./types.js";
+import { BaselineDecision, TaskStateRecord } from "./types.js";
 
 const baselineFiles = ["overview.md", "architecture.md", "rules.md", "commands.md"] as const;
 
-export type BaselineDecision = "accepted" | "edited" | "skipped";
+export type { BaselineDecision } from "./types.js";
+
+export type BaselineFile = (typeof baselineFiles)[number];
+
+export type BaselineSyncOptions = {
+  selectedFiles?: BaselineFile[];
+  editedMarkdown?: string;
+  now?: Date;
+};
 
 export type BaselineSyncResult = {
   decision: BaselineDecision;
   updated: string[];
+  preview: Partial<Record<BaselineFile, string>>;
+  highImpact: boolean;
 };
 
 export async function ensureBaselineDelta(root: string, taskId: string, now = new Date()): Promise<TaskStateRecord> {
@@ -40,28 +50,35 @@ export async function syncBaselineDelta(
   root: string,
   taskId: string,
   decision: BaselineDecision,
-  now = new Date()
+  options: BaselineSyncOptions | Date = {}
 ): Promise<BaselineSyncResult> {
+  const normalized = normalizeSyncOptions(options);
+  const now = normalized.now;
   const state = await readTaskState(root, taskId);
   if (state.artifacts.baseline_delta === null) {
-    return { decision, updated: [] };
+    return { decision, updated: [], preview: {}, highImpact: false };
   }
+
+  const preview = await previewBaselineDelta(root, taskId, normalized.editedMarkdown);
+
   if (decision === "skipped") {
     await appendTrace(root, taskId, {
       ts: now.toISOString(),
       type: "baseline_delta.skipped",
-      summary: "Baseline delta skipped."
+      summary: "Baseline delta skipped.",
+      data: { decision }
     });
-    return { decision, updated: [] };
+    return { decision, updated: [], preview: preview.sections, highImpact: preview.highImpact };
   }
 
-  const deltaPath = path.join(taskDir(root, taskId), state.artifacts.baseline_delta);
-  const delta = await readFile(deltaPath, "utf8");
-  const sections = parseBaselineDelta(delta);
+  const selected = decision === "selected" ? new Set(normalized.selectedFiles ?? []) : null;
   const updated: string[] = [];
 
   for (const fileName of baselineFiles) {
-    const content = sections[fileName]?.trim();
+    if (selected !== null && !selected.has(fileName)) {
+      continue;
+    }
+    const content = preview.sections[fileName]?.trim();
     if (content === undefined || content.length === 0) {
       continue;
     }
@@ -74,16 +91,38 @@ export async function syncBaselineDelta(
     ts: now.toISOString(),
     type: "baseline_delta.synced",
     summary: updated.length > 0 ? `Baseline delta synced to ${updated.join(", ")}.` : "Baseline delta had no content to sync.",
-    data: { decision, updated }
+    data: {
+      decision,
+      updated,
+      selected: normalized.selectedFiles ?? null,
+      highImpact: preview.highImpact
+    }
   });
 
-  return { decision, updated };
+  return { decision, updated, preview: preview.sections, highImpact: preview.highImpact };
 }
 
-function parseBaselineDelta(markdown: string): Partial<Record<(typeof baselineFiles)[number], string>> {
-  const sections: Partial<Record<(typeof baselineFiles)[number], string>> = {};
+export async function previewBaselineDelta(
+  root: string,
+  taskId: string,
+  editedMarkdown?: string
+): Promise<{ sections: Partial<Record<BaselineFile, string>>; highImpact: boolean }> {
+  const state = await readTaskState(root, taskId);
+  if (state.artifacts.baseline_delta === null) {
+    return { sections: {}, highImpact: false };
+  }
+  const deltaPath = path.join(taskDir(root, taskId), state.artifacts.baseline_delta);
+  const delta = editedMarkdown ?? await readFile(deltaPath, "utf8");
+  return {
+    sections: parseBaselineDelta(delta),
+    highImpact: isHighImpactDelta(delta)
+  };
+}
+
+function parseBaselineDelta(markdown: string): Partial<Record<BaselineFile, string>> {
+  const sections: Partial<Record<BaselineFile, string>> = {};
   const lines = markdown.split(/\r?\n/);
-  let current: (typeof baselineFiles)[number] | null = null;
+  let current: BaselineFile | null = null;
   let buffer: string[] = [];
 
   function flush(): void {
@@ -97,7 +136,7 @@ function parseBaselineDelta(markdown: string): Partial<Record<(typeof baselineFi
     const match = /^##\s+(overview\.md|architecture\.md|rules\.md|commands\.md)\s*$/.exec(line);
     if (match !== null) {
       flush();
-      current = match[1] as (typeof baselineFiles)[number];
+      current = match[1] as BaselineFile;
       continue;
     }
     if (current !== null) {
@@ -107,4 +146,15 @@ function parseBaselineDelta(markdown: string): Partial<Record<(typeof baselineFi
   flush();
 
   return sections;
+}
+
+function normalizeSyncOptions(options: BaselineSyncOptions | Date): Required<Pick<BaselineSyncOptions, "now">> & BaselineSyncOptions {
+  if (options instanceof Date) {
+    return { now: options };
+  }
+  return { ...options, now: options.now ?? new Date() };
+}
+
+function isHighImpactDelta(markdown: string): boolean {
+  return /\b(architecture|capability|delete|remove|conflict|breaking|low confidence)\b/i.test(markdown);
 }

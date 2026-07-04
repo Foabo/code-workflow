@@ -4,6 +4,7 @@ import { preflight, WorkflowAction } from "./preflight.js";
 import { listTasks, selectTask } from "./task-store.js";
 import {
   appendTrace,
+  checkClosureGate,
   consumeResumeNote,
   createResumeNote,
   createTask,
@@ -12,7 +13,7 @@ import {
   updateTaskState
 } from "./tasks.js";
 import { doctorProject, validateProject } from "./validate.js";
-import { TaskLifecycle, TraceEvent } from "./types.js";
+import { DirtyWorktreeDecision, EnhancementChoice, TaskLifecycle, TraceEvent } from "./types.js";
 import { HarnessName } from "./adapters.js";
 import { BaselineDecision, ensureBaselineDelta, syncBaselineDelta } from "./baseline.js";
 import { updateProject } from "./update.js";
@@ -28,7 +29,11 @@ async function main(argv: string[]): Promise<number> {
   try {
     switch (command) {
       case "init": {
-        const result = await initProject(root, { harnesses: [optionalHarness(publicFlags, "harness") ?? "generic"] });
+        const result = await initProject(root, {
+          harnesses: [optionalHarness(publicFlags, "harness") ?? "generic"],
+          codeIntelligence: optionalEnhancementChoice(publicFlags, "code-intelligence") ?? "skipped",
+          externalContext: optionalEnhancementChoice(publicFlags, "external-context") ?? "skipped"
+        });
         printJson(result);
         return 0;
       }
@@ -119,12 +124,29 @@ async function runInternal(subcommand: string | undefined, args: string[], root:
     case "finish-task": {
       const taskId = requiredString(flags, "task");
       const baselineDecision = optionalBaselineDecision(flags, "baseline");
-      if (baselineDecision === "accepted" || baselineDecision === "edited" || baselineDecision === "skipped") {
-        await syncBaselineDelta(root, taskId, baselineDecision);
+      const dirtyWorktreeHandling = optionalDirtyWorktreeHandling(flags, "dirty-worktree");
+      const gateIssues = await checkClosureGate(root, taskId, {
+        summary: requiredString(flags, "summary"),
+        dirtyWorktreeHandling,
+        baselineDecision
+      });
+      if (gateIssues.length > 0) {
+        throw new Error(`closure gate failed:\n${gateIssues.map((issue) => `- ${issue}`).join("\n")}`);
+      }
+      if (
+        baselineDecision === "accepted" ||
+        baselineDecision === "selected" ||
+        baselineDecision === "edited" ||
+        baselineDecision === "skipped"
+      ) {
+        await syncBaselineDelta(root, taskId, baselineDecision, {
+          selectedFiles: optionalBaselineFiles(flags, "selected-files"),
+          editedMarkdown: optionalString(flags, "edited-content")
+        });
       }
       const task = await finishTask(root, taskId, {
         summary: requiredString(flags, "summary"),
-        dirtyWorktreeHandling: optionalDirtyWorktreeHandling(flags, "dirty-worktree"),
+        dirtyWorktreeHandling,
         baselineDecision
       });
       printJson(task);
@@ -154,7 +176,10 @@ async function runInternal(subcommand: string | undefined, args: string[], root:
     }
     case "sync-baseline-delta": {
       const taskId = requiredString(flags, "task");
-      const result = await syncBaselineDelta(root, taskId, requiredBaselineDecision(flags, "decision"));
+      const result = await syncBaselineDelta(root, taskId, requiredBaselineDecision(flags, "decision"), {
+        selectedFiles: optionalBaselineFiles(flags, "selected-files"),
+        editedMarkdown: optionalString(flags, "edited-content")
+      });
       printJson(result);
       return 0;
     }
@@ -262,37 +287,59 @@ function requiredWorkflowAction(flags: Flags, key: string): WorkflowAction {
   throw new Error(`--${key} must be a workflow action`);
 }
 
-function optionalDirtyWorktreeHandling(
-  flags: Flags,
-  key: string
-): "covered" | "acknowledged" | "clean" | undefined {
+function optionalDirtyWorktreeHandling(flags: Flags, key: string): DirtyWorktreeDecision | undefined {
   const value = optionalString(flags, key);
   if (value === undefined) {
     return undefined;
   }
-  if (value === "covered" || value === "acknowledged" || value === "clean") {
+  if (value === "covered" || value === "unrelated" || value === "clean") {
     return value;
   }
-  throw new Error(`--${key} must be covered, acknowledged, or clean`);
+  throw new Error(`--${key} must be covered, unrelated, or clean`);
 }
 
-function optionalBaselineDecision(flags: Flags, key: string): "accepted" | "edited" | "skipped" | "none" | undefined {
+function optionalBaselineDecision(flags: Flags, key: string): BaselineDecision | "none" | undefined {
   const value = optionalString(flags, key);
   if (value === undefined) {
     return undefined;
   }
-  if (value === "accepted" || value === "edited" || value === "skipped" || value === "none") {
+  if (value === "accepted" || value === "selected" || value === "edited" || value === "skipped" || value === "none") {
     return value;
   }
-  throw new Error(`--${key} must be accepted, edited, skipped, or none`);
+  throw new Error(`--${key} must be accepted, selected, edited, skipped, or none`);
 }
 
 function requiredBaselineDecision(flags: Flags, key: string): BaselineDecision {
   const value = requiredString(flags, key);
-  if (value === "accepted" || value === "edited" || value === "skipped") {
+  if (value === "accepted" || value === "selected" || value === "edited" || value === "skipped") {
     return value;
   }
-  throw new Error(`--${key} must be accepted, edited, or skipped`);
+  throw new Error(`--${key} must be accepted, selected, edited, or skipped`);
+}
+
+function optionalEnhancementChoice(flags: Flags, key: string): EnhancementChoice | undefined {
+  const value = optionalString(flags, key);
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "skipped" || value === "detected" || value === "configured") {
+    return value;
+  }
+  throw new Error(`--${key} must be skipped, detected, or configured`);
+}
+
+function optionalBaselineFiles(flags: Flags, key: string): Array<"overview.md" | "architecture.md" | "rules.md" | "commands.md"> | undefined {
+  const value = optionalString(flags, key);
+  if (value === undefined || value.trim().length === 0) {
+    return undefined;
+  }
+  return value.split(",").map((item) => {
+    const trimmed = item.trim();
+    if (trimmed === "overview.md" || trimmed === "architecture.md" || trimmed === "rules.md" || trimmed === "commands.md") {
+      return trimmed;
+    }
+    throw new Error(`--${key} entries must be overview.md, architecture.md, rules.md, or commands.md`);
+  });
 }
 
 function optionalDiscardWorktreeHandling(
@@ -315,7 +362,7 @@ function printJson(value: unknown): void {
 
 function printUsage(): void {
   console.log(`Usage:
-  cw init [--root <path>] [--harness generic|codex]
+  cw init [--root <path>] [--harness generic|codex] [--code-intelligence skipped|detected|configured] [--external-context skipped|detected|configured]
   cw validate [--root <path>]
   cw doctor [--root <path>]
   cw update [--root <path>] [--harness generic|codex]
@@ -330,11 +377,11 @@ function printInternalUsage(): void {
   cw internal select-task [--task <id>]
   cw internal append-trace --task <id> --type <type> --summary <text>
   cw internal set-state --task <id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
-  cw internal finish-task --task <id> --summary <text> [--dirty-worktree covered|acknowledged|clean] [--baseline accepted|edited|skipped|none]
+  cw internal finish-task --task <id> --summary <text> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none]
   cw internal discard-task --task <id> --confirm [--worktree keep|stash|revert|delete-worktree|none]
   cw internal create-resume --task <id> --content <markdown>
   cw internal ensure-baseline-delta --task <id>
-  cw internal sync-baseline-delta --task <id> --decision accepted|edited|skipped
+  cw internal sync-baseline-delta --task <id> --decision accepted|selected|edited|skipped
   cw internal consume-resume --task <id>`);
 }
 

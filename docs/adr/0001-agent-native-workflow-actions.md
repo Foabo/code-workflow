@@ -1,3 +1,3 @@
-# Agent-native workflow actions with a thin CLI wrapper
+# Agent-native workflow actions with deterministic kernel helpers
 
-The workflow kernel will treat actions such as work, clarify, spec, plan, context, run, verify, review, finish, and resume as agent-native workflow actions first, not as CLI commands first. The CLI remains a thin wrapper for initialization, diagnostics, schema validation, adapter generation, and automation, because the daily product experience should happen inside the coding harness while all surfaces still write to the same `.cw` task facts.
+The workflow kernel exposes daily work through harness-native `cw-*` workflow actions: `cw-work`, `cw-clarify`, `cw-plan`, `cw-run`, `cw-check`, `cw-finish`, `cw-resume`, `cw-discard`, and `cw-understand`. Support commands such as `cw-init`, `cw-doctor`, `cw-update`, and validation commands cover repository setup, diagnostics, schema validation, adapter generation, and automation. All surfaces delegate deterministic state changes to kernel helpers, so Codex, Claude Code, OpenCode, and CLI entries write the same `.cw` task facts.

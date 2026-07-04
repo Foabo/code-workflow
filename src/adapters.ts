@@ -16,6 +16,8 @@ export type AdapterOptions = {
   overwrite?: boolean;
 };
 
+export const GENERATED_MARKER = "<!-- generated-by-cw:v1 -->";
+
 const commandPurposes: Record<(typeof AGENT_COMMANDS)[number], string> = {
   "cw-work": "Default task progress action. Create or select a task, advance the next responsible phase, run check when appropriate, then stop before finish.",
   "cw-clarify": "Clarify the task contract and update spec.md with user-confirmed goal, scope, constraints, decisions, and acceptance criteria.",
@@ -81,9 +83,9 @@ const commandSteps: Record<(typeof AGENT_COMMANDS)[number], string[]> = {
   "cw-finish": [
     "Run `cw preflight --action finish --task <task-id>`.",
     "Confirm dirty worktree handling when needed.",
-    "If baseline-delta.md exists, preview it and ask whether to accept, edit, or skip it.",
-    "After confirmation, run `cw internal sync-baseline-delta --task <task-id> --decision accepted|edited|skipped` when applicable.",
-    "Run `cw internal finish-task --task <task-id> --summary <summary> --dirty-worktree <covered|acknowledged|clean> --baseline <accepted|edited|skipped|none>`.",
+    "If baseline-delta.md exists, preview it and ask whether to accept, select, edit, or skip it.",
+    "After confirmation, run `cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped` when applicable.",
+    "Run `cw internal finish-task --task <task-id> --summary <summary> --dirty-worktree <covered|unrelated|clean> --baseline <accepted|selected|edited|skipped|none>`.",
     "Report the closed task id and any project baseline files updated."
   ],
   "cw-resume": [
@@ -173,7 +175,9 @@ async function generateCodexAdapter(root: string, options: AdapterOptions): Prom
 }
 
 function renderGenericCommand(command: (typeof AGENT_COMMANDS)[number]): string {
-  return `# ${command}
+  return `${GENERATED_MARKER}
+
+# ${command}
 
 ${commandPurposes[command]}
 
@@ -195,6 +199,14 @@ ${commandPurposes[command]}
 - Stop for user judgment when requirements, product behavior, destructive worktree handling, workflow overrides, or baseline promotion need confirmation.
 - If a subagent, skill, hook, MCP tool, or code intelligence tool is unavailable, continue inline when responsible.
 
+## Execution Strategy Guidance
+
+- Inline execution is fully supported and must remain complete.
+- Hybrid execution is recommended when the harness supports delegation: keep coordination in the main session while delegating implementation or checking.
+- Subagents receive task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
+- Implementer subagents may write code and update checklist progress, but must not close tasks.
+- Checker subagents must return spec drift or product behavior changes to the main session for user confirmation.
+
 ## Workflow Steps
 
 ${commandSteps[command].map((step, index) => `${index + 1}. ${step}`).join("\n")}
@@ -213,7 +225,7 @@ ${commandSteps[command].map((step, index) => `${index + 1}. ${step}`).join("\n")
 - cw internal discard-task --task <task-id> --confirm --worktree <handling>
 - cw internal create-resume --task <task-id> --content <markdown>
 - cw internal ensure-baseline-delta --task <task-id>
-- cw internal sync-baseline-delta --task <task-id> --decision accepted|edited|skipped
+- cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped
 - cw internal consume-resume --task <task-id>
 `;
 }

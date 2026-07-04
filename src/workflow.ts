@@ -2,13 +2,22 @@ import path from "node:path";
 import { exec } from "node:child_process";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
-import { ensureBaselineDelta, syncBaselineDelta } from "./baseline.js";
+import { BaselineFile, ensureBaselineDelta, previewBaselineDelta, syncBaselineDelta } from "./baseline.js";
 import { doctorProject } from "./validate.js";
-import { appendTrace, consumeResumeNote, createTask, discardTask, finishTask, readTaskState, updateTaskState } from "./tasks.js";
+import {
+  appendTrace,
+  checkClosureGate,
+  consumeResumeNote,
+  createTask,
+  discardTask,
+  finishTask,
+  readTaskState,
+  updateTaskState
+} from "./tasks.js";
 import { getCwPaths, taskDir } from "./paths.js";
 import { preflight, WorkflowAction } from "./preflight.js";
 import { selectTask } from "./task-store.js";
-import { TaskStateRecord } from "./types.js";
+import { BaselineDecision, DirtyWorktreeDecision, TaskStateRecord } from "./types.js";
 
 const execAsync = promisify(exec);
 
@@ -19,14 +28,22 @@ export type WorkflowOptions = {
   title?: string;
   goal?: string;
   scope?: string;
+  nonGoals?: string;
+  constraints?: string;
+  decisions?: string;
   acceptance?: string[];
   summary?: string;
   note?: string;
   writeFile?: string;
   content?: string;
   commands?: string[];
-  decision?: "accepted" | "edited" | "skipped" | "none";
-  dirtyWorktree?: "covered" | "acknowledged" | "clean";
+  manualVerification?: string;
+  drift?: boolean;
+  decision?: BaselineDecision | "none";
+  selectedBaselineFiles?: BaselineFile[];
+  editedBaselineDelta?: string;
+  confirmBaselineImpact?: boolean;
+  dirtyWorktree?: DirtyWorktreeDecision;
   worktreeHandling?: "keep" | "stash" | "revert" | "delete-worktree" | "none";
   confirm?: boolean;
   merge?: boolean;
@@ -95,10 +112,31 @@ async function runWork(root: string, options: WorkflowOptions): Promise<Workflow
 async function runClarify(root: string, options: WorkflowOptions): Promise<WorkflowResult> {
   const task = await selected(root, options);
   await preflight(root, { action: "clarify", taskId: task.id });
-  const goal = required(options.goal, "--goal is required");
+  if (options.goal === undefined || options.goal.trim().length === 0) {
+    const blocked = await updateTaskState(root, task.id, {
+      lifecycle: "blocked",
+      phase: "clarify",
+      blockedReason: options.note ?? "Clarification requires a task goal.",
+      nextAction: "Ask the user for the task goal, scope, constraints, and acceptance criteria"
+    });
+    return {
+      action: "clarify",
+      task: blocked,
+      message: `Blocked ${task.id}; clarification needs user input.`
+    };
+  }
+  const goal = options.goal;
   const scope = options.scope ?? "In scope for the current task.";
   const acceptance = options.acceptance?.length ? options.acceptance : ["Task behavior satisfies the goal."];
-  await writeFile(path.join(taskDir(root, task.id), task.artifacts.spec), renderSpec(goal, scope, acceptance), "utf8");
+  await writeFile(
+    path.join(taskDir(root, task.id), task.artifacts.spec),
+    renderSpec(goal, scope, acceptance, {
+      nonGoals: options.nonGoals,
+      constraints: options.constraints,
+      decisions: options.decisions
+    }),
+    "utf8"
+  );
   const updated = await updateTaskState(root, task.id, {
     lifecycle: "open",
     phase: "plan",
@@ -117,6 +155,20 @@ async function runPlan(root: string, options: WorkflowOptions): Promise<Workflow
   const task = await selected(root, options);
   await preflight(root, { action: "plan", taskId: task.id });
   const spec = await readFile(path.join(taskDir(root, task.id), task.artifacts.spec), "utf8");
+  if (!hasSectionContent(spec, "Goal") || hasUncheckedCheckbox(spec)) {
+    const blocked = await updateTaskState(root, task.id, {
+      lifecycle: "blocked",
+      phase: "clarify",
+      blockedReason: "Task spec is not accepted or lacks a goal.",
+      nextAction: "Clarify and accept spec.md before planning"
+    });
+    await appendTrace(root, task.id, {
+      ts: blocked.updated_at,
+      type: "plan.blocked",
+      summary: "Planning blocked because spec.md is insufficient."
+    });
+    return { action: "plan", task: blocked, message: `Planning blocked for ${task.id}.` };
+  }
   const goal = extractSection(spec, "Goal") || task.title;
   await writeFile(path.join(taskDir(root, task.id), task.artifacts.plan), renderPlan(goal), "utf8");
   await writeFile(path.join(taskDir(root, task.id), task.artifacts.task), renderTask(), "utf8");
@@ -170,8 +222,30 @@ async function runCheck(root: string, options: WorkflowOptions): Promise<Workflo
   }
   const taskPath = path.join(taskDir(root, task.id), task.artifacts.task);
   const content = await readFile(taskPath, "utf8");
+  if (options.drift === true) {
+    const updated = await updateTaskState(root, task.id, {
+      phase: "check",
+      nextAction: "Resolve drift by updating spec.md, plan.md, or task.md before finish",
+      healthFlags: Array.from(new Set([...task.health_flags, "drift_suspected"])),
+      invalidatedArtifacts: Array.from(new Set([...task.invalidated_artifacts, "spec.md"]))
+    });
+    await appendTrace(root, task.id, {
+      ts: updated.updated_at,
+      type: "check.failed",
+      summary: options.summary ?? "Check found unresolved drift.",
+      data: { drift: true }
+    });
+    return {
+      action: "check",
+      task: updated,
+      message: `Check blocked finish for ${task.id}; drift needs resolution.`,
+      details: commandResults.length > 0 ? { commands: commandResults, drift: true } : { drift: true }
+    };
+  }
   await writeFile(taskPath, checkSection(checkSection(content, "Verification"), "Check"), "utf8");
   const updated = await updateTaskState(root, task.id, {
+    healthFlags: task.health_flags.filter((flag) => flag !== "drift_suspected"),
+    invalidatedArtifacts: [],
     phase: "finish",
     nextAction: "Run cw-finish after user confirmation"
   });
@@ -179,7 +253,12 @@ async function runCheck(root: string, options: WorkflowOptions): Promise<Workflo
     ts: updated.updated_at,
     type: "check.passed",
     summary: options.summary ?? "Verification and review passed.",
-    data: commandResults.length > 0 ? { commands: commandResults.map((result) => result.command) } : undefined
+    data: commandResults.length > 0 || options.manualVerification !== undefined
+      ? {
+          commands: commandResults.map((result) => result.command),
+          manual_verification: options.manualVerification
+        }
+      : undefined
   });
   return {
     action: "check",
@@ -192,15 +271,56 @@ async function runCheck(root: string, options: WorkflowOptions): Promise<Workflo
 async function runFinish(root: string, options: WorkflowOptions): Promise<WorkflowResult> {
   const task = await selected(root, options);
   await preflight(root, { action: "finish", taskId: task.id });
-  if (options.decision === "accepted" || options.decision === "edited" || options.decision === "skipped") {
-    await syncBaselineDelta(root, task.id, options.decision);
+  const baselinePreview = task.artifacts.baseline_delta !== null
+    ? await previewBaselineDelta(root, task.id, options.editedBaselineDelta)
+    : { sections: {}, highImpact: false };
+  const baselineDecision = options.decision ?? (task.artifacts.baseline_delta === null ? "none" : undefined);
+  if (
+    baselinePreview.highImpact &&
+    baselineDecision !== undefined &&
+    baselineDecision !== "none" &&
+    baselineDecision !== "skipped" &&
+    options.confirmBaselineImpact !== true
+  ) {
+    throw new Error("high-impact baseline delta requires explicit confirmation");
+  }
+  if (baselineDecision === "selected" && (options.selectedBaselineFiles === undefined || options.selectedBaselineFiles.length === 0)) {
+    throw new Error("selected baseline sync requires at least one selected baseline file");
+  }
+
+  const gateIssues = await checkClosureGate(root, task.id, {
+    summary: options.summary ?? "Task finished.",
+    dirtyWorktreeHandling: options.dirtyWorktree ?? "clean",
+    baselineDecision
+  });
+  if (gateIssues.length > 0) {
+    throw new Error(`closure gate failed:\n${gateIssues.map((issue) => `- ${issue}`).join("\n")}`);
+  }
+
+  let baselineSync = null;
+  if (
+    baselineDecision === "accepted" ||
+    baselineDecision === "selected" ||
+    baselineDecision === "edited" ||
+    baselineDecision === "skipped"
+  ) {
+    baselineSync = await syncBaselineDelta(root, task.id, baselineDecision, {
+      selectedFiles: options.selectedBaselineFiles,
+      editedMarkdown: options.editedBaselineDelta
+    });
   }
   const finished = await finishTask(root, task.id, {
     summary: options.summary ?? "Task finished.",
     dirtyWorktreeHandling: options.dirtyWorktree ?? "clean",
-    baselineDecision: options.decision ?? "none"
+    baselineDecision,
+    baselineImpactConfirmed: options.confirmBaselineImpact
   });
-  return { action: "finish", task: finished, message: `Closed task ${task.id}.` };
+  return {
+    action: "finish",
+    task: finished,
+    message: `Closed task ${task.id}.`,
+    details: { baseline_preview: baselinePreview.sections, baseline_sync: baselineSync }
+  };
 }
 
 async function runResume(root: string, options: WorkflowOptions): Promise<WorkflowResult> {
@@ -228,22 +348,19 @@ async function runDoctor(root: string): Promise<WorkflowResult> {
 async function runUnderstand(root: string, options: WorkflowOptions): Promise<WorkflowResult> {
   const paths = getCwPaths(root);
   await preflight(root, { action: "understand" });
-  const draftDir = path.join(paths.cw, "understand-draft");
+  const draftDir = paths.understandDraft;
   await mkdir(draftDir, { recursive: true });
   const draft = await draftBaseline(root);
   for (const [fileName, content] of Object.entries(draft)) {
     await writeFile(path.join(draftDir, fileName), content, "utf8");
   }
-  if (options.merge === true) {
-    for (const [fileName, content] of Object.entries(draft)) {
-      await writeFile(path.join(paths.project, fileName), content, "utf8");
-    }
-  }
   return {
     action: "understand",
     task: null,
-    message: options.merge === true ? "Project baseline draft merged." : "Project baseline draft written.",
-    details: { draft_dir: ".cw/understand-draft", files: Object.keys(draft) }
+    message: options.merge === true
+      ? "Project baseline draft written; review and merge accepted content separately."
+      : "Project baseline draft written.",
+    details: { draft_dir: ".cw/understand-draft", files: Object.keys(draft), merged: false }
   };
 }
 
@@ -335,7 +452,12 @@ ${scripts.build ? "- npm run build" : ""}
   };
 }
 
-function renderSpec(goal: string, scope: string, acceptance: string[]): string {
+function renderSpec(
+  goal: string,
+  scope: string,
+  acceptance: string[],
+  details: { nonGoals?: string; constraints?: string; decisions?: string } = {}
+): string {
   return `# Spec
 
 ## Goal
@@ -348,9 +470,15 @@ ${scope}
 
 ## Non-goals
 
+${details.nonGoals ?? ""}
+
 ## Constraints
 
+${details.constraints ?? ""}
+
 ## Decisions
+
+${details.decisions ?? ""}
 
 ## Acceptance Criteria
 ${acceptance.map((item) => `- [x] ${item}`).join("\n")}
@@ -412,6 +540,14 @@ function checkSection(markdown: string, section: string): string {
 function extractSection(markdown: string, section: string): string | null {
   const match = new RegExp(`## ${section}\\n\\n([\\s\\S]*?)(\\n## |$)`).exec(markdown);
   return match?.[1]?.trim() || null;
+}
+
+function hasSectionContent(markdown: string, section: string): boolean {
+  return (extractSection(markdown, section) ?? "").trim().length > 0;
+}
+
+function hasUncheckedCheckbox(markdown: string): boolean {
+  return /^- \[ \]/m.test(markdown);
 }
 
 function required(value: string | undefined, message: string): string {

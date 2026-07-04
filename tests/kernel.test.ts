@@ -31,11 +31,32 @@ describe("cw kernel", () => {
 
     assert.ok(result.created.includes(".cw/version.json"));
     assert.ok(result.created.includes(".cw/project/overview.md"));
+    assert.ok(result.created.includes(".cw/enhancements.json"));
     assert.ok(result.created.includes(".cw/templates/spec.md"));
     assert.equal(result.adapters[0]?.harness, "generic");
     assert.ok(result.adapters[0]?.created.includes(".cw/agent-commands/cw-work.md"));
-    assert.match(await readFile(path.join(root, ".cw/agent-commands/cw-work.md"), "utf8"), /repo truth/);
+    const command = await readFile(path.join(root, ".cw/agent-commands/cw-work.md"), "utf8");
+    assert.match(command, /generated-by-cw:v1/);
+    assert.match(command, /repo truth/);
+    assert.match(command, /Hybrid execution is recommended/);
     assert.deepEqual(await validateProject(root), []);
+    const doctor = await doctorProject(root);
+    assert.equal(doctor.ok, true);
+    assert.deepEqual(doctor.enhancements, { code_intelligence: "skipped", external_context: "skipped" });
+  });
+
+  it("keeps init idempotent and records optional enhancements as advisory config", async () => {
+    const root = await tempRoot();
+    await initProject(root, { codeIntelligence: "configured", externalContext: "detected" });
+    await writeFile(path.join(root, ".cw/project/overview.md"), "# Custom overview\n", "utf8");
+
+    const rerun = await initProject(root, { codeIntelligence: "skipped", externalContext: "skipped" });
+
+    assert.ok(rerun.existing.includes(".cw/project/overview.md"));
+    assert.ok(rerun.existing.includes(".cw/enhancements.json"));
+    assert.equal(await readFile(path.join(root, ".cw/project/overview.md"), "utf8"), "# Custom overview\n");
+    const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
+    assert.equal(enhancements.code_intelligence, "configured");
     assert.equal((await doctorProject(root)).ok, true);
   });
 
@@ -57,6 +78,8 @@ describe("cw kernel", () => {
     assert.match(skill, /^---\nname: cw-work/m);
     assert.match(skill, /Treat `\.cw` as Repo Truth/);
     assert.match(skill, /cw preflight --action work/);
+    assert.match(skill, /Implementer subagents may write code/);
+    assert.match(skill, /Checker subagents must return spec drift/);
 
     await writeFile(path.join(root, "plugins/cw-workflow/skills/cw-work/SKILL.md"), "stale", "utf8");
     const update = await updateProject(root, ["codex"]);
@@ -152,6 +175,30 @@ describe("cw kernel", () => {
     assert.equal(report.task?.id, "task-preflight");
   });
 
+  it("blocks clarification and planning when required task facts are missing", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await createTask(root, { id: "task-needs-input", title: "Needs input" });
+
+    const clarify = await runWorkflowAction(root, "clarify", { taskId: "task-needs-input" });
+
+    assert.equal(clarify.task?.lifecycle, "blocked");
+    assert.equal(clarify.task?.phase, "clarify");
+    assert.match(clarify.task?.blocked_reason ?? "", /goal/);
+
+    await updateTaskState(root, "task-needs-input", {
+      lifecycle: "open",
+      blockedReason: null,
+      phase: "plan",
+      nextAction: "Try planning"
+    });
+    const plan = await runWorkflowAction(root, "plan", { taskId: "task-needs-input" });
+
+    assert.equal(plan.task?.lifecycle, "blocked");
+    assert.equal(plan.task?.phase, "clarify");
+    assert.match(plan.task?.blocked_reason ?? "", /spec/);
+  });
+
   it("creates and consumes a task-local resume note", async () => {
     const root = await tempRoot();
     await initProject(root);
@@ -160,6 +207,10 @@ describe("cw kernel", () => {
     const withResume = await createResumeNote(root, "task-resume", "# Resume\n\nContinue from check.\n", "User resumes work");
     assert.equal(withResume.artifacts.resume, "resume.md");
     assert.equal(withResume.resume_condition, "User resumes work");
+    await assert.rejects(
+      createResumeNote(root, "task-resume", "# Resume\n\nSecond note.\n"),
+      /already has a resume note/
+    );
 
     const consumed = await consumeResumeNote(root, "task-resume");
     assert.equal(consumed.artifacts.resume, null);
@@ -187,6 +238,37 @@ describe("cw kernel", () => {
     assert.match(await readFile(path.join(root, ".cw/project/commands.md"), "utf8"), /Run `npm test` before finish\./);
   });
 
+  it("syncs selected, edited, and skipped baseline delta decisions", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+
+    await createTask(root, { id: "task-selected-baseline", title: "Selected baseline" });
+    await ensureBaselineDelta(root, "task-selected-baseline");
+    await writeFile(
+      path.join(root, ".cw/tasks/task-selected-baseline/baseline-delta.md"),
+      "# Baseline Delta\n\n## commands.md\n\nUse `npm test`.\n\n## rules.md\n\nReview checklist before finish.\n",
+      "utf8"
+    );
+    const selected = await syncBaselineDelta(root, "task-selected-baseline", "selected", {
+      selectedFiles: ["commands.md"]
+    });
+    assert.deepEqual(selected.updated, [".cw/project/commands.md"]);
+    assert.doesNotMatch(await readFile(path.join(root, ".cw/project/rules.md"), "utf8"), /Review checklist/);
+
+    await createTask(root, { id: "task-edited-baseline", title: "Edited baseline" });
+    await ensureBaselineDelta(root, "task-edited-baseline");
+    const edited = await syncBaselineDelta(root, "task-edited-baseline", "edited", {
+      editedMarkdown: "# Baseline Delta\n\n## rules.md\n\nEdited baseline rule.\n"
+    });
+    assert.deepEqual(edited.updated, [".cw/project/rules.md"]);
+    assert.match(await readFile(path.join(root, ".cw/project/rules.md"), "utf8"), /Edited baseline rule/);
+
+    await createTask(root, { id: "task-skipped-baseline", title: "Skipped baseline" });
+    await ensureBaselineDelta(root, "task-skipped-baseline");
+    const skipped = await syncBaselineDelta(root, "task-skipped-baseline", "skipped");
+    assert.deepEqual(skipped.updated, []);
+  });
+
   it("finishes a task only through the closure gate", async () => {
     const root = await tempRoot();
     await initProject(root);
@@ -211,11 +293,83 @@ describe("cw kernel", () => {
       "# Task\n\n## Implementation\n- [x] Implemented\n\n## Verification\n- [x] Tested\n\n## Check\n- [x] Acceptance criteria in spec.md are covered.\n",
       "utf8"
     );
+    await updateTaskState(root, "task-finish", {
+      phase: "finish",
+      nextAction: "Run cw-finish after user confirmation"
+    });
 
     const finished = await finishTask(root, "task-finish", { summary: "Task finished" });
     assert.equal(finished.lifecycle, "closed");
     assert.equal(finished.phase, "finish");
     assert.equal(finished.next_action, "Task is closed");
+  });
+
+  it("blocks finish when check records unresolved drift", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await runWorkflowAction(root, "work", { taskId: "task-drift", title: "Drift test" });
+    await runWorkflowAction(root, "clarify", {
+      taskId: "task-drift",
+      goal: "Keep behavior aligned.",
+      acceptance: ["Drift is resolved before finish"]
+    });
+    await runWorkflowAction(root, "plan", { taskId: "task-drift" });
+    await runWorkflowAction(root, "run", { taskId: "task-drift", summary: "Implementation changed behavior." });
+
+    const check = await runWorkflowAction(root, "check", {
+      taskId: "task-drift",
+      drift: true,
+      summary: "Spec drift found."
+    });
+
+    assert.equal(check.task?.phase, "check");
+    assert.ok(check.task?.health_flags.includes("drift_suspected"));
+    await assert.rejects(
+      runWorkflowAction(root, "finish", { taskId: "task-drift", summary: "Done" }),
+      /unresolved drift/
+    );
+  });
+
+  it("requires explicit confirmation before syncing high-impact baseline deltas during finish", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await runWorkflowAction(root, "work", { taskId: "task-high-impact", title: "High impact baseline" });
+    await runWorkflowAction(root, "clarify", {
+      taskId: "task-high-impact",
+      goal: "Document an architecture fact.",
+      acceptance: ["Architecture fact is documented"]
+    });
+    await runWorkflowAction(root, "plan", { taskId: "task-high-impact" });
+    await runWorkflowAction(root, "run", { taskId: "task-high-impact", summary: "Architecture note prepared." });
+    await runWorkflowAction(root, "check", {
+      taskId: "task-high-impact",
+      summary: "Manual review passed.",
+      manualVerification: "Reviewed architecture wording."
+    });
+    await ensureBaselineDelta(root, "task-high-impact");
+    await writeFile(
+      path.join(root, ".cw/tasks/task-high-impact/baseline-delta.md"),
+      "# Baseline Delta\n\n## architecture.md\n\nArchitecture now documents the workflow kernel boundary.\n",
+      "utf8"
+    );
+
+    await assert.rejects(
+      runWorkflowAction(root, "finish", {
+        taskId: "task-high-impact",
+        summary: "Done",
+        decision: "accepted"
+      }),
+      /high-impact baseline delta/
+    );
+
+    const finished = await runWorkflowAction(root, "finish", {
+      taskId: "task-high-impact",
+      summary: "Done",
+      decision: "accepted",
+      confirmBaselineImpact: true
+    });
+    assert.equal(finished.task?.lifecycle, "closed");
+    assert.match(await readFile(path.join(root, ".cw/project/architecture.md"), "utf8"), /workflow kernel boundary/);
   });
 
   it("discards a task only with explicit confirmation", async () => {
@@ -230,6 +384,38 @@ describe("cw kernel", () => {
 
     await discardTask(root, "task-discard", { confirmed: true, worktreeHandling: "none" });
     await assert.rejects(access(path.join(root, ".cw/tasks/task-discard")));
+  });
+
+  it("doctor reports malformed task state and stale generated command entries", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await createTask(root, { id: "task-unhealthy", title: "Unhealthy task" });
+    const taskJsonPath = path.join(root, ".cw/tasks/task-unhealthy/task.json");
+    const state = JSON.parse(await readFile(taskJsonPath, "utf8")) as Record<string, unknown>;
+    state.next_action = "";
+    state.result = "done";
+    await writeFile(taskJsonPath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+    await writeFile(path.join(root, ".cw/agent-commands/cw-work.md"), "stale", "utf8");
+
+    const report = await doctorProject(root);
+
+    assert.equal(report.ok, false);
+    assert.ok(report.issues.some((issue) => issue.path.endsWith("task.json.next_action")));
+    assert.ok(report.issues.some((issue) => issue.path.endsWith("task.json.result")));
+    assert.ok(report.warnings.some((warning) => warning.message.includes("stale")));
+  });
+
+  it("understand writes drafts without directly overwriting project baseline files", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await writeFile(path.join(root, "package.json"), JSON.stringify({ scripts: { test: "node --test" } }, null, 2));
+    await writeFile(path.join(root, ".cw/project/commands.md"), "# Commands\n\nKeep this baseline.\n", "utf8");
+
+    const result = await runWorkflowAction(root, "understand", { merge: true });
+
+    assert.equal(result.details?.merged, false);
+    assert.match(await readFile(path.join(root, ".cw/understand-draft/commands.md"), "utf8"), /npm test/);
+    assert.equal(await readFile(path.join(root, ".cw/project/commands.md"), "utf8"), "# Commands\n\nKeep this baseline.\n");
   });
 
   it("runs the version 1 workflow completion path end to end", async () => {

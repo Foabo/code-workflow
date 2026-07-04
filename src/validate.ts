@@ -1,10 +1,12 @@
 import path from "node:path";
 import { access, readdir, readFile } from "node:fs/promises";
+import { GENERATED_MARKER } from "./adapters.js";
 import { readJsonFile } from "./json.js";
 import { getCwPaths } from "./paths.js";
-import { validateTaskStateRecord, validateVersionRecord } from "./schema.js";
+import { validateEnhancementConfigRecord, validateTaskStateRecord, validateVersionRecord } from "./schema.js";
 import { PROJECT_BASELINE_TEMPLATES, TASK_ARTIFACT_TEMPLATES } from "./templates.js";
-import { DoctorReport, TaskStateRecord, ValidationIssue } from "./types.js";
+import { AGENT_COMMANDS } from "./templates.js";
+import { DoctorReport, EnhancementConfigRecord, TaskStateRecord, ValidationIssue } from "./types.js";
 
 export async function validateProject(root: string): Promise<ValidationIssue[]> {
   const paths = getCwPaths(root);
@@ -16,6 +18,14 @@ export async function validateProject(root: string): Promise<ValidationIssue[]> 
       issues.push(...validateVersionRecord(await readJsonFile(paths.version), ".cw/version.json"));
     } catch (error) {
       issues.push({ path: ".cw/version.json", message: formatError(error) });
+    }
+  }
+
+  if (await exists(paths.enhancements)) {
+    try {
+      issues.push(...validateEnhancementConfigRecord(await readJsonFile(paths.enhancements), ".cw/enhancements.json"));
+    } catch (error) {
+      issues.push({ path: ".cw/enhancements.json", message: formatError(error) });
     }
   }
 
@@ -53,6 +63,7 @@ export async function validateProject(root: string): Promise<ValidationIssue[]> 
 export async function doctorProject(root: string): Promise<DoctorReport> {
   const issues = await validateProject(root);
   const warnings: ValidationIssue[] = [];
+  const enhancements = await readEnhancementStatus(root);
 
   for (const taskId of await listTaskIds(root)) {
     const taskJson = path.join(getCwPaths(root).tasks, taskId, "task.json");
@@ -78,7 +89,25 @@ export async function doctorProject(root: string): Promise<DoctorReport> {
     }
   }
 
-  return { ok: issues.length === 0 && warnings.length === 0, issues, warnings };
+  warnings.push(...(await generatedAdapterWarnings(root)));
+
+  return { ok: issues.length === 0 && warnings.length === 0, issues, warnings, enhancements };
+}
+
+async function readEnhancementStatus(root: string): Promise<DoctorReport["enhancements"]> {
+  const enhancementsPath = getCwPaths(root).enhancements;
+  if (!(await exists(enhancementsPath))) {
+    return { code_intelligence: null, external_context: null };
+  }
+  try {
+    const config = await readJsonFile<EnhancementConfigRecord>(enhancementsPath);
+    return {
+      code_intelligence: config.code_intelligence,
+      external_context: config.external_context
+    };
+  } catch {
+    return { code_intelligence: null, external_context: null };
+  }
 }
 
 async function validateTaskArtifacts(root: string, taskId: string, state: TaskStateRecord): Promise<ValidationIssue[]> {
@@ -91,6 +120,26 @@ async function validateTaskArtifacts(root: string, taskId: string, state: TaskSt
     issues.push(...(await validateRequiredFile(path.join(taskRoot, artifactPath))));
   }
   return issues;
+}
+
+async function generatedAdapterWarnings(root: string): Promise<ValidationIssue[]> {
+  const warnings: ValidationIssue[] = [];
+  const paths = getCwPaths(root);
+  if (!(await exists(paths.agentCommands))) {
+    return warnings;
+  }
+  for (const command of AGENT_COMMANDS) {
+    const filePath = path.join(paths.agentCommands, `${command}.md`);
+    if (!(await exists(filePath))) {
+      warnings.push({ path: `.cw/agent-commands/${command}.md`, message: "generated command entry is missing" });
+      continue;
+    }
+    const content = await readFile(filePath, "utf8");
+    if (!content.includes(GENERATED_MARKER)) {
+      warnings.push({ path: `.cw/agent-commands/${command}.md`, message: "generated command entry appears stale" });
+    }
+  }
+  return warnings;
 }
 
 async function validateTraceJsonl(root: string, taskId: string, filePath: string): Promise<ValidationIssue[]> {

@@ -3,7 +3,7 @@ import { generateAdapter, HarnessName } from "./adapters.js";
 import { ensureDir, writeFileIfMissing } from "./fs.js";
 import { getCwPaths } from "./paths.js";
 import { PROJECT_BASELINE_TEMPLATES, TASK_ARTIFACT_TEMPLATES } from "./templates.js";
-import { CW_SCHEMA_VERSION, VersionRecord } from "./types.js";
+import { CW_SCHEMA_VERSION, EnhancementChoice, EnhancementConfigRecord, VersionRecord } from "./types.js";
 
 export type InitResult = {
   created: string[];
@@ -17,6 +17,8 @@ export type InitResult = {
 
 export type InitOptions = {
   harnesses?: HarnessName[];
+  codeIntelligence?: EnhancementChoice;
+  externalContext?: EnhancementChoice;
   now?: Date;
 };
 
@@ -42,6 +44,19 @@ export async function initProject(root: string, options: InitOptions | Date = {}
     created.push(relative(root, paths.version));
   } else {
     existing.push(relative(root, paths.version));
+  }
+
+  const enhancements: EnhancementConfigRecord = {
+    schema_version: CW_SCHEMA_VERSION,
+    code_intelligence: normalized.codeIntelligence,
+    external_context: normalized.externalContext,
+    updated_at: normalized.now.toISOString()
+  };
+
+  if (await writeJsonIfMissing(paths.enhancements, enhancements)) {
+    created.push(relative(root, paths.enhancements));
+  } else {
+    existing.push(relative(root, paths.enhancements));
   }
 
   for (const [fileName, content] of Object.entries(PROJECT_BASELINE_TEMPLATES)) {
@@ -79,10 +94,12 @@ function relative(root: string, filePath: string): string {
 
 function normalizeOptions(options: InitOptions | Date): Required<InitOptions> {
   if (options instanceof Date) {
-    return { harnesses: ["generic"], now: options };
+    return { harnesses: ["generic"], codeIntelligence: "skipped", externalContext: "skipped", now: options };
   }
   return {
     harnesses: options.harnesses ?? ["generic"],
+    codeIntelligence: options.codeIntelligence ?? "skipped",
+    externalContext: options.externalContext ?? "skipped",
     now: options.now ?? new Date()
   };
 }

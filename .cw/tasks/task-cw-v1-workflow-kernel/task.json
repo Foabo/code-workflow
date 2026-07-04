@@ -1,0 +1,22 @@
+{
+  "id": "task-cw-v1-workflow-kernel",
+  "title": "Implement CW v1 workflow kernel",
+  "lifecycle": "closed",
+  "phase": "finish",
+  "next_action": "Task is closed",
+  "health_flags": [],
+  "artifacts": {
+    "spec": "spec.md",
+    "plan": "plan.md",
+    "task": "task.md",
+    "baseline_delta": null,
+    "resume": null
+  },
+  "invalidated_artifacts": [],
+  "blocked_reason": null,
+  "parked_reason": null,
+  "resume_condition": null,
+  "created_at": "2026-07-04T07:22:54.393Z",
+  "updated_at": "2026-07-04T07:31:27.137Z",
+  "schema_version": 1
+}

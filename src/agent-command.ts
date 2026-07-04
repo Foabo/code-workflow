@@ -50,13 +50,22 @@ function optionsFromFlags(flags: Flags): WorkflowOptions {
     title: stringFlag(flags, "title"),
     goal: stringFlag(flags, "goal"),
     scope: stringFlag(flags, "scope"),
+    nonGoals: stringFlag(flags, "non-goals"),
+    constraints: stringFlag(flags, "constraints"),
+    decisions: stringFlag(flags, "decisions"),
     acceptance: arrayFlag(flags, "acceptance"),
     summary: stringFlag(flags, "summary"),
     note: stringFlag(flags, "note"),
     writeFile: stringFlag(flags, "write-file"),
     content: stringFlag(flags, "content"),
     commands: arrayFlag(flags, "command"),
+    manualVerification: stringFlag(flags, "manual-verification"),
+    drift: flags.drift === true || flags.drift === "true",
     decision: decisionFlag(flags, "baseline") ?? decisionFlag(flags, "decision"),
+    selectedBaselineFiles: baselineFilesFlag(flags, "selected-baseline"),
+    editedBaselineDelta: stringFlag(flags, "edited-baseline"),
+    confirmBaselineImpact: flags.confirmBaselineImpact === true || flags["confirm-baseline-impact"] === true ||
+      flags.confirmBaselineImpact === "true" || flags["confirm-baseline-impact"] === "true",
     dirtyWorktree: dirtyFlag(flags, "dirty-worktree"),
     worktreeHandling: worktreeFlag(flags, "worktree"),
     confirm: flags.confirm === true || flags.confirm === "true",
@@ -108,7 +117,7 @@ function arrayFlag(flags: Flags, key: string): string[] | undefined {
 
 function decisionFlag(flags: Flags, key: string): WorkflowOptions["decision"] {
   const value = stringFlag(flags, key);
-  if (value === "accepted" || value === "edited" || value === "skipped" || value === "none") {
+  if (value === "accepted" || value === "selected" || value === "edited" || value === "skipped" || value === "none") {
     return value;
   }
   return undefined;
@@ -116,7 +125,7 @@ function decisionFlag(flags: Flags, key: string): WorkflowOptions["decision"] {
 
 function dirtyFlag(flags: Flags, key: string): WorkflowOptions["dirtyWorktree"] {
   const value = stringFlag(flags, key);
-  if (value === "covered" || value === "acknowledged" || value === "clean") {
+  if (value === "covered" || value === "unrelated" || value === "clean") {
     return value;
   }
   return undefined;
@@ -128,4 +137,13 @@ function worktreeFlag(flags: Flags, key: string): WorkflowOptions["worktreeHandl
     return value;
   }
   return undefined;
+}
+
+function baselineFilesFlag(flags: Flags, key: string): WorkflowOptions["selectedBaselineFiles"] {
+  return arrayFlag(flags, key)?.map((value) => {
+    if (value === "overview.md" || value === "architecture.md" || value === "rules.md" || value === "commands.md") {
+      return value;
+    }
+    throw new Error(`--${key} must be one of overview.md, architecture.md, rules.md, commands.md`);
+  });
 }

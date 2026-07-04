@@ -1,6 +1,9 @@
 export const CW_SCHEMA_VERSION = 1;
 
 export type TaskLifecycle = "open" | "blocked" | "parked" | "closed";
+export type EnhancementChoice = "skipped" | "detected" | "configured";
+export type DirtyWorktreeDecision = "clean" | "covered" | "unrelated";
+export type BaselineDecision = "accepted" | "selected" | "edited" | "skipped";
 
 export type TaskArtifacts = {
   spec: string;
@@ -33,6 +36,13 @@ export type VersionRecord = {
   created_at: string;
 };
 
+export type EnhancementConfigRecord = {
+  schema_version: 1;
+  code_intelligence: EnhancementChoice;
+  external_context: EnhancementChoice;
+  updated_at: string;
+};
+
 export type TraceEvent = {
   ts: string;
   type: string;
@@ -49,4 +59,8 @@ export type DoctorReport = {
   ok: boolean;
   issues: ValidationIssue[];
   warnings: ValidationIssue[];
+  enhancements?: {
+    code_intelligence: EnhancementChoice | null;
+    external_context: EnhancementChoice | null;
+  };
 };

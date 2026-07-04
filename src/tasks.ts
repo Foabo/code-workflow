@@ -6,7 +6,14 @@ import { readJsonFile, writeJsonFile } from "./json.js";
 import { getCwPaths, taskDir, taskJsonPath, tracePath } from "./paths.js";
 import { assertTaskStateRecord } from "./schema.js";
 import { TASK_ARTIFACT_TEMPLATES } from "./templates.js";
-import { CW_SCHEMA_VERSION, TaskLifecycle, TaskStateRecord, TraceEvent } from "./types.js";
+import {
+  BaselineDecision,
+  CW_SCHEMA_VERSION,
+  DirtyWorktreeDecision,
+  TaskLifecycle,
+  TaskStateRecord,
+  TraceEvent
+} from "./types.js";
 
 export type CreateTaskInput = {
   id: string;
@@ -30,8 +37,9 @@ export type UpdateTaskStateInput = {
 
 export type FinishTaskInput = {
   summary: string;
-  dirtyWorktreeHandling?: "covered" | "acknowledged" | "clean";
-  baselineDecision?: "accepted" | "edited" | "skipped" | "none";
+  dirtyWorktreeHandling?: DirtyWorktreeDecision;
+  baselineDecision?: BaselineDecision | "none";
+  baselineImpactConfirmed?: boolean;
   now?: Date;
 };
 
@@ -120,6 +128,7 @@ export async function updateTaskState(
     updated_at: (input.now ?? new Date()).toISOString()
   };
 
+  validateTaskLifecycleHygiene(next);
   await writeJsonFile(taskJsonPath(root, taskId), next);
   await appendTrace(root, taskId, {
     ts: next.updated_at,
@@ -135,7 +144,7 @@ export async function finishTask(root: string, taskId: string, input: FinishTask
     throw new Error("only open tasks can finish");
   }
 
-  const gateIssues = await closureGateIssues(root, taskId, state, input);
+  const gateIssues = await checkClosureGate(root, taskId, input);
   if (gateIssues.length > 0) {
     throw new Error(`closure gate failed:\n${gateIssues.map((issue) => `- ${issue}`).join("\n")}`);
   }
@@ -168,9 +177,21 @@ export async function finishTask(root: string, taskId: string, input: FinishTask
   return next;
 }
 
+export async function checkClosureGate(root: string, taskId: string, input: FinishTaskInput): Promise<string[]> {
+  const state = await readTaskState(root, taskId);
+  if (state.lifecycle !== "open") {
+    return ["only open tasks can finish"];
+  }
+  return closureGateIssues(root, taskId, state, input);
+}
+
 export async function discardTask(root: string, taskId: string, input: DiscardTaskInput): Promise<void> {
   if (!input.confirmed) {
     throw new Error("discard requires explicit confirmation");
+  }
+  const gitStatus = await getGitStatus(root);
+  if (gitStatus.kind === "dirty" && input.worktreeHandling === "none") {
+    throw new Error("shared-worktree discard requires selected worktree handling");
   }
   const now = (input.now ?? new Date()).toISOString();
   await readTaskState(root, taskId);
@@ -197,6 +218,9 @@ export async function createResumeNote(
   now = new Date()
 ): Promise<TaskStateRecord> {
   const state = await readTaskState(root, taskId);
+  if (state.artifacts.resume !== null) {
+    throw new Error("task already has a resume note");
+  }
   const filePath = path.join(taskDir(root, taskId), "resume.md");
   await writeFile(filePath, content, "utf8");
   const next: TaskStateRecord = {
@@ -247,6 +271,9 @@ async function closureGateIssues(
   const spec = await readFile(path.join(dir, state.artifacts.spec), "utf8");
   const task = await readFile(path.join(dir, state.artifacts.task), "utf8");
 
+  if (state.phase !== "finish") {
+    issues.push("task phase must be finish before closure");
+  }
   if (hasUncheckedCheckbox(spec)) {
     issues.push("spec.md has unchecked acceptance criteria or checklist items");
   }
@@ -255,15 +282,35 @@ async function closureGateIssues(
   }
 
   if (state.artifacts.baseline_delta !== null && input.baselineDecision === undefined) {
-    issues.push("baseline delta requires an accepted, edited, or skipped decision");
+    issues.push("baseline delta requires an accepted, selected, edited, or skipped decision");
+  }
+  if (state.invalidated_artifacts.length > 0 || state.health_flags.includes("drift_suspected")) {
+    issues.push("unresolved drift prevents finish");
   }
 
   const gitStatus = await getGitStatus(root);
-  if (gitStatus.kind === "dirty" && input.dirtyWorktreeHandling === undefined) {
-    issues.push("dirty worktree requires covered or acknowledged handling");
+  if (gitStatus.kind === "dirty" && (input.dirtyWorktreeHandling === undefined || input.dirtyWorktreeHandling === "clean")) {
+    issues.push("dirty worktree requires covered or unrelated handling");
   }
 
   return issues;
+}
+
+function validateTaskLifecycleHygiene(state: TaskStateRecord): void {
+  if (state.lifecycle !== "closed" && state.next_action.trim().length === 0) {
+    throw new Error("unfinished task requires next action");
+  }
+  if (state.lifecycle === "blocked" && state.blocked_reason === null) {
+    throw new Error("blocked task requires blocked reason");
+  }
+  if (state.lifecycle === "parked") {
+    if (state.parked_reason === null) {
+      throw new Error("parked task requires parked reason");
+    }
+    if (state.resume_condition === null) {
+      throw new Error("parked task requires resume condition");
+    }
+  }
 }
 
 function hasUncheckedCheckbox(markdown: string): boolean {
