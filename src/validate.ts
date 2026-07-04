@@ -139,6 +139,30 @@ async function generatedAdapterWarnings(root: string): Promise<ValidationIssue[]
       warnings.push({ path: `.cw/agent-commands/${command}.md`, message: "generated command entry appears stale" });
     }
   }
+  if (await codexAdapterExists(root)) {
+    warnings.push(...(await generatedCodexSkillWarnings(root)));
+  }
+  return warnings;
+}
+
+async function codexAdapterExists(root: string): Promise<boolean> {
+  return exists(path.join(root, "plugins", "cw-workflow", ".codex-plugin", "plugin.json"));
+}
+
+async function generatedCodexSkillWarnings(root: string): Promise<ValidationIssue[]> {
+  const warnings: ValidationIssue[] = [];
+  for (const command of AGENT_COMMANDS) {
+    const filePath = path.join(root, ".codex", "skills", command, "SKILL.md");
+    const displayPath = `.codex/skills/${command}/SKILL.md`;
+    if (!(await exists(filePath))) {
+      warnings.push({ path: displayPath, message: "generated Codex skill entry is missing" });
+      continue;
+    }
+    const content = await readFile(filePath, "utf8");
+    if (!content.includes(GENERATED_MARKER)) {
+      warnings.push({ path: displayPath, message: "generated Codex skill entry appears stale" });
+    }
+  }
   return warnings;
 }
 

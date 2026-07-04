@@ -1,3 +1,5 @@
+<!-- generated-by-cw:v1 -->
+
 # cw-check
 
 Run verification and review, reconcile drift, and update task.md before finish is allowed.
@@ -19,6 +21,14 @@ Run verification and review, reconcile drift, and update task.md before finish i
 - Keep edits scoped to the current workflow action.
 - Stop for user judgment when requirements, product behavior, destructive worktree handling, workflow overrides, or baseline promotion need confirmation.
 - If a subagent, skill, hook, MCP tool, or code intelligence tool is unavailable, continue inline when responsible.
+
+## Execution Strategy Guidance
+
+- Inline execution is fully supported and must remain complete.
+- Hybrid execution is recommended when the harness supports delegation: keep coordination in the main session while delegating implementation or checking.
+- Subagents receive task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
+- Implementer subagents may write code and update checklist progress, but must not close tasks.
+- Checker subagents must return spec drift or product behavior changes to the main session for user confirmation.
 
 ## Workflow Steps
 
@@ -46,5 +56,5 @@ Run verification and review, reconcile drift, and update task.md before finish i
 - cw internal discard-task --task <task-id> --confirm --worktree <handling>
 - cw internal create-resume --task <task-id> --content <markdown>
 - cw internal ensure-baseline-delta --task <task-id>
-- cw internal sync-baseline-delta --task <task-id> --decision accepted|edited|skipped
+- cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped
 - cw internal consume-resume --task <task-id>

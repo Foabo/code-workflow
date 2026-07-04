@@ -157,18 +157,23 @@ async function generateCodexAdapter(root: string, options: AdapterOptions): Prom
   const pluginRoot = path.join(root, "plugins", "cw-workflow");
   const pluginManifestPath = path.join(pluginRoot, ".codex-plugin", "plugin.json");
   const skillsRoot = path.join(pluginRoot, "skills");
+  const repoSkillsRoot = path.join(root, ".codex", "skills");
 
   await ensureDir(path.dirname(marketplacePath));
   await ensureDir(path.dirname(pluginManifestPath));
   await ensureDir(skillsRoot);
+  await ensureDir(repoSkillsRoot);
 
   await writeGenerated(root, marketplacePath, renderCodexMarketplace(), options, generic);
   await writeGenerated(root, pluginManifestPath, renderCodexPluginManifest(), options, generic);
 
   for (const command of AGENT_COMMANDS) {
     const skillDir = path.join(skillsRoot, command);
+    const repoSkillDir = path.join(repoSkillsRoot, command);
     await ensureDir(skillDir);
+    await ensureDir(repoSkillDir);
     await writeGenerated(root, path.join(skillDir, "SKILL.md"), renderCodexSkill(command), options, generic);
+    await writeGenerated(root, path.join(repoSkillDir, "SKILL.md"), renderCodexSkill(command), options, generic);
   }
 
   return generic;

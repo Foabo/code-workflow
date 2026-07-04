@@ -38,6 +38,7 @@ describe("cw kernel", () => {
     const command = await readFile(path.join(root, ".cw/agent-commands/cw-work.md"), "utf8");
     assert.match(command, /generated-by-cw:v1/);
     assert.match(command, /repo truth/);
+    assert.match(command, /cw preflight --action work/);
     assert.match(command, /Hybrid execution is recommended/);
     assert.deepEqual(await validateProject(root), []);
     const doctor = await doctorProject(root);
@@ -69,6 +70,7 @@ describe("cw kernel", () => {
     assert.ok(result.adapters[0]?.created.includes(".agents/plugins/marketplace.json"));
     assert.ok(result.adapters[0]?.created.includes("plugins/cw-workflow/.codex-plugin/plugin.json"));
     assert.ok(result.adapters[0]?.created.includes("plugins/cw-workflow/skills/cw-work/SKILL.md"));
+    assert.ok(result.adapters[0]?.created.includes(".codex/skills/cw-work/SKILL.md"));
     assert.ok(result.adapters[0]?.created.includes(".cw/agent-commands/cw-work.md"));
     const marketplace = await readFile(path.join(root, ".agents/plugins/marketplace.json"), "utf8");
     assert.match(marketplace, /"name": "cw-workflow"/);
@@ -80,11 +82,20 @@ describe("cw kernel", () => {
     assert.match(skill, /cw preflight --action work/);
     assert.match(skill, /Implementer subagents may write code/);
     assert.match(skill, /Checker subagents must return spec drift/);
+    const repoSkill = await readFile(path.join(root, ".codex/skills/cw-work/SKILL.md"), "utf8");
+    assert.match(repoSkill, /^---\nname: cw-work/m);
+    assert.match(repoSkill, /cw preflight --action work/);
 
     await writeFile(path.join(root, "plugins/cw-workflow/skills/cw-work/SKILL.md"), "stale", "utf8");
+    await writeFile(path.join(root, ".codex/skills/cw-work/SKILL.md"), "stale", "utf8");
+    const staleReport = await doctorProject(root);
+    assert.equal(staleReport.ok, false);
+    assert.ok(staleReport.warnings.some((warning) => warning.path === ".codex/skills/cw-work/SKILL.md"));
+
     const update = await updateProject(root, ["codex"]);
     assert.equal(update.validation.ok, true);
     assert.match(await readFile(path.join(root, "plugins/cw-workflow/skills/cw-work/SKILL.md"), "utf8"), /cw preflight --action work/);
+    assert.match(await readFile(path.join(root, ".codex/skills/cw-work/SKILL.md"), "utf8"), /cw preflight --action work/);
   });
 
   it("creates a task with core artifacts and append-only trace events", async () => {
