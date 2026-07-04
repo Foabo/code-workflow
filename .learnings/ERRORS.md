@@ -33,6 +33,38 @@ Replaced Vitest with Node's built-in test runner, then reran `npm install --no-a
 
 ---
 
+## [ERR-20260704-002] shell_command_string_invocation
+
+**Logged**: 2026-07-04T17:36:34+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: infra
+
+### Summary
+A zsh validation script stored `node /path/to/script.js` in a scalar variable and tried to execute it as one path.
+
+### Error
+```text
+run_cmd:3: no such file or directory: node /Users/abboo/src/work/agents/code-workflow/dist/src/cli.js
+```
+
+### Context
+- Command attempted: temporary-repository CW command matrix.
+- Workspace: `/Users/abboo/src/work/agents/code-workflow`.
+- The failure happened before exercising the product commands.
+
+### Suggested Fix
+Use bash arrays, shell functions, or pass `node` and the script path as separate command words.
+
+### Resolution
+Reran the command matrix with a bash script and separate command words.
+
+### Metadata
+- Reproducible: yes
+- Related Files: none
+
+---
+
 ## [ERR-20260704-001] plugin_validator_missing_yaml
 
 **Logged**: 2026-07-04T10:51:31+08:00
