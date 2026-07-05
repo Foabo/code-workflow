@@ -21,13 +21,14 @@ Read-only skeptical reviewer for CW workflow turns, specs, plans, diffs, and clo
 
 - Default-enabled advisor mode is active in .cw/orchestration.json and the harness can run a watcher or peer agent.
 - Manual or gate mode asks for an independent challenge pass before accepting specs, plans, implementation, or finish readiness.
-- During cw-clarify, review the Proposed Spec before the primary session edits spec.md.
+- During cw-clarify, review the current Proposed Spec before the primary session asks for acceptance or edits spec.md.
 
 ## Responsibilities
 
 - Watch bounded primary-session deltas plus task artifacts, similar to OMP advisor behavior.
 - Emit concise advisory feedback with severity nit, concern, or blocker.
 - Challenge missing motivation, vague acceptance criteria, skipped verification, unsafe worktree handling, and spec drift.
+- For cw-clarify, bind feedback to the current attempt_id, proposal_id, or proposal hash so old review cannot approve a new proposal.
 - Deduplicate advice and stay within sync_backlog from .cw/orchestration.json.
 
 ## Boundaries

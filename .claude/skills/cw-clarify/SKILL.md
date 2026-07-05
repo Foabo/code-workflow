@@ -33,23 +33,31 @@ Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md
 
 1. Run `cw preflight --action clarify --task <task-id>` when a task id is known.
 2. Read the current spec.md and relevant project baseline files.
-3. Apply the clarify quality gate described below.
-4. Ask only the questions needed to settle goal, scope, non-goals, constraints, decisions, and acceptance criteria.
-5. Present a short Proposed Spec and wait for user confirmation before editing spec.md.
-6. Edit spec.md only with the accepted task contract.
-7. Capture confirmed long-term project facts as task-local baseline candidates; do not update Project Baseline files during clarify.
-8. Run `cw internal set-state --task <task-id> --phase plan --next-action <text>` when the spec is accepted.
-9. If required information is missing, run `cw internal set-state --task <task-id> --lifecycle blocked --phase clarify --blocked-reason <reason> --next-action <text>`.
+3. Run the Brainstorm Pass described below before drafting Proposed Spec.
+4. Run the Grill Loop described below until Open Decisions and high-risk assumptions are resolved or explicitly accepted.
+5. Present a Proposed Spec and record `spec.proposed` with current proposal identity.
+6. Call the `cw-advisor` role when available to review the current Proposed Spec before asking the user to accept it.
+7. If advisor is unavailable, record `advisor.unavailable` with attempted invocation, harness, failure reason, timestamp, and fallback checklist result, then perform the same checklist inline as degraded execution.
+8. Resolve, defer with rationale, or get explicit user risk acceptance for each concern. Fix blockers and re-review, or record explicit user override.
+9. Wait for explicit user accept before editing spec.md.
+10. Run `cw internal validate-clarify --task <task-id> --stage advance` before writing spec.md or moving to plan.
+11. Edit spec.md only with the accepted task contract after the clarify gate passes.
+12. Capture confirmed long-term project facts as task-local baseline candidates; do not update Project Baseline files during clarify.
+13. Run `cw internal set-state --task <task-id> --phase plan --next-action <text>` when the spec is accepted.
+14. If required information is missing, run `cw internal set-state --task <task-id> --lifecycle blocked --phase clarify --blocked-reason <reason> --next-action <text>`.
 
 ## Phase Guidance
 
-- Clarify uses one process for all tasks. Smaller tasks are faster because fewer important uncertainties survive the challenge pass, not because challenge is skipped.
-- Start with a challenge pass before writing Proposed Spec: restate the original problem and motivation, test assumptions, check scope boundaries, make acceptance criteria observable, name material risks, and ask whether there is a shorter path.
-- If the challenge pass leaves important uncertainty, grill one question at a time. Include your recommended answer and the trade-off so the user can make a concrete decision.
-- Use expand-then-grill when the request is broad, ambiguous, high risk, or affects workflow semantics, CLI/API behavior, task lifecycle, state machines, cross-module behavior, irreversible work, or baseline promotion.
-- Expand around user-visible results, offer at most three candidate directions, and recommend one before grilling the chosen direction.
+- Clarify uses one fixed sequence for all tasks: Brainstorm Pass -> Grill Loop -> Proposed Spec -> advisor review of the current Proposed Spec -> concern/blocker handling -> explicit accept -> write spec.md.
+- Brainstorm Pass must restate the goal and motivation, offer at most three directions, recommend the smallest path, list assumptions, risks, acceptance evidence, and produce Open Decisions.
+- Grill Loop asks one concrete question at a time for Open Decisions and high-risk assumptions. Include your recommended answer and the trade-off so the user can make a concrete decision.
+- Use the full Grill Loop when the request is broad, ambiguous, high risk, or affects workflow semantics, CLI/API behavior, task lifecycle, state machines, cross-module behavior, irreversible work, or baseline promotion.
 - Clarification is complete only when the goal, boundary, acceptance criteria, key risks, and important trade-offs are clear enough to write spec.md without high-risk assumptions.
-- Before writing spec.md, present a Proposed Spec using the existing sections: Goal, Scope, Non-goals, Constraints, Decisions, and Acceptance Criteria. Continue asking if any high-risk assumption remains.
+- Before asking for acceptance, present a Proposed Spec using the existing sections: Goal, Scope, Non-goals, Constraints, Decisions, and Acceptance Criteria. Continue asking if any high-risk assumption remains.
+- Advisor review must target the current Proposed Spec identity. Old advisor review cannot be reused for a new proposal.
+- Advisor unavailable is degraded execution. Record the attempted invocation, harness, failure reason, timestamp, and fallback checklist result before continuing inline.
+- Concern handling must be explicit: resolve it, defer it with rationale, or get user risk acceptance. Blocker handling requires a revised review or explicit user override.
+- Do not create clarify.md. spec.md is the only long-lived clarify artifact.
 - Clarify terminology lightly. Task-local terms belong in spec.md; stable reusable project concepts may become baseline-delta.md candidates.
 - Project Baseline files are not updated during clarify. Confirmed long-term facts should be captured as task-local candidates for later Baseline Outcome handling.
 - For generated workflow guidance changes, challenge likely agent behavior directly: would this wording let an agent skip challenge, skip grill, move to plan/run too early, misuse subagents, or accept vague evidence?
@@ -64,6 +72,8 @@ Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md
 - cw internal create-task --title <title> [--id <task-id>]
 - cw internal select-task [--task <task-id>]
 - cw internal append-trace --task <task-id> --type <event-type> --summary <summary>
+- cw internal append-trace --task <task-id> --type <event-type> --summary <summary> --data-json <json-object>
+- cw internal validate-clarify --task <task-id> --stage proposal|accept|advance
 - cw internal set-state --task <task-id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
 - cw internal finish-task --task <task-id> --summary <summary> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none] [--edited-content <confirmed-current-state-sections>]
 - cw internal discard-task --task <task-id> --confirm --worktree <handling>

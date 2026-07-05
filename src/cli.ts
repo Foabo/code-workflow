@@ -14,6 +14,7 @@ import {
   SetupCommand,
   validateProviderSelection
 } from "./enhancements.js";
+import { ClarifyGateStage, readTraceEvents, validateClarifyGate } from "./clarify-gate.js";
 import { initProject } from "./init.js";
 import { preflight, WorkflowAction } from "./preflight.js";
 import { listTasks, selectTask } from "./task-store.js";
@@ -200,11 +201,37 @@ async function runInternal(subcommand: string | undefined, args: string[], root:
       const event: TraceEvent = {
         ts: optionalString(flags, "ts") ?? new Date().toISOString(),
         type: requiredString(flags, "type"),
-        summary: requiredString(flags, "summary")
+        summary: requiredString(flags, "summary"),
+        data: optionalJsonObject(flags, "data-json")
       };
       await appendTrace(root, taskId, event);
       printJson({ ok: true });
       return 0;
+    }
+    case "validate-clarify": {
+      let task: Awaited<ReturnType<typeof selectTask>> | null = null;
+      try {
+        task = await selectTask(root, { taskId: optionalString(flags, "task") });
+      } catch (error) {
+        if (flagEnabled(flags, "watchdog")) {
+          printJson({ ok: true, skipped: true, reason: error instanceof Error ? error.message : String(error) });
+          return 0;
+        }
+        throw error;
+      }
+      const stage = flagEnabled(flags, "watchdog")
+        ? "watchdog"
+        : optionalClarifyGateStage(flags, "stage") ?? "advance";
+      const report = validateClarifyGate({
+        task,
+        events: await readTraceEvents(root, task.id),
+        stage,
+        attemptId: optionalString(flags, "attempt-id"),
+        proposalId: optionalString(flags, "proposal-id"),
+        proposalHash: optionalString(flags, "proposal-hash")
+      });
+      printJson(report);
+      return report.ok ? 0 : 1;
     }
     case "set-state": {
       const taskId = await requiredActiveTaskId(root, flags);
@@ -638,6 +665,29 @@ function optionalNullableString(flags: Flags, key: string): string | null | unde
     return value;
   }
   return undefined;
+}
+
+function optionalJsonObject(flags: Flags, key: string): Record<string, unknown> | undefined {
+  const value = optionalString(flags, key);
+  if (value === undefined) {
+    return undefined;
+  }
+  const parsed = JSON.parse(value) as unknown;
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`--${key} must be a JSON object`);
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function optionalClarifyGateStage(flags: Flags, key: string): ClarifyGateStage | undefined {
+  const value = optionalString(flags, key);
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "proposal" || value === "accept" || value === "advance" || value === "watchdog") {
+    return value;
+  }
+  throw new Error(`--${key} must be proposal, accept, advance, or watchdog`);
 }
 
 function optionalLifecycle(flags: Flags, key: string): TaskLifecycle | undefined {

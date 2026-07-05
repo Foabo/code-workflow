@@ -1,6 +1,10 @@
 import path from "node:path";
 import { access, readFile } from "node:fs/promises";
-import { expectedGeneratedRoleAgentsForRoot, isGeneratedSkillCurrent } from "./adapters.js";
+import {
+  expectedGeneratedRoleAgentsForRoot,
+  expectedGeneratedWatchdogArtifactsForRoot,
+  isGeneratedSkillCurrent
+} from "./adapters.js";
 import { readJsonFile } from "./json.js";
 import { getCwPaths, TaskLocation, taskDir } from "./paths.js";
 import {
@@ -164,17 +168,32 @@ async function generatedAdapterWarnings(root: string): Promise<ValidationIssue[]
   if (await exists(path.join(root, ".codex", "agents"))) {
     warnings.push(...(await generatedRoleAgentWarnings(root, "codex")));
   }
+  if (await exists(path.join(root, ".codex"))) {
+    warnings.push(...(await generatedWatchdogWarnings(root, "codex")));
+  }
   if (await exists(path.join(root, ".claude", "agents"))) {
     warnings.push(...(await generatedRoleAgentWarnings(root, "claude")));
+  }
+  if (await exists(path.join(root, ".claude"))) {
+    warnings.push(...(await generatedWatchdogWarnings(root, "claude")));
   }
   if (await exists(path.join(root, ".opencode", "agents"))) {
     warnings.push(...(await generatedRoleAgentWarnings(root, "opencode")));
   }
+  if (await exists(path.join(root, ".opencode"))) {
+    warnings.push(...(await generatedWatchdogWarnings(root, "opencode")));
+  }
   if (await exists(path.join(root, ".pi", "agents"))) {
     warnings.push(...(await generatedRoleAgentWarnings(root, "pi")));
   }
+  if (await exists(path.join(root, ".pi"))) {
+    warnings.push(...(await generatedWatchdogWarnings(root, "pi")));
+  }
   if (await exists(path.join(root, ".cursor", "agents"))) {
     warnings.push(...(await generatedRoleAgentWarnings(root, "cursor")));
+  }
+  if (await exists(path.join(root, ".cursor"))) {
+    warnings.push(...(await generatedWatchdogWarnings(root, "cursor")));
   }
   return warnings;
 }
@@ -210,6 +229,25 @@ async function generatedRoleAgentWarnings(
     const content = await readFile(filePath, "utf8");
     if (content !== expected.content) {
       warnings.push({ path: expected.path, message: "generated role agent appears stale" });
+    }
+  }
+  return warnings;
+}
+
+async function generatedWatchdogWarnings(
+  root: string,
+  harness: "codex" | "claude" | "opencode" | "pi" | "cursor"
+): Promise<ValidationIssue[]> {
+  const warnings: ValidationIssue[] = [];
+  for (const expected of expectedGeneratedWatchdogArtifactsForRoot(root, harness)) {
+    const filePath = path.join(root, expected.path);
+    if (!(await exists(filePath))) {
+      warnings.push({ path: expected.path, message: "generated local watchdog artifact is missing" });
+      continue;
+    }
+    const content = await readFile(filePath, "utf8");
+    if (content !== expected.content) {
+      warnings.push({ path: expected.path, message: "generated local watchdog artifact appears stale" });
     }
   }
   return warnings;

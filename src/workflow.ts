@@ -3,6 +3,12 @@ import { exec } from "node:child_process";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { BaselineFile, ensureBaselineDelta, previewBaselineMerge, syncBaselineDelta } from "./baseline.js";
+import {
+  proposalHash,
+  proposalIdFromHash,
+  readTraceEvents,
+  validateClarifyGate
+} from "./clarify-gate.js";
 import { doctorProject } from "./validate.js";
 import {
   appendTrace,
@@ -17,7 +23,7 @@ import {
 import { getCwPaths, taskDir } from "./paths.js";
 import { preflight, WorkflowAction } from "./preflight.js";
 import { selectTask } from "./task-store.js";
-import { BaselineDecision, DirtyWorktreeDecision, TaskStateRecord } from "./types.js";
+import { BaselineDecision, DirtyWorktreeDecision, TaskStateRecord, ValidationIssue } from "./types.js";
 
 const execAsync = promisify(exec);
 
@@ -48,6 +54,8 @@ export type WorkflowOptions = {
   worktreeHandling?: "keep" | "stash" | "revert" | "delete-worktree" | "none";
   confirm?: boolean;
   merge?: boolean;
+  attemptId?: string;
+  proposalId?: string;
 };
 
 export type WorkflowResult = {
@@ -157,28 +165,135 @@ async function runClarify(root: string, options: WorkflowOptions): Promise<Workf
   const goal = options.goal;
   const scope = options.scope ?? "In scope for the current task.";
   const acceptance = options.acceptance?.length ? options.acceptance : ["Task behavior satisfies the goal."];
-  await writeFile(
-    path.join(taskDir(root, task.id), task.artifacts.spec),
-    renderSpec(goal, scope, acceptance, {
-      nonGoals: options.nonGoals,
-      constraints: options.constraints,
-      decisions: options.decisions
-    }),
-    "utf8"
-  );
+  const proposedSpec = renderSpec(goal, scope, acceptance, {
+    nonGoals: options.nonGoals,
+    constraints: options.constraints,
+    decisions: options.decisions
+  });
+  const identity = clarifyProposalIdentity(proposedSpec, options);
+
+  if (options.confirm !== true) {
+    const now = new Date().toISOString();
+    const data = {
+      attempt_id: identity.attemptId,
+      proposal_id: identity.proposalId,
+      proposal_hash: identity.proposalHash
+    };
+    await appendTrace(root, task.id, {
+      ts: now,
+      type: "brainstorm.done",
+      summary: "Clarify proposal prepared; Brainstorm Pass evidence is required before acceptance.",
+      data
+    });
+    await appendTrace(root, task.id, {
+      ts: now,
+      type: "spec.proposed",
+      summary: "Proposed Spec prepared; advisor review and explicit accept are required before spec.md is written.",
+      data
+    });
+    const blocked = await updateTaskState(root, task.id, {
+      lifecycle: "blocked",
+      phase: "clarify",
+      blockedReason: "Proposed Spec requires advisor review and explicit accept before spec.md is written.",
+      nextAction: "Run advisor review for the current proposal, resolve concerns or blockers, then rerun cw-clarify with explicit accept."
+    });
+    return {
+      action: "clarify",
+      task: blocked,
+      message: `Proposed spec for ${task.id}; advisor review and explicit accept are required before writing spec.md.`,
+      details: { proposal: proposedSpec, identity }
+    };
+  }
+
+  const acceptGate = validateClarifyGate({
+    task,
+    events: await readTraceEvents(root, task.id),
+    stage: "accept",
+    attemptId: options.attemptId,
+    proposalId: options.proposalId,
+    proposalHash: identity.proposalHash
+  });
+  if (!acceptGate.ok || acceptGate.identity === null) {
+    const blocked = await blockClarifyGateFailure(root, task.id, acceptGate.issues);
+    return {
+      action: "clarify",
+      task: blocked,
+      message: `Clarify accept gate blocked ${task.id}.`,
+      details: { gate: acceptGate }
+    };
+  }
+  await appendTrace(root, task.id, {
+    ts: new Date().toISOString(),
+    type: "spec.accepted",
+    summary: "Task spec explicitly accepted.",
+    data: {
+      attempt_id: acceptGate.identity.attemptId,
+      proposal_id: acceptGate.identity.proposalId,
+      proposal_hash: acceptGate.identity.proposalHash,
+      explicit: true
+    }
+  });
+  const advanceGate = validateClarifyGate({
+    task,
+    events: await readTraceEvents(root, task.id),
+    stage: "advance",
+    attemptId: acceptGate.identity.attemptId,
+    proposalId: acceptGate.identity.proposalId,
+    proposalHash: acceptGate.identity.proposalHash
+  });
+  if (!advanceGate.ok) {
+    const blocked = await blockClarifyGateFailure(root, task.id, advanceGate.issues);
+    return {
+      action: "clarify",
+      task: blocked,
+      message: `Clarify phase gate blocked ${task.id}.`,
+      details: { gate: advanceGate }
+    };
+  }
+  await writeFile(path.join(taskDir(root, task.id), task.artifacts.spec), proposedSpec, "utf8");
   const updated = await updateTaskState(root, task.id, {
     lifecycle: "open",
     phase: "plan",
     nextAction: "Create plan.md and task.md from the accepted spec",
     blockedReason: null
   });
-  await appendTrace(root, task.id, {
-    ts: updated.updated_at,
-    type: "spec.accepted",
-    summary: "Task spec accepted."
-  });
   const resumed = await consumeResumeAfterProgress(root, updated);
   return { action: "clarify", task: resumed, message: `Accepted spec for ${task.id}.` };
+}
+
+function clarifyProposalIdentity(
+  proposedSpec: string,
+  options: Pick<WorkflowOptions, "attemptId" | "proposalId">
+): { attemptId: string; proposalId: string; proposalHash: string } {
+  const hash = proposalHash(proposedSpec);
+  return {
+    attemptId: options.attemptId ?? `a-${Date.now().toString(36)}-${hash.slice(0, 8)}`,
+    proposalId: options.proposalId ?? proposalIdFromHash(hash),
+    proposalHash: hash
+  };
+}
+
+async function blockClarifyGateFailure(
+  root: string,
+  taskId: string,
+  issues: ValidationIssue[]
+): Promise<TaskStateRecord> {
+  const reason = issues.length > 0
+    ? `Clarify gate failed: ${issues.map((issue) => `${issue.path} ${issue.message}`).join("; ")}`
+    : "Clarify gate failed.";
+  const blocked = await updateTaskState(root, taskId, {
+    lifecycle: "blocked",
+    phase: "clarify",
+    blockedReason: reason,
+    nextAction: "Repair the current Proposed Spec gate evidence, advisor review, or explicit accept before writing spec.md."
+  });
+  await appendTrace(root, taskId, {
+    ts: blocked.updated_at,
+    type: "clarify.gate.failed",
+    summary: reason,
+    data: { issues }
+  });
+  return blocked;
 }
 
 async function runPlan(root: string, options: WorkflowOptions): Promise<WorkflowResult> {

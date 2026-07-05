@@ -70,7 +70,9 @@ function optionsFromFlags(flags: Flags): WorkflowOptions {
     dirtyWorktree: dirtyFlag(flags, "dirty-worktree"),
     worktreeHandling: worktreeFlag(flags, "worktree"),
     confirm: flags.confirm === true || flags.confirm === "true",
-    merge: flags.merge === true || flags.merge === "true"
+    merge: flags.merge === true || flags.merge === "true",
+    attemptId: stringFlag(flags, "attempt-id"),
+    proposalId: stringFlag(flags, "proposal-id")
   };
 }
 

@@ -52,10 +52,15 @@ const commandSteps: Record<(typeof AGENT_COMMANDS)[number], string[]> = {
   "cw-clarify": [
     "Run `cw preflight --action clarify --task <task-id>` when a task id is known.",
     "Read the current spec.md and relevant project baseline files.",
-    "Apply the clarify quality gate described below.",
-    "Ask only the questions needed to settle goal, scope, non-goals, constraints, decisions, and acceptance criteria.",
-    "Present a short Proposed Spec and wait for user confirmation before editing spec.md.",
-    "Edit spec.md only with the accepted task contract.",
+    "Run the Brainstorm Pass described below before drafting Proposed Spec.",
+    "Run the Grill Loop described below until Open Decisions and high-risk assumptions are resolved or explicitly accepted.",
+    "Present a Proposed Spec and record `spec.proposed` with current proposal identity.",
+    "Call the `cw-advisor` role when available to review the current Proposed Spec before asking the user to accept it.",
+    "If advisor is unavailable, record `advisor.unavailable` with attempted invocation, harness, failure reason, timestamp, and fallback checklist result, then perform the same checklist inline as degraded execution.",
+    "Resolve, defer with rationale, or get explicit user risk acceptance for each concern. Fix blockers and re-review, or record explicit user override.",
+    "Wait for explicit user accept before editing spec.md.",
+    "Run `cw internal validate-clarify --task <task-id> --stage advance` before writing spec.md or moving to plan.",
+    "Edit spec.md only with the accepted task contract after the clarify gate passes.",
     "Capture confirmed long-term project facts as task-local baseline candidates; do not update Project Baseline files during clarify.",
     "Run `cw internal set-state --task <task-id> --phase plan --next-action <text>` when the spec is accepted.",
     "If required information is missing, run `cw internal set-state --task <task-id> --lifecycle blocked --phase clarify --blocked-reason <reason> --next-action <text>`."
@@ -142,13 +147,16 @@ const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>
     "If the phase, artifacts, or user request conflict, stop and resolve the conflict through the matching phase guidance before making code changes."
   ],
   "cw-clarify": [
-    "Clarify uses one process for all tasks. Smaller tasks are faster because fewer important uncertainties survive the challenge pass, not because challenge is skipped.",
-    "Start with a challenge pass before writing Proposed Spec: restate the original problem and motivation, test assumptions, check scope boundaries, make acceptance criteria observable, name material risks, and ask whether there is a shorter path.",
-    "If the challenge pass leaves important uncertainty, grill one question at a time. Include your recommended answer and the trade-off so the user can make a concrete decision.",
-    "Use expand-then-grill when the request is broad, ambiguous, high risk, or affects workflow semantics, CLI/API behavior, task lifecycle, state machines, cross-module behavior, irreversible work, or baseline promotion.",
-    "Expand around user-visible results, offer at most three candidate directions, and recommend one before grilling the chosen direction.",
+    "Clarify uses one fixed sequence for all tasks: Brainstorm Pass -> Grill Loop -> Proposed Spec -> advisor review of the current Proposed Spec -> concern/blocker handling -> explicit accept -> write spec.md.",
+    "Brainstorm Pass must restate the goal and motivation, offer at most three directions, recommend the smallest path, list assumptions, risks, acceptance evidence, and produce Open Decisions.",
+    "Grill Loop asks one concrete question at a time for Open Decisions and high-risk assumptions. Include your recommended answer and the trade-off so the user can make a concrete decision.",
+    "Use the full Grill Loop when the request is broad, ambiguous, high risk, or affects workflow semantics, CLI/API behavior, task lifecycle, state machines, cross-module behavior, irreversible work, or baseline promotion.",
     "Clarification is complete only when the goal, boundary, acceptance criteria, key risks, and important trade-offs are clear enough to write spec.md without high-risk assumptions.",
-    "Before writing spec.md, present a Proposed Spec using the existing sections: Goal, Scope, Non-goals, Constraints, Decisions, and Acceptance Criteria. Continue asking if any high-risk assumption remains.",
+    "Before asking for acceptance, present a Proposed Spec using the existing sections: Goal, Scope, Non-goals, Constraints, Decisions, and Acceptance Criteria. Continue asking if any high-risk assumption remains.",
+    "Advisor review must target the current Proposed Spec identity. Old advisor review cannot be reused for a new proposal.",
+    "Advisor unavailable is degraded execution. Record the attempted invocation, harness, failure reason, timestamp, and fallback checklist result before continuing inline.",
+    "Concern handling must be explicit: resolve it, defer it with rationale, or get user risk acceptance. Blocker handling requires a revised review or explicit user override.",
+    "Do not create clarify.md. spec.md is the only long-lived clarify artifact.",
     "Clarify terminology lightly. Task-local terms belong in spec.md; stable reusable project concepts may become baseline-delta.md candidates.",
     "Project Baseline files are not updated during clarify. Confirmed long-term facts should be captured as task-local candidates for later Baseline Outcome handling.",
     "For generated workflow guidance changes, challenge likely agent behavior directly: would this wording let an agent skip challenge, skip grill, move to plan/run too early, misuse subagents, or accept vague evidence?"
@@ -238,12 +246,13 @@ const roleAgentDefinitions: Record<AgentRoleName, RoleAgentDefinition> = {
     useWhen: [
       "Default-enabled advisor mode is active in .cw/orchestration.json and the harness can run a watcher or peer agent.",
       "Manual or gate mode asks for an independent challenge pass before accepting specs, plans, implementation, or finish readiness.",
-      "During cw-clarify, review the Proposed Spec before the primary session edits spec.md."
+      "During cw-clarify, review the current Proposed Spec before the primary session asks for acceptance or edits spec.md."
     ],
     responsibilities: [
       "Watch bounded primary-session deltas plus task artifacts, similar to OMP advisor behavior.",
       "Emit concise advisory feedback with severity nit, concern, or blocker.",
       "Challenge missing motivation, vague acceptance criteria, skipped verification, unsafe worktree handling, and spec drift.",
+      "For cw-clarify, bind feedback to the current attempt_id, proposal_id, or proposal hash so old review cannot approve a new proposal.",
       "Deduplicate advice and stay within sync_backlog from .cw/orchestration.json."
     ],
     boundaries: [
@@ -391,6 +400,7 @@ async function generateAgentSkillAdapter(
   }
 
   await generateRoleAgents(root, harness, options, result);
+  await generateWatchdogArtifacts(root, harness, options, result);
 
   return result;
 }
@@ -407,6 +417,7 @@ async function generateClaudeAdapter(root: string, options: AdapterOptions): Pro
   }
 
   await generateRoleAgents(root, "claude", options, result);
+  await generateWatchdogArtifacts(root, "claude", options, result);
 
   return result;
 }
@@ -423,6 +434,34 @@ async function generateRoleAgents(
   for (const expected of await expectedGeneratedRoleAgentsForRoot(root, harness)) {
     await writeGenerated(root, path.join(root, expected.path), expected.content, options, result);
   }
+}
+
+async function generateWatchdogArtifacts(
+  root: string,
+  harness: HarnessName,
+  options: AdapterOptions,
+  result: AdapterResult
+): Promise<void> {
+  for (const expected of expectedGeneratedWatchdogArtifacts(harness)) {
+    await ensureDir(path.dirname(path.join(root, expected.path)));
+    await writeGenerated(root, path.join(root, expected.path), expected.content, options, result);
+  }
+}
+
+export function expectedGeneratedWatchdogArtifactsForRoot(
+  _root: string,
+  harness: HarnessName
+): Array<{ path: string; content: string }> {
+  return expectedGeneratedWatchdogArtifacts(harness);
+}
+
+export function expectedGeneratedWatchdogArtifacts(harness: HarnessName): Array<{ path: string; content: string }> {
+  return [
+    {
+      path: watchdogArtifactPath(harness),
+      content: renderWatchdogArtifact(harness)
+    }
+  ];
 }
 
 export async function expectedGeneratedRoleAgentsForRoot(root: string, harness: HarnessName): Promise<Array<{ path: string; content: string }>> {
@@ -458,6 +497,102 @@ function roleAgentRoot(harness: HarnessName): string {
     return ".cursor/agents";
   }
   return ".pi/agents";
+}
+
+function watchdogArtifactPath(harness: HarnessName): string {
+  if (harness === "codex") {
+    return ".codex/hooks.json";
+  }
+  if (harness === "claude") {
+    return ".claude/settings.json";
+  }
+  if (harness === "opencode") {
+    return ".opencode/plugins/cw-clarify-watchdog.ts";
+  }
+  if (harness === "cursor") {
+    return ".cursor/hooks.json";
+  }
+  return ".pi/extensions/cw-clarify-watchdog.ts";
+}
+
+function renderWatchdogArtifact(harness: HarnessName): string {
+  const command = "cw internal validate-clarify --watchdog";
+  if (harness === "codex") {
+    return `${JSON.stringify({
+      hooks: {
+        Stop: [
+          {
+            type: "command",
+            command
+          }
+        ]
+      }
+    }, null, 2)}\n`;
+  }
+  if (harness === "claude") {
+    return `${JSON.stringify({
+      hooks: {
+        Stop: [
+          {
+            matcher: "",
+            hooks: [
+              {
+                type: "command",
+                command
+              }
+            ]
+          }
+        ],
+        SubagentStop: [
+          {
+            matcher: "",
+            hooks: [
+              {
+                type: "command",
+                command
+              }
+            ]
+          }
+        ]
+      }
+    }, null, 2)}\n`;
+  }
+  if (harness === "cursor") {
+    return `${JSON.stringify({
+      version: 1,
+      hooks: {
+        stop: [
+          {
+            command
+          }
+        ],
+        subagentStop: [
+          {
+            command
+          }
+        ]
+      }
+    }, null, 2)}\n`;
+  }
+  if (harness === "opencode") {
+    return `export default async function cwClarifyWatchdog({ $, event }: { $: unknown; event: { type?: string } }) {
+  if (event.type !== "session.idle") {
+    return;
+  }
+  const runner = $ as (strings: TemplateStringsArray, ...values: string[]) => Promise<unknown>;
+  await runner\`cw internal validate-clarify --watchdog\`;
+}
+`;
+  }
+  return `export default function cwClarifyWatchdog(pi: { on: (event: string, handler: () => Promise<void>) => void; $?: (strings: TemplateStringsArray, ...values: string[]) => Promise<unknown> }) {
+  pi.on("session_idle", async () => {
+    if (pi.$ === undefined) {
+      return;
+    }
+    await pi.$\`cw internal validate-clarify --watchdog\`;
+  });
+}
+`;
 }
 
 function renderRoleAgent(definition: RoleAgentDefinition, harness: HarnessName, profile: ResolvedRoleModelProfile): string {
@@ -612,6 +747,8 @@ ${commandSteps[command].map((step, index) => `${index + 1}. ${step}`).join("\n")
 - cw internal create-task --title <title> [--id <task-id>]
 - cw internal select-task [--task <task-id>]
 - cw internal append-trace --task <task-id> --type <event-type> --summary <summary>
+- cw internal append-trace --task <task-id> --type <event-type> --summary <summary> --data-json <json-object>
+- cw internal validate-clarify --task <task-id> --stage proposal|accept|advance
 - cw internal set-state --task <task-id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
 - cw internal finish-task --task <task-id> --summary <summary> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none] [--edited-content <confirmed-current-state-sections>]
 - cw internal discard-task --task <task-id> --confirm --worktree <handling>

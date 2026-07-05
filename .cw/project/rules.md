@@ -22,3 +22,5 @@
 - Claude repo-local CW skills are generated under `.claude/skills/`. They may be regenerated with `cw update --harness claude`.
 - Do not edit generated CW skills as canonical workflow truth; update adapter rendering code and regenerate them.
 - Do not claim repository-local `.codex/prompts/` files are Codex commands; Codex custom prompts are documented as local Codex home files and deprecated.
+
+- Clarify proposals must keep stable proposal identity in trace events so advisor review and explicit accept cannot be reused across different Proposed Specs.

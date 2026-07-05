@@ -17,7 +17,8 @@ import type {
   DirtyWorktreeDecision,
   TaskStateRecord,
   WorkflowCommandAction,
-  WorkflowOptions
+  WorkflowOptions,
+  WorkflowResult
 } from "../src/index.js";
 
 describe("cw kernel", () => {
@@ -114,6 +115,7 @@ describe("cw kernel", () => {
     assert.equal(result.adapters[0]?.harness, "codex");
     assert.ok(result.adapters[0]?.created.includes(".agents/skills/cw-work/SKILL.md"));
     assert.ok(result.adapters[0]?.created.includes(".codex/agents/cw-advisor.toml"));
+    assert.ok(result.adapters[0]?.created.includes(".codex/hooks.json"));
     await assert.rejects(access(path.join(root, ".cw/agent-commands")));
     await assert.rejects(access(path.join(root, ".agents/plugins/marketplace.json")));
     await assert.rejects(access(path.join(root, ".codex/skills/cw-work/SKILL.md")));
@@ -147,6 +149,9 @@ describe("cw kernel", () => {
     assert.match(advisorAgent, /Watch bounded primary-session deltas/);
     assert.match(advisorAgent, /Do not ask the user directly/);
     assert.match(advisorAgent, /severity: nit \| concern \| blocker/);
+    assert.match(advisorAgent, /proposal hash/);
+    const codexWatchdog = await readFile(path.join(root, ".codex/hooks.json"), "utf8");
+    assert.match(codexWatchdog, /cw internal validate-clarify --watchdog/);
     const implementerAgent = await readFile(path.join(root, ".codex/agents/cw-implementer.toml"), "utf8");
     assert.match(implementerAgent, /Modify code and tests within the accepted task contract/);
     assert.match(implementerAgent, /Do not decide requirement drift/);
@@ -156,11 +161,14 @@ describe("cw kernel", () => {
       assert.doesNotMatch(skill, /asks Codex to run/);
     }
     const clarifySkill = await readFile(path.join(root, ".agents/skills/cw-clarify/SKILL.md"), "utf8");
-    assert.match(clarifySkill, /challenge pass/);
-    assert.match(clarifySkill, /Smaller tasks are faster/);
-    assert.match(clarifySkill, /shorter path/);
-    assert.match(clarifySkill, /expand-then-grill/);
-    assert.match(clarifySkill, /one question at a time/);
+    assert.match(clarifySkill, /Brainstorm Pass/);
+    assert.match(clarifySkill, /Grill Loop/);
+    assert.match(clarifySkill, /advisor review of the current Proposed Spec/);
+    assert.match(clarifySkill, /proposal identity/);
+    assert.match(clarifySkill, /degraded execution/);
+    assert.match(clarifySkill, /validate-clarify/);
+    assert.match(clarifySkill, /Do not create clarify\.md/);
+    assert.match(clarifySkill, /one concrete question at a time/);
     assert.match(clarifySkill, /would this wording let an agent skip challenge/);
     assert.match(clarifySkill, /Proposed Spec/);
     assert.match(clarifySkill, /confirmed long-term project facts/);
@@ -313,6 +321,7 @@ describe("cw kernel", () => {
     assert.equal(claude.adapters[0]?.harness, "claude");
     assert.ok(claude.adapters[0]?.created.includes(".claude/skills/cw-work/SKILL.md"));
     assert.ok(claude.adapters[0]?.created.includes(".claude/agents/cw-advisor.md"));
+    assert.ok(claude.adapters[0]?.created.includes(".claude/settings.json"));
     await assert.rejects(access(path.join(claudeRoot, ".cw/agent-commands")));
     await assert.rejects(access(path.join(claudeRoot, ".claude/commands")));
     const claudeSkill = await readFile(path.join(claudeRoot, ".claude/skills/cw-work/SKILL.md"), "utf8");
@@ -328,10 +337,12 @@ describe("cw kernel", () => {
     const claudeAdvisor = await readFile(path.join(claudeRoot, ".claude/agents/cw-advisor.md"), "utf8");
     assert.match(claudeAdvisor, /^---\nname: cw-advisor/m);
     assert.match(claudeAdvisor, /tools: Read, Grep, Glob/);
+    assert.match(await readFile(path.join(claudeRoot, ".claude/settings.json"), "utf8"), /cw internal validate-clarify --watchdog/);
 
     assert.equal(opencode.adapters[0]?.harness, "opencode");
     assert.ok(opencode.adapters[0]?.created.includes(".agents/skills/cw-work/SKILL.md"));
     assert.ok(opencode.adapters[0]?.created.includes(".opencode/agents/cw-advisor.md"));
+    assert.ok(opencode.adapters[0]?.created.includes(".opencode/plugins/cw-clarify-watchdog.ts"));
     await assert.rejects(access(path.join(opencodeRoot, ".cw/agent-commands")));
     await assert.rejects(access(path.join(opencodeRoot, ".opencode/commands")));
     const opencodeSkill = await readFile(path.join(opencodeRoot, ".agents/skills/cw-work/SKILL.md"), "utf8");
@@ -343,10 +354,15 @@ describe("cw kernel", () => {
     assert.match(opencodeAdvisor, /mode: subagent/);
     assert.match(opencodeAdvisor, /temperature: 0\.1/);
     assert.match(opencodeAdvisor, /tools:\n  write: false\n  edit: false\n  bash: false/);
+    assert.match(
+      await readFile(path.join(opencodeRoot, ".opencode/plugins/cw-clarify-watchdog.ts"), "utf8"),
+      /cw internal validate-clarify --watchdog/
+    );
 
     assert.equal(pi.adapters[0]?.harness, "pi");
     assert.ok(pi.adapters[0]?.created.includes(".agents/skills/cw-work/SKILL.md"));
     assert.ok(pi.adapters[0]?.created.includes(".pi/agents/cw-advisor.md"));
+    assert.ok(pi.adapters[0]?.created.includes(".pi/extensions/cw-clarify-watchdog.ts"));
     await assert.rejects(access(path.join(piRoot, ".cw/agent-commands")));
     await assert.rejects(access(path.join(piRoot, ".pi/skills")));
     const piSkill = await readFile(path.join(piRoot, ".agents/skills/cw-work/SKILL.md"), "utf8");
@@ -356,10 +372,12 @@ describe("cw kernel", () => {
     assert.match(piSkill, /cw preflight --action work/);
     const piAdvisor = await readFile(path.join(piRoot, ".pi/agents/cw-advisor.md"), "utf8");
     assert.match(piAdvisor, /Pi subagents discover project agents from \.pi\/agents/);
+    assert.match(await readFile(path.join(piRoot, ".pi/extensions/cw-clarify-watchdog.ts"), "utf8"), /cw internal validate-clarify --watchdog/);
 
     assert.equal(cursor.adapters[0]?.harness, "cursor");
     assert.ok(cursor.adapters[0]?.created.includes(".agents/skills/cw-work/SKILL.md"));
     assert.ok(cursor.adapters[0]?.created.includes(".cursor/agents/cw-advisor.md"));
+    assert.ok(cursor.adapters[0]?.created.includes(".cursor/hooks.json"));
     await assert.rejects(access(path.join(cursorRoot, ".cw/agent-commands")));
     const cursorSkill = await readFile(path.join(cursorRoot, ".agents/skills/cw-work/SKILL.md"), "utf8");
     assert.match(cursorSkill, /^---\nname: cw-work/m);
@@ -369,6 +387,10 @@ describe("cw kernel", () => {
     const cursorAdvisor = await readFile(path.join(cursorRoot, ".cursor/agents/cw-advisor.md"), "utf8");
     assert.match(cursorAdvisor, /^---\nname: cw-advisor/m);
     assert.match(cursorAdvisor, /readonly: true/);
+    const cursorHooks = await readFile(path.join(cursorRoot, ".cursor/hooks.json"), "utf8");
+    assert.match(cursorHooks, /cw internal validate-clarify --watchdog/);
+    const nonLocalMarker = ["cl", "oud"].join("");
+    assert.doesNotMatch(`${cursorSkill}\n${cursorAdvisor}\n${cursorHooks}`, new RegExp(nonLocalMarker, "i"));
   });
 
   it("accepts a positional root for CLI init", async () => {
@@ -1105,6 +1127,165 @@ describe("cw kernel", () => {
     assert.match(plan.task?.next_action ?? "", /observable result/);
   });
 
+  it("requires advisor review and explicit accept before clarify writes spec", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await createTaskViaCli(root, { id: "0001-clarify-gate", title: "Clarify gate" });
+
+    const proposed = await runWorkflowAction(root, "clarify", {
+      taskId: "0001-clarify-gate",
+      goal: "Create a durable clarify gate.",
+      acceptance: ["spec.md is written only after advisor review"]
+    });
+    assert.equal(proposed.task?.lifecycle, "blocked");
+    assert.equal(proposed.task?.phase, "clarify");
+    assert.match(proposed.message, /Proposed spec/);
+    assert.doesNotMatch(await readFile(path.join(root, ".cw/tasks/0001-clarify-gate/spec.md"), "utf8"), /durable clarify gate/);
+
+    const blockedAccept = await runWorkflowAction(root, "clarify", {
+      taskId: "0001-clarify-gate",
+      goal: "Create a durable clarify gate.",
+      acceptance: ["spec.md is written only after advisor review"],
+      confirm: true
+    });
+    assert.equal(blockedAccept.task?.lifecycle, "blocked");
+    assert.match(blockedAccept.task?.blocked_reason ?? "", /advisor/);
+
+    const identity = proposed.details?.identity as { attemptId: string; proposalId: string; proposalHash: string };
+    await appendTraceViaCli(root, "0001-clarify-gate", {
+      type: "advisor.reviewed",
+      summary: "Advisor approved current Proposed Spec.",
+      data: {
+        attempt_id: identity.attemptId,
+        proposal_id: identity.proposalId,
+        proposal_hash: identity.proposalHash,
+        verdict: "pass"
+      }
+    });
+    const accepted = await runWorkflowAction(root, "clarify", {
+      taskId: "0001-clarify-gate",
+      goal: "Create a durable clarify gate.",
+      acceptance: ["spec.md is written only after advisor review"],
+      confirm: true
+    });
+    assert.equal(accepted.task?.phase, "plan");
+    assert.match(await readFile(path.join(root, ".cw/tasks/0001-clarify-gate/spec.md"), "utf8"), /durable clarify gate/);
+    const trace = await readTrace(root, "0001-clarify-gate");
+    assert.ok(trace.some((event) => event.type === "spec.accepted" && (event.data as Record<string, unknown>).explicit === true));
+  });
+
+  it("validates clarify gate event identity and advisor outcomes", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await createTaskViaCli(root, { id: "0001-clarify-validator", title: "Clarify validator" });
+    const data = { attempt_id: "a1", proposal_id: "p1", proposal_hash: "hash1" };
+
+    await appendTraceViaCli(root, "0001-clarify-validator", {
+      type: "brainstorm.done",
+      summary: "Brainstorm done.",
+      data
+    });
+    await appendTraceViaCli(root, "0001-clarify-validator", {
+      type: "spec.proposed",
+      summary: "Spec proposed.",
+      data
+    });
+
+    const missingAdvisor = await runValidateClarifyViaCli(root, "0001-clarify-validator", "accept");
+    assert.equal(missingAdvisor.code, 1);
+    assert.match(missingAdvisor.stdout, /advisor/);
+
+    await appendTraceViaCli(root, "0001-clarify-validator", {
+      type: "advisor.reviewed",
+      summary: "Advisor raised concern.",
+      data: { ...data, verdict: "concern" }
+    });
+    const unresolvedConcern = await runValidateClarifyViaCli(root, "0001-clarify-validator", "accept");
+    assert.equal(unresolvedConcern.code, 1);
+    assert.match(unresolvedConcern.stdout, /concern/);
+
+    await appendTraceViaCli(root, "0001-clarify-validator", {
+      type: "advisor.reviewed",
+      summary: "Advisor concern deferred.",
+      data: { ...data, verdict: "concern", deferred_reason: "Accepted as implementation risk." }
+    });
+    assert.equal((await runValidateClarifyViaCli(root, "0001-clarify-validator", "accept")).code, 0);
+
+    const mismatched = await runValidateClarifyViaCli(root, "0001-clarify-validator", "accept", ["--proposal-id", "other"]);
+    assert.equal(mismatched.code, 1);
+    assert.match(mismatched.stdout, /spec.proposed/);
+
+    await appendTraceViaCli(root, "0001-clarify-validator", {
+      type: "advisor.reviewed",
+      summary: "Advisor raised blocker.",
+      data: { ...data, verdict: "blocker" }
+    });
+    const unresolvedBlocker = await runValidateClarifyViaCli(root, "0001-clarify-validator", "accept");
+    assert.equal(unresolvedBlocker.code, 1);
+    assert.match(unresolvedBlocker.stdout, /blocker/);
+
+    await appendTraceViaCli(root, "0001-clarify-validator", {
+      type: "advisor.reviewed",
+      summary: "Advisor blocker overridden by user.",
+      data: { ...data, verdict: "blocker", user_override: true }
+    });
+    await appendTraceViaCli(root, "0001-clarify-validator", {
+      type: "spec.accepted",
+      summary: "Spec accepted.",
+      data: { ...data, explicit: true }
+    });
+    assert.equal((await runValidateClarifyViaCli(root, "0001-clarify-validator", "advance")).code, 0);
+
+    await createTaskViaCli(root, { id: "0002-clarify-unavailable", title: "Clarify unavailable" });
+    const fallbackData = { attempt_id: "a2", proposal_id: "p2", proposal_hash: "hash2" };
+    await appendTraceViaCli(root, "0002-clarify-unavailable", {
+      type: "brainstorm.done",
+      summary: "Brainstorm done.",
+      data: fallbackData
+    });
+    await appendTraceViaCli(root, "0002-clarify-unavailable", {
+      type: "spec.proposed",
+      summary: "Spec proposed.",
+      data: fallbackData
+    });
+    await appendTraceViaCli(root, "0002-clarify-unavailable", {
+      type: "advisor.unavailable",
+      summary: "Advisor unavailable without enough evidence.",
+      data: { ...fallbackData, attempted: true, harness: "codex" }
+    });
+    const incompleteFallback = await runValidateClarifyViaCli(root, "0002-clarify-unavailable", "accept");
+    assert.equal(incompleteFallback.code, 1);
+    assert.match(incompleteFallback.stdout, /failure_reason/);
+    await appendTraceViaCli(root, "0002-clarify-unavailable", {
+      type: "advisor.unavailable",
+      summary: "Advisor unavailable; inline fallback completed.",
+      data: {
+        ...fallbackData,
+        attempted: true,
+        harness: "codex",
+        failure_reason: "subagent unavailable",
+        fallback_checklist_result: "pass"
+      }
+    });
+    assert.equal((await runValidateClarifyViaCli(root, "0002-clarify-unavailable", "accept")).code, 0);
+
+    await createTaskViaCli(root, { id: "0003-clarify-order", title: "Clarify order" });
+    const orderData = { attempt_id: "a3", proposal_id: "p3", proposal_hash: "hash3" };
+    await appendTraceViaCli(root, "0003-clarify-order", {
+      type: "spec.proposed",
+      summary: "Spec proposed before brainstorm.",
+      data: orderData
+    });
+    await appendTraceViaCli(root, "0003-clarify-order", {
+      type: "brainstorm.done",
+      summary: "Brainstorm done too late.",
+      data: orderData
+    });
+    const outOfOrder = await runValidateClarifyViaCli(root, "0003-clarify-order", "proposal");
+    assert.equal(outOfOrder.code, 1);
+    assert.match(outOfOrder.stdout, /before spec.proposed/);
+  });
+
   it("creates and consumes a task-local resume note", async () => {
     const root = await tempRoot();
     await initProject(root);
@@ -1302,7 +1483,7 @@ describe("cw kernel", () => {
     const root = await tempRoot();
     await initProject(root);
     await runWorkflowAction(root, "work", { taskId: "0001-drift-test", title: "Drift test" });
-    await runWorkflowAction(root, "clarify", {
+    await acceptClarifyViaWorkflow(root, {
       taskId: "0001-drift-test",
       goal: "Keep behavior aligned.",
       acceptance: ["Drift is resolved before finish"]
@@ -1328,7 +1509,7 @@ describe("cw kernel", () => {
     const root = await tempRoot();
     await initProject(root);
     await runWorkflowAction(root, "work", { taskId: "0001-finish-prompt", title: "Finish prompt" });
-    await runWorkflowAction(root, "clarify", {
+    await acceptClarifyViaWorkflow(root, {
       taskId: "0001-finish-prompt",
       goal: "Record a reusable command.",
       acceptance: ["Reusable command is ready for baseline review"]
@@ -1362,7 +1543,7 @@ describe("cw kernel", () => {
     const root = await tempRoot();
     await initProject(root);
     await runWorkflowAction(root, "work", { taskId: "0001-high-impact-baseline", title: "High impact baseline" });
-    await runWorkflowAction(root, "clarify", {
+    await acceptClarifyViaWorkflow(root, {
       taskId: "0001-high-impact-baseline",
       goal: "Document an architecture fact.",
       acceptance: ["Architecture fact is documented"]
@@ -1406,7 +1587,7 @@ describe("cw kernel", () => {
     const root = await tempRoot();
     await initProject(root);
     await runWorkflowAction(root, "work", { taskId: "0001-check-baseline-outcome", title: "Check baseline outcome" });
-    await runWorkflowAction(root, "clarify", {
+    await acceptClarifyViaWorkflow(root, {
       taskId: "0001-check-baseline-outcome",
       goal: "Verify baseline outcome handling.",
       acceptance: ["Check does not pass without Baseline Outcome"]
@@ -1541,7 +1722,7 @@ describe("cw kernel", () => {
     });
     assert.equal(work.task?.phase, "clarify");
 
-    const clarify = await runWorkflowAction(root, "clarify", {
+    const clarify = await acceptClarifyViaWorkflow(root, {
       taskId: "0001-create-readme",
       goal: "Create a README file for the fixture project.",
       scope: "Add concise project documentation.",
@@ -1865,6 +2046,60 @@ async function discardTaskViaCli(
     args.push("--confirm");
   }
   await cliJson<{ ok: true }>(args);
+}
+
+async function appendTraceViaCli(
+  root: string,
+  taskId: string,
+  input: { type: string; summary: string; data?: Record<string, unknown> }
+): Promise<void> {
+  const args = ["internal", "append-trace", "--root", root, "--task", taskId, "--type", input.type, "--summary", input.summary];
+  if (input.data !== undefined) {
+    args.push("--data-json", JSON.stringify(input.data));
+  }
+  await cliJson<{ ok: true }>(args);
+}
+
+async function runValidateClarifyViaCli(
+  root: string,
+  taskId: string,
+  stage: "proposal" | "accept" | "advance" | "watchdog",
+  extraArgs: string[] = []
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  return runCli([
+    "internal",
+    "validate-clarify",
+    "--root",
+    root,
+    "--task",
+    taskId,
+    "--stage",
+    stage,
+    ...extraArgs
+  ]);
+}
+
+async function acceptClarifyViaWorkflow(
+  root: string,
+  input: WorkflowOptions & { taskId: string; goal: string }
+): Promise<WorkflowResult> {
+  const proposed = await runWorkflowAction(root, "clarify", input);
+  const identity = proposed.details?.identity as
+    | { attemptId: string; proposalId: string; proposalHash: string }
+    | undefined;
+  assert.equal(proposed.task?.phase, "clarify");
+  assert.ok(identity, "clarify proposal identity is returned");
+  await appendTraceViaCli(root, input.taskId, {
+    type: "advisor.reviewed",
+    summary: "Advisor approved current Proposed Spec.",
+    data: {
+      attempt_id: identity.attemptId,
+      proposal_id: identity.proposalId,
+      proposal_hash: identity.proposalHash,
+      verdict: "pass"
+    }
+  });
+  return runWorkflowAction(root, "clarify", { ...input, confirm: true });
 }
 
 async function migrateTasksViaCli(root: string, _now?: Date): Promise<LegacyTaskMigrationResult> {

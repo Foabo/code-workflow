@@ -71,6 +71,8 @@ Run verification and review, reconcile drift, and update task.md before finish i
 - cw internal create-task --title <title> [--id <task-id>]
 - cw internal select-task [--task <task-id>]
 - cw internal append-trace --task <task-id> --type <event-type> --summary <summary>
+- cw internal append-trace --task <task-id> --type <event-type> --summary <summary> --data-json <json-object>
+- cw internal validate-clarify --task <task-id> --stage proposal|accept|advance
 - cw internal set-state --task <task-id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
 - cw internal finish-task --task <task-id> --summary <summary> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none] [--edited-content <confirmed-current-state-sections>]
 - cw internal discard-task --task <task-id> --confirm --worktree <handling>

@@ -379,6 +379,20 @@ Advisor 采用 OMP 风格：
 - 有 emission guard：相同问题应合并，低价值建议应降噪。
 - advisor 只给主会话建议，不拥有用户交互权和状态推进权。
 
+`cw-clarify` 额外有确定性 gate。标准顺序是：
+
+1. Brainstorm Pass：复述目标和动机，给出最多 3 个方向，推荐最小路径，列出假设、风险、验收证据，并产出 Open Decisions。
+2. Grill Loop：围绕 Open Decisions 和高风险假设继续追问，直到用户确认关键取舍。
+3. Proposed Spec：主会话生成当前 proposal，并用 `attempt_id`、`proposal_id` 和 proposal hash 写入 trace。
+4. advisor review：advisor 审查当前 Proposed Spec。旧 proposal 的 review 不可复用。
+5. concern/blocker handling：concern 必须修正、带理由延后，或由用户明确接受风险；blocker 必须修正后复审，或记录用户明确 override。
+6. explicit accept：用户接受当前 proposal 后，trace 写入 `spec.accepted`。
+7. write `spec.md`：只有 deterministic clarify gate 通过后，才写入 `spec.md` 并推进 plan。
+
+clarify gate 是本地纯校验，不调用模型。它读取 task state、`trace.jsonl` 和 proposal identity，检查 `brainstorm.done`、`spec.proposed`、`advisor.reviewed` 或 `advisor.unavailable`、`spec.accepted` 的顺序、freshness 和身份一致性。`advisor.unavailable` 是降级执行，必须记录 attempted invocation、harness、failure reason、timestamp 和 fallback checklist result。
+
+支持本地 hook 的 harness 会生成 local watchdog artifact。watchdog 只调用 `cw internal validate-clarify --watchdog`，不复制 gate 逻辑。write `spec.md`、推进 plan、或通过 accept gate 前，validator 失败必须阻断；中间 clarify 状态可以只提醒。
+
 编排配置：
 
 ```json

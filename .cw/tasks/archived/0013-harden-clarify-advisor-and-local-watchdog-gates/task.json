@@ -1,0 +1,22 @@
+{
+  "id": "0013-harden-clarify-advisor-and-local-watchdog-gates",
+  "title": "Harden clarify advisor and local watchdog gates",
+  "lifecycle": "closed",
+  "phase": "finish",
+  "next_action": "Task is closed",
+  "health_flags": [],
+  "artifacts": {
+    "spec": "spec.md",
+    "plan": "plan.md",
+    "task": "task.md",
+    "baseline_delta": "baseline-delta.md",
+    "resume": null
+  },
+  "invalidated_artifacts": [],
+  "blocked_reason": "",
+  "parked_reason": null,
+  "resume_condition": null,
+  "created_at": "2026-07-05T14:57:45.941Z",
+  "updated_at": "2026-07-05T15:51:34.410Z",
+  "schema_version": 1
+}
