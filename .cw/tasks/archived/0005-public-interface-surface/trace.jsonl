@@ -1,0 +1,9 @@
+{"ts":"2026-07-05T02:58:54.074Z","type":"task.created","summary":"Task created: Narrow public interface and product-level tests"}
+{"ts":"2026-07-05T02:59:52.219Z","type":"spec.accepted","summary":"Task spec accepted from architecture design decisions."}
+{"ts":"2026-07-05T02:59:55.949Z","type":"plan.updated","summary":"Plan and executable checklist created for public interface narrowing."}
+{"ts":"2026-07-05T03:00:00.934Z","type":"task.state.updated","summary":"phase clarify -> run; next action updated"}
+{"ts":"2026-07-05T03:11:06.431Z","type":"run.updated","summary":"Narrowed package-root exports and moved kernel tests onto CLI/product seams."}
+{"ts":"2026-07-05T03:11:06.433Z","type":"task.state.updated","summary":"phase run -> check; next action updated"}
+{"ts":"2026-07-05T03:15:12.921Z","type":"check.passed","summary":"Verification passed and public interface narrowing matches the accepted spec."}
+{"ts":"2026-07-05T03:15:12.924Z","type":"task.state.updated","summary":"phase check -> finish; next action updated"}
+{"ts":"2026-07-05T03:17:20.994Z","type":"task.finished","summary":"Public package surface narrowed and kernel tests moved to CLI/product seams.","data":{"baseline_decision":"none","dirty_worktree_handling":"covered"}}

@@ -1,14 +1,21 @@
-export * from "./adapters.js";
-export * from "./baseline.js";
-export * from "./enhancements.js";
-export * from "./git.js";
-export * from "./init.js";
-export * from "./preflight.js";
-export * from "./schema.js";
-export * from "./task-storage.js";
-export * from "./task-store.js";
-export * from "./tasks.js";
-export * from "./types.js";
-export * from "./update.js";
-export * from "./validate.js";
-export * from "./workflow.js";
+export { initProject } from "./init.js";
+export type { InitOptions, InitResult } from "./init.js";
+
+export { updateProject } from "./update.js";
+export type { UpdateResult } from "./update.js";
+
+export { runWorkflowAction } from "./workflow.js";
+export type { WorkflowCommandAction, WorkflowOptions, WorkflowResult } from "./workflow.js";
+
+export { doctorProject, validateProject } from "./validate.js";
+
+export type { HarnessName } from "./adapters.js";
+export type { BaselineFile } from "./baseline.js";
+export type {
+  BaselineDecision,
+  DirtyWorktreeDecision,
+  DoctorReport,
+  EnhancementChoice,
+  TaskStateRecord,
+  ValidationIssue
+} from "./types.js";

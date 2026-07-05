@@ -12,9 +12,8 @@ This repository uses CW to guide its own development.
 
 ## Codex Integration
 
-- The repository-local Codex plugin marketplace is `.agents/plugins/marketplace.json`.
-- The CW Codex plugin source is `plugins/cw-workflow`.
-- Generated Codex skills live under `plugins/cw-workflow/skills/`.
+- Generated Codex repo-local skills live under `.agents/skills/`.
+- CW does not generate a repository-local Codex plugin marketplace or `plugins/cw-workflow` source by default.
 - Refresh generated Codex harness entries with `cw update --harness codex`.
 - Do not treat `.codex/prompts/` as a repository command surface; Codex custom prompts are local-home prompts and are deprecated in favor of skills.
 

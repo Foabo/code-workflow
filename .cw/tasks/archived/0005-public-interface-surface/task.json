@@ -1,0 +1,22 @@
+{
+  "id": "0005-public-interface-surface",
+  "title": "Narrow public interface and product-level tests",
+  "lifecycle": "closed",
+  "phase": "finish",
+  "next_action": "Task is closed",
+  "health_flags": [],
+  "artifacts": {
+    "spec": "spec.md",
+    "plan": "plan.md",
+    "task": "task.md",
+    "baseline_delta": null,
+    "resume": null
+  },
+  "invalidated_artifacts": [],
+  "blocked_reason": null,
+  "parked_reason": null,
+  "resume_condition": null,
+  "created_at": "2026-07-05T02:58:54.074Z",
+  "updated_at": "2026-07-05T03:17:20.994Z",
+  "schema_version": 1
+}

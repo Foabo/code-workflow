@@ -5,31 +5,20 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  applyEnhancementSetup,
-  consumeResumeNote,
-  createResumeNote,
-  createTask,
-  discardTask,
   doctorProject,
-  enableCodexMemoriesConfig,
-  ensureBaselineDelta,
-  finishTask,
-  buildEnhancementSetupPlan,
   initProject,
-  listTasks,
-  migrateTasks,
-  normalizeEnhancementProviderRecord,
-  preflight,
-  providerChoicesFor,
-  readTaskState,
   runWorkflowAction,
-  selectTask,
-  syncBaselineDelta,
   updateProject,
-  updateTaskState,
   validateProject
 } from "../src/index.js";
-import type { CommandRunner } from "../src/index.js";
+import type {
+  BaselineFile,
+  BaselineDecision,
+  DirtyWorktreeDecision,
+  TaskStateRecord,
+  WorkflowCommandAction,
+  WorkflowOptions
+} from "../src/index.js";
 
 describe("cw kernel", () => {
   it("initializes a project with version, baseline, task templates, and valid structure", async () => {
@@ -354,19 +343,25 @@ describe("cw kernel", () => {
         harness: "claude",
         codeIndex: "codebase-memory-mcp",
         contextMemory: "claude-mem",
-        absentPath: [".claude-mem"]
+        absentPath: [".claude-mem"],
+        codeIndexTouched: ["~/.local/bin/codebase-memory-mcp", "CLAUDE.md"],
+        contextMemoryTouched: ["~/.claude-mem/settings.json", "~/.claude-mem/"]
       },
       {
         harness: "opencode",
         codeIndex: "aft",
         contextMemory: "magic-context",
-        absentPath: [".cortexkit"]
+        absentPath: [".cortexkit"],
+        codeIndexTouched: [".cortexkit/aft.jsonc", "opencode.jsonc"],
+        contextMemoryTouched: [".cortexkit/magic-context.jsonc", "opencode.jsonc"]
       },
       {
         harness: "pi",
         codeIndex: "aft",
         contextMemory: "magic-context",
-        absentPath: [".cortexkit"]
+        absentPath: [".cortexkit"],
+        codeIndexTouched: [".cortexkit/aft.jsonc", ".pi/"],
+        contextMemoryTouched: [".cortexkit/magic-context.jsonc", ".pi/"]
       }
     ] as const;
 
@@ -386,9 +381,18 @@ describe("cw kernel", () => {
       assert.equal(codeIndex.provider_id, testCase.codeIndex);
       assert.equal(codeIndex.status, "pending");
       assert.deepEqual(codeIndex.commands_run, []);
+      for (const touchedFile of testCase.codeIndexTouched) {
+        assert.ok((codeIndex.touched_files as string[]).includes(touchedFile), `${testCase.harness} code index touches ${touchedFile}`);
+      }
       assert.equal(contextMemory.provider_id, testCase.contextMemory);
       assert.equal(contextMemory.status, "pending");
       assert.deepEqual(contextMemory.commands_run, []);
+      for (const touchedFile of testCase.contextMemoryTouched) {
+        assert.ok(
+          (contextMemory.touched_files as string[]).includes(touchedFile),
+          `${testCase.harness} context memory touches ${touchedFile}`
+        );
+      }
       for (const absentPath of testCase.absentPath) {
         await assert.rejects(access(path.join(home, absentPath)));
         await assert.rejects(access(path.join(root, absentPath)));
@@ -397,32 +401,91 @@ describe("cw kernel", () => {
     }
   });
 
-  it("patches Codex memories config and records context memory metadata", async () => {
+  it("records experimental Codex code index setup metadata through --yes init", async () => {
+    const cases = [
+      {
+        provider: "graphify",
+        touchedFiles: ["AGENTS.md", ".codex/hooks.json", "graphify-out/"],
+        commandPattern: /graphify update \./,
+        verificationPattern: /graphify --version/
+      },
+      {
+        provider: "codegraph",
+        touchedFiles: [".codegraph/", "~/.codegraph/telemetry.json"],
+        commandPattern: /codegraph init \./,
+        verificationPattern: /codegraph status \./
+      }
+    ] as const;
+
+    for (const testCase of cases) {
+      const root = await tempRoot();
+      const cli = await runCli([
+        "init",
+        "--root",
+        root,
+        "--harness",
+        "codex",
+        "--code-index",
+        testCase.provider,
+        "--context-memory",
+        "skipped",
+        "--yes"
+      ]);
+
+      assert.equal(cli.code, 0, cli.stderr);
+      assert.doesNotMatch(cli.stdout, /Apply .* setup now/);
+      const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
+      const codeIndex = enhancements.code_index as Record<string, unknown>;
+      assert.equal(codeIndex.provider_id, testCase.provider);
+      assert.equal(codeIndex.status, "pending");
+      assert.deepEqual(codeIndex.commands_run, []);
+      assert.match(JSON.stringify(codeIndex.commands), testCase.commandPattern);
+      assert.match((codeIndex.verification as { command: string }).command, testCase.verificationPattern);
+      for (const touchedFile of testCase.touchedFiles) {
+        assert.ok((codeIndex.touched_files as string[]).includes(touchedFile), `${testCase.provider} touches ${touchedFile}`);
+      }
+      assert.deepEqual(await validateProject(root), []);
+    }
+  });
+
+  it("applies Codex memories setup through CLI confirmation", async () => {
     const root = await tempRoot();
     const home = await tempRoot();
     const configPath = path.join(home, ".codex", "config.toml");
     await mkdir(path.dirname(configPath), { recursive: true });
-    await writeFile(configPath, "[features]\nmodel_reasoning_effort = \"medium\"\nmemories = false\n", "utf8");
-    await initProject(root, { harnesses: ["codex"] });
+    await writeFile(
+      configPath,
+      "[model]\nname = \"gpt-5\"\n\n[features]\nweb_search = true\nmemories = false\n\n[profiles.fast]\nmodel = \"gpt-5\"\n",
+      "utf8"
+    );
 
-    const plan = await buildEnhancementSetupPlan({
-      root,
-      harness: "codex",
-      category: "context_memory",
-      providerId: "codex-native-memories",
-      homeDir: home
-    });
-    const result = await applyEnhancementSetup(root, plan, {
-      confirmed: true,
-      now: new Date("2026-07-04T00:00:00.000Z")
-    });
+    const cli = await runCli(
+      [
+        "init",
+        "--root",
+        root,
+        "--harness",
+        "codex",
+        "--code-index",
+        "skipped",
+        "--context-memory",
+        "codex-native-memories"
+      ],
+      { env: { CW_FORCE_INTERACTIVE: "1", HOME: home }, answers: ["y"] }
+    );
 
-    assert.equal(result.status, "configured");
-    assert.equal(await readFile(configPath, "utf8"), "[features]\nmodel_reasoning_effort = \"medium\"\nmemories = true\n");
+    assert.equal(cli.code, 0, cli.stderr);
+    assert.equal(
+      await readFile(configPath, "utf8"),
+      "[model]\nname = \"gpt-5\"\n\n[features]\nweb_search = true\nmemories = true\n\n[profiles.fast]\nmodel = \"gpt-5\"\n"
+    );
     const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
     assert.equal(enhancements.external_context, "configured");
-    assert.equal((enhancements.context_memory as Record<string, unknown>).provider_id, "codex-native-memories");
-    assert.deepEqual((enhancements.context_memory as Record<string, unknown>).verification, {
+    const contextMemory = enhancements.context_memory as Record<string, unknown>;
+    assert.equal(contextMemory.provider_id, "codex-native-memories");
+    assert.ok((contextMemory.touched_files as string[]).includes("~/.codex/config.toml"));
+    assert.equal(JSON.stringify(contextMemory).includes(home), false);
+    assert.deepEqual(contextMemory.verification, {
       command: "verify config patches were written",
       ok: true,
       exit_code: 0
@@ -430,276 +493,146 @@ describe("cw kernel", () => {
     assert.deepEqual(await validateProject(root), []);
   });
 
-  it("runs codebase-memory-mcp setup through an injectable runner", async () => {
+  it("adds Codex memories config through CLI confirmation when the flag is missing", async () => {
     const root = await tempRoot();
-    await initProject(root, { harnesses: ["codex"] });
-    const commands: string[] = [];
-    const runner: CommandRunner = async (command) => {
-      commands.push([command.command, ...command.args].join(" "));
-      return { ok: true, stdout: "ok\n", stderr: "", exitCode: 0 };
-    };
-
-    const plan = await buildEnhancementSetupPlan({
-      root,
-      harness: "codex",
-      category: "code_index",
-      providerId: "codebase-memory-mcp"
-    });
-    const result = await applyEnhancementSetup(root, plan, {
-      confirmed: true,
-      runner,
-      now: new Date("2026-07-04T00:00:00.000Z")
-    });
-
-    assert.equal(result.status, "configured");
-    assert.equal(commands.length, 3);
-    assert.match(commands[0] ?? "", /install\.sh/);
-    assert.match(commands[1] ?? "", /index_repository/);
-    assert.match(commands[2] ?? "", /--version/);
-    assert.equal(result.commands.some((command) => command.includes(root)), false);
-    assert.equal(result.commands_run.some((command) => command.includes(root)), false);
-    const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
-    assert.equal(enhancements.code_intelligence, "configured");
-    assert.equal((enhancements.code_index as Record<string, unknown>).provider_id, "codebase-memory-mcp");
-    assert.equal((enhancements.code_index as Record<string, unknown>).status, "configured");
-    assert.equal(JSON.stringify(enhancements.code_index).includes(root), false);
-    assert.deepEqual(await validateProject(root), []);
-  });
-
-  it("builds codebase-memory-mcp plans for install and use-existing flows", async () => {
-    const root = await tempRoot();
-    const detection = {
-      installed: true,
-      binary_path: "/tmp/bin/codebase-memory-mcp",
-      version: "0.8.1",
-      message: "Found codebase-memory-mcp 0.8.1."
-    };
-
-    const existing = await buildEnhancementSetupPlan({
-      root,
-      harness: "codex",
-      category: "code_index",
-      providerId: "codebase-memory-mcp",
-      codebaseMemoryMode: "use-existing",
-      codebaseMemoryDetection: detection
-    });
-    const install = await buildEnhancementSetupPlan({
-      root,
-      harness: "codex",
-      category: "code_index",
-      providerId: "codebase-memory-mcp"
-    });
-
-    assert.equal(existing.commands.length, 1);
-    assert.equal(existing.commands[0]?.command, "codebase-memory-mcp");
-    assert.equal(install.commands.length, 2);
-    assert.equal(install.commands[0]?.command, "bash");
-    assert.match(install.commands[0]?.args.join(" ") ?? "", /install\.sh/);
-  });
-
-  it("builds Claude, OpenCode, and Pi default provider choices and setup plans", async () => {
-    const root = await tempRoot();
-
-    assert.equal(providerChoicesFor("code_index", "claude")[0]?.value, "codebase-memory-mcp");
-    assert.equal(providerChoicesFor("context_memory", "claude")[0]?.value, "claude-mem");
-    assert.match(providerChoicesFor("context_memory", "claude")[0]?.label ?? "", /intrusive/i);
-    assert.equal(providerChoicesFor("code_index", "opencode")[0]?.value, "aft");
-    assert.match(providerChoicesFor("code_index", "opencode")[0]?.label ?? "", /intrusive/i);
-    assert.equal(providerChoicesFor("context_memory", "opencode")[0]?.value, "magic-context");
-    assert.match(providerChoicesFor("context_memory", "opencode")[0]?.label ?? "", /intrusive/i);
-    assert.equal(providerChoicesFor("code_index", "pi")[0]?.value, "aft");
-    assert.equal(providerChoicesFor("context_memory", "pi")[0]?.value, "magic-context");
-
-    const claudeMem = await buildEnhancementSetupPlan({
-      root,
-      harness: "claude",
-      category: "context_memory",
-      providerId: "claude-mem"
-    });
-    assert.equal(claudeMem.intrusion, "high");
-    assert.equal(claudeMem.commands[0]?.command, "npx");
-    assert.deepEqual(claudeMem.commands[0]?.args, ["claude-mem", "install"]);
-    assert.ok(claudeMem.touched_files.includes("~/.claude-mem/settings.json"));
-
-    const opencodeAft = await buildEnhancementSetupPlan({
-      root,
-      harness: "opencode",
-      category: "code_index",
-      providerId: "aft"
-    });
-    assert.equal(opencodeAft.intrusion, "high");
-    assert.deepEqual(opencodeAft.commands[0]?.args, ["@cortexkit/aft@latest", "setup", "--harness", "opencode"]);
-    assert.ok(opencodeAft.touched_files.includes(".cortexkit/aft.jsonc"));
-    assert.ok(opencodeAft.touched_files.includes("opencode.jsonc"));
-    assert.match(opencodeAft.notes.join("\n"), /Replaces built-in/);
-
-    const piMagicContext = await buildEnhancementSetupPlan({
-      root,
-      harness: "pi",
-      category: "context_memory",
-      providerId: "magic-context"
-    });
-    assert.equal(piMagicContext.intrusion, "high");
-    assert.deepEqual(piMagicContext.commands[0]?.args, ["@cortexkit/magic-context@latest", "setup", "--harness", "pi"]);
-    assert.ok(piMagicContext.touched_files.includes(".cortexkit/magic-context.jsonc"));
-    assert.ok(piMagicContext.touched_files.includes(".pi/"));
-    assert.match(piMagicContext.notes.join("\n"), /model configuration/);
-  });
-
-  it("marks CodeGraph and Graphify as experimental intrusive code index candidates", async () => {
-    const choices = providerChoicesFor("code_index", "codex");
-    assert.equal(choices[0]?.value, "codebase-memory-mcp");
-    assert.ok(choices.some((choice) => choice.value === "graphify" && /experimental, intrusive/i.test(choice.label)));
-    assert.ok(choices.some((choice) => choice.value === "codegraph" && /experimental, intrusive/i.test(choice.label)));
-
-    const root = await tempRoot();
-    const graphify = await buildEnhancementSetupPlan({
-      root,
-      harness: "codex",
-      category: "code_index",
-      providerId: "graphify"
-    });
-    const codegraph = await buildEnhancementSetupPlan({
-      root,
-      harness: "codex",
-      category: "code_index",
-      providerId: "codegraph"
-    });
-
-    assert.equal(graphify.experimental, true);
-    assert.equal(graphify.intrusion, "high");
-    assert.ok(graphify.touched_files.includes("AGENTS.md"));
-    assert.ok(graphify.touched_files.includes(".codex/hooks.json"));
-    assert.ok(graphify.touched_files.includes("graphify-out/"));
-    assert.match(graphify.notes.join("\n"), /Uninstall may leave an empty \.codex\/hooks\.json/);
-
-    assert.equal(codegraph.experimental, true);
-    assert.equal(codegraph.intrusion, "medium");
-    assert.ok(codegraph.touched_files.includes(".codegraph/"));
-    assert.ok(codegraph.touched_files.includes("~/.codegraph/telemetry.json"));
-    assert.match(codegraph.notes.join("\n"), /not been fully verified/);
-  });
-
-  it("normalizes repo and home paths in provider metadata", () => {
-    const root = "/Users/alice/work/project";
-    const home = "/Users/alice";
-    const record = normalizeEnhancementProviderRecord(
-      root,
-      {
-        category: "context_memory",
-        provider_id: "codex-native-memories",
-        status: "configured",
-        commands: [`tool --repo ${root} --config ${home}/.codex/config.toml`],
-        commands_run: [`tool --repo ${root}`],
-        touched_files: [`${home}/.codex/config.toml`, `${root}/.codex/AGENTS.md`],
-        message: "ok",
-        verification: {
-          command: `verify ${root}`,
-          ok: true,
-          exit_code: 0
-        },
-        updated_at: "2026-07-04T00:00:00.000Z"
-      },
-      home
+    const home = await tempRoot();
+    const configPath = path.join(home, ".codex", "config.toml");
+    await mkdir(path.dirname(configPath), { recursive: true });
+    await writeFile(
+      configPath,
+      "[model]\nname = \"gpt-5\"\n\n[features]\nweb_search = true\n\n[profiles.fast]\nmodel = \"gpt-5\"\n",
+      "utf8"
     );
 
-    assert.deepEqual(record.touched_files, ["~/.codex/config.toml", "./.codex/AGENTS.md"]);
-    assert.equal(record.commands[0], "tool --repo . --config ~/.codex/config.toml");
-    assert.equal(record.commands_run[0], "tool --repo .");
-    assert.equal(record.verification?.command, "verify .");
-  });
+    const cli = await runCli(
+      [
+        "init",
+        "--root",
+        root,
+        "--harness",
+        "codex",
+        "--code-index",
+        "skipped",
+        "--context-memory",
+        "codex-native-memories"
+      ],
+      { env: { CW_FORCE_INTERACTIVE: "1", HOME: home }, answers: ["y"] }
+    );
 
-  it("records failed provider setup metadata", async () => {
-    const root = await tempRoot();
-    await initProject(root, { harnesses: ["codex"] });
-    const runner: CommandRunner = async () => ({ ok: false, stdout: "", stderr: "install failed\n", exitCode: 1 });
-
-    const plan = await buildEnhancementSetupPlan({
-      root,
-      harness: "codex",
-      category: "code_index",
-      providerId: "codebase-memory-mcp"
-    });
-    const result = await applyEnhancementSetup(root, plan, {
-      confirmed: true,
-      runner,
-      now: new Date("2026-07-04T00:00:00.000Z")
-    });
-
-    assert.equal(result.status, "failed");
-    assert.equal(result.message, "install failed");
-    const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
-    assert.equal(enhancements.code_intelligence, "skipped");
-    assert.equal((enhancements.code_index as Record<string, unknown>).provider_id, "codebase-memory-mcp");
-    assert.equal((enhancements.code_index as Record<string, unknown>).status, "failed");
+    assert.equal(cli.code, 0, cli.stderr);
+    assert.equal(
+      await readFile(configPath, "utf8"),
+      "[model]\nname = \"gpt-5\"\n\n[features]\nweb_search = true\nmemories = true\n\n[profiles.fast]\nmodel = \"gpt-5\"\n"
+    );
     assert.deepEqual(await validateProject(root), []);
   });
 
-  it("records thrown provider setup errors as failed metadata", async () => {
+  it("applies existing codebase-memory-mcp setup through CLI confirmation", async () => {
     const root = await tempRoot();
-    await initProject(root, { harnesses: ["codex"] });
-    const runner: CommandRunner = async () => {
-      throw new Error("command not found");
-    };
+    const fakeBin = await tempRoot();
+    const logPath = path.join(fakeBin, "commands.log");
+    const fakeCodebaseMemory = path.join(fakeBin, "codebase-memory-mcp");
+    await writeFile(
+      fakeCodebaseMemory,
+      `#!/bin/sh\necho "$@" >> ${JSON.stringify(logPath)}\nif [ "$1" = "--version" ]; then echo 0.8.1; fi\nexit 0\n`,
+      "utf8"
+    );
+    await chmod(fakeCodebaseMemory, 0o755);
 
-    const plan = await buildEnhancementSetupPlan({
-      root,
-      harness: "codex",
-      category: "code_index",
-      providerId: "codebase-memory-mcp"
-    });
-    const result = await applyEnhancementSetup(root, plan, {
-      confirmed: true,
-      runner,
-      now: new Date("2026-07-04T00:00:00.000Z")
-    });
+    const cli = await runCli(
+      [
+        "init",
+        "--root",
+        root,
+        "--harness",
+        "codex",
+        "--code-index",
+        "codebase-memory-mcp:existing",
+        "--context-memory",
+        "skipped"
+      ],
+      { env: { CW_FORCE_INTERACTIVE: "1", PATH: fakeBin }, answers: ["y"] }
+    );
 
-    assert.equal(result.status, "failed");
-    assert.equal(result.message, "command not found");
+    assert.equal(cli.code, 0, cli.stderr);
+    const log = await readFile(logPath, "utf8");
+    assert.match(log, /cli index_repository/);
+    assert.match(log, /--version/);
     const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
-    assert.equal(enhancements.code_intelligence, "skipped");
-    assert.equal((enhancements.code_index as Record<string, unknown>).status, "failed");
+    const codeIndex = enhancements.code_index as Record<string, unknown>;
+    assert.equal(enhancements.code_intelligence, "configured");
+    assert.equal(codeIndex.provider_id, "codebase-memory-mcp");
+    assert.equal(codeIndex.status, "configured");
+    assert.equal(JSON.stringify(codeIndex).includes(root), false);
+    assert.doesNotMatch(JSON.stringify(codeIndex.commands), /install\.sh/);
     assert.deepEqual(await validateProject(root), []);
   });
 
-  it("does not overwrite malformed enhancement config during provider setup", async () => {
+  it("records failed provider setup metadata through CLI setup", async () => {
+    const root = await tempRoot();
+    const fakeBin = await tempRoot();
+    const fakeCodebaseMemory = path.join(fakeBin, "codebase-memory-mcp");
+    await writeFile(fakeCodebaseMemory, "#!/bin/sh\necho install failed >&2\nexit 1\n", "utf8");
+    await chmod(fakeCodebaseMemory, 0o755);
+
+    const cli = await runCli(
+      [
+        "init",
+        "--root",
+        root,
+        "--harness",
+        "codex",
+        "--code-index",
+        "codebase-memory-mcp:existing",
+        "--context-memory",
+        "skipped"
+      ],
+      { env: { CW_FORCE_INTERACTIVE: "1", PATH: fakeBin }, answers: ["y"] }
+    );
+
+    assert.equal(cli.code, 0, cli.stderr);
+    const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
+    const codeIndex = enhancements.code_index as Record<string, unknown>;
+    assert.equal(enhancements.code_intelligence, "skipped");
+    assert.equal(codeIndex.provider_id, "codebase-memory-mcp");
+    assert.equal(codeIndex.status, "failed");
+    assert.equal(codeIndex.message, "install failed");
+    assert.deepEqual(await validateProject(root), []);
+  });
+
+  it("does not overwrite malformed enhancement config during CLI provider setup", async () => {
     const root = await tempRoot();
     const home = await tempRoot();
     await initProject(root, { harnesses: ["codex"] });
     const enhancementsPath = path.join(root, ".cw/enhancements.json");
     await writeFile(enhancementsPath, "{", "utf8");
 
-    const plan = await buildEnhancementSetupPlan({
-      root,
-      harness: "codex",
-      category: "context_memory",
-      providerId: "codex-native-memories",
-      homeDir: home
-    });
-
-    await assert.rejects(
-      applyEnhancementSetup(root, plan, {
-        confirmed: true,
-        now: new Date("2026-07-04T00:00:00.000Z")
-      }),
-      /cannot read existing enhancement config/
+    const cli = await runCli(
+      [
+        "init",
+        "--root",
+        root,
+        "--harness",
+        "codex",
+        "--code-index",
+        "skipped",
+        "--context-memory",
+        "codex-native-memories"
+      ],
+      { env: { CW_FORCE_INTERACTIVE: "1", HOME: home }, answers: ["y"] }
     );
+
+    assert.equal(cli.code, 1);
+    assert.match(cli.stderr, /cannot read existing enhancement config/);
     assert.equal(await readFile(enhancementsPath, "utf8"), "{");
     await assert.rejects(access(path.join(home, ".codex", "config.toml")));
-  });
-
-  it("preserves existing Codex config while enabling memories", () => {
-    assert.equal(
-      enableCodexMemoriesConfig("[model]\nname = \"gpt-5\"\n\n[features]\nweb_search = true\n\n[profiles.fast]\nmodel = \"gpt-5\"\n"),
-      "[model]\nname = \"gpt-5\"\n\n[features]\nweb_search = true\nmemories = true\n\n[profiles.fast]\nmodel = \"gpt-5\"\n"
-    );
   });
 
   it("creates a task with core artifacts and append-only trace events", async () => {
     const root = await tempRoot();
     await initProject(root);
 
-    const state = await createTask(root, {
+    const state = await createTaskViaCli(root, {
       id: "0001-auth-rate-limit",
       title: "Add auth rate limiting",
       now: new Date("2026-07-03T01:00:00.000Z")
@@ -738,7 +671,7 @@ describe("cw kernel", () => {
     await initProject(root);
     await mkdir(path.join(root, ".cw/tasks/archived/0007-old-task"), { recursive: true });
 
-    const generated = await createTask(root, {
+    const generated = await createTaskViaCli(root, {
       title: "Ship docs",
       now: new Date("2026-07-03T01:00:00.000Z")
     });
@@ -746,7 +679,7 @@ describe("cw kernel", () => {
     assert.equal(generated.id, "0008-ship-docs");
     assert.match(await readFile(path.join(root, ".cw/tasks/0008-ship-docs/spec.md"), "utf8"), /# Spec/);
     await assert.rejects(
-      createTask(root, {
+      createTaskViaCli(root, {
         id: "0007-reused-number",
         title: "Reused number"
       }),
@@ -757,9 +690,9 @@ describe("cw kernel", () => {
   it("updates task state and records the change in trace", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await createTask(root, { id: "0001-update-docs", title: "Update docs" });
+    await createTaskViaCli(root, { id: "0001-update-docs", title: "Update docs" });
 
-    const updated = await updateTaskState(root, "0001-update-docs", {
+    const updated = await setTaskStateViaCli(root, "0001-update-docs", {
       phase: "run",
       nextAction: "Execute the implementation checklist",
       now: new Date("2026-07-03T02:00:00.000Z")
@@ -783,26 +716,26 @@ describe("cw kernel", () => {
   it("lists tasks, selects a single task, and reports ambiguous selection", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await createTask(root, { id: "0001-one", title: "One", now: new Date("2026-07-03T01:00:00.000Z") });
+    await createTaskViaCli(root, { id: "0001-one", title: "One", now: new Date("2026-07-03T01:00:00.000Z") });
 
-    assert.equal((await selectTask(root)).id, "0001-one");
-    assert.deepEqual((await listTasks(root)).map((task) => task.id), ["0001-one"]);
+    assert.equal((await selectTaskViaCli(root)).id, "0001-one");
+    assert.deepEqual((await listTasksViaCli(root)).map((task) => task.id), ["0001-one"]);
 
-    await createTask(root, { id: "0002-two", title: "Two", now: new Date("2026-07-03T02:00:00.000Z") });
-    await assert.rejects(selectTask(root), /multiple matching tasks/);
-    assert.equal((await selectTask(root, { taskId: "0002-two" })).id, "0002-two");
-    assert.equal((await selectTask(root, { taskId: "0002" })).id, "0002-two");
-    await assert.rejects(selectTask(root, { taskId: "9999" }), /no task found/);
+    await createTaskViaCli(root, { id: "0002-two", title: "Two", now: new Date("2026-07-03T02:00:00.000Z") });
+    await assert.rejects(selectTaskViaCli(root), /multiple matching tasks/);
+    assert.equal((await selectTaskViaCli(root, { taskId: "0002-two" })).id, "0002-two");
+    assert.equal((await selectTaskViaCli(root, { taskId: "0002" })).id, "0002-two");
+    await assert.rejects(selectTaskViaCli(root, { taskId: "9999" }), /no task found/);
     await mkdir(path.join(root, ".cw/tasks/0002-two-duplicate"), { recursive: true });
-    await assert.rejects(selectTask(root, { taskId: "0002" }), /ambiguous/);
+    await assert.rejects(selectTaskViaCli(root, { taskId: "0002" }), /ambiguous/);
   });
 
   it("runs preflight for a selected task", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await createTask(root, { id: "0001-preflight-test", title: "Preflight test" });
+    await createTaskViaCli(root, { id: "0001-preflight-test", title: "Preflight test" });
 
-    const report = await preflight(root, { action: "run", taskId: "0001-preflight-test" });
+    const report = await runPreflightViaCli(root, { action: "run", taskId: "0001-preflight-test" });
 
     assert.equal(report.ok, true);
     assert.equal(report.task?.id, "0001-preflight-test");
@@ -811,7 +744,7 @@ describe("cw kernel", () => {
   it("resolves numeric task references in internal CLI commands", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await createTask(root, { id: "0001-cli-reference", title: "CLI reference" });
+    await createTaskViaCli(root, { id: "0001-cli-reference", title: "CLI reference" });
 
     const cli = await runCli([
       "internal",
@@ -827,13 +760,13 @@ describe("cw kernel", () => {
     ]);
 
     assert.equal(cli.code, 0, cli.stderr);
-    assert.equal((await readTaskState(root, "0001-cli-reference")).phase, "run");
+    assert.equal((await readTaskStateFile(root, "0001-cli-reference")).phase, "run");
   });
 
   it("blocks clarification and planning when required task facts are missing", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await createTask(root, { id: "0001-needs-input", title: "Needs input" });
+    await createTaskViaCli(root, { id: "0001-needs-input", title: "Needs input" });
 
     const clarify = await runWorkflowAction(root, "clarify", { taskId: "0001-needs-input" });
 
@@ -841,7 +774,7 @@ describe("cw kernel", () => {
     assert.equal(clarify.task?.phase, "clarify");
     assert.match(clarify.task?.blocked_reason ?? "", /goal/);
 
-    await updateTaskState(root, "0001-needs-input", {
+    await setTaskStateViaCli(root, "0001-needs-input", {
       lifecycle: "open",
       blockedReason: null,
       phase: "plan",
@@ -858,13 +791,13 @@ describe("cw kernel", () => {
   it("blocks planning with a concrete next question when acceptance criteria are missing", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await createTask(root, { id: "0001-missing-acceptance", title: "Missing acceptance" });
+    await createTaskViaCli(root, { id: "0001-missing-acceptance", title: "Missing acceptance" });
     await writeFile(
       path.join(root, ".cw/tasks/0001-missing-acceptance/spec.md"),
       "# Spec\n\n## Goal\n\nCreate a README file.\n\n## Scope\n\nAdd project documentation.\n\n## Non-goals\n\n\n## Constraints\n\n\n## Decisions\n\n\n## Acceptance Criteria\n",
       "utf8"
     );
-    await updateTaskState(root, "0001-missing-acceptance", {
+    await setTaskStateViaCli(root, "0001-missing-acceptance", {
       lifecycle: "open",
       blockedReason: null,
       phase: "plan",
@@ -882,20 +815,20 @@ describe("cw kernel", () => {
   it("creates and consumes a task-local resume note", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await createTask(root, { id: "0001-resume-test", title: "Resume test" });
+    await createTaskViaCli(root, { id: "0001-resume-test", title: "Resume test" });
 
-    const withResume = await createResumeNote(root, "0001-resume-test", "# Resume\n\nContinue from check.\n", "User resumes work");
+    const withResume = await createResumeNoteViaCli(root, "0001-resume-test", "# Resume\n\nContinue from check.\n", "User resumes work");
     assert.equal(withResume.artifacts.resume, "resume.md");
     assert.equal(withResume.resume_condition, "User resumes work");
     await assert.rejects(
-      createResumeNote(root, "0001-resume-test", "# Resume\n\nSecond note.\n"),
+      createResumeNoteViaCli(root, "0001-resume-test", "# Resume\n\nSecond note.\n"),
       /already has a resume note/
     );
 
-    const consumed = await consumeResumeNote(root, "0001-resume-test");
+    const consumed = await consumeResumeNoteViaCli(root, "0001-resume-test");
     assert.equal(consumed.artifacts.resume, null);
     assert.equal(consumed.resume_condition, null);
-    const stored = await readTaskState(root, "0001-resume-test");
+    const stored = await readTaskStateFile(root, "0001-resume-test");
     assert.equal(stored.artifacts.resume, null);
     assert.equal(stored.resume_condition, null);
   });
@@ -903,9 +836,9 @@ describe("cw kernel", () => {
   it("creates and syncs a baseline delta", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await createTask(root, { id: "0001-baseline-test", title: "Baseline test" });
+    await createTaskViaCli(root, { id: "0001-baseline-test", title: "Baseline test" });
 
-    const withDelta = await ensureBaselineDelta(root, "0001-baseline-test");
+    const withDelta = await ensureBaselineDeltaViaCli(root, "0001-baseline-test");
     assert.equal(withDelta.artifacts.baseline_delta, "baseline-delta.md");
     await writeFile(
       path.join(root, ".cw/tasks/0001-baseline-test/baseline-delta.md"),
@@ -913,7 +846,7 @@ describe("cw kernel", () => {
       "utf8"
     );
 
-    const result = await syncBaselineDelta(root, "0001-baseline-test", "accepted");
+    const result = await syncBaselineDeltaViaCli(root, "0001-baseline-test", "accepted");
     assert.deepEqual(result.updated, [".cw/project/commands.md"]);
     assert.match(await readFile(path.join(root, ".cw/project/commands.md"), "utf8"), /Run `npm test` before finish\./);
   });
@@ -922,44 +855,44 @@ describe("cw kernel", () => {
     const root = await tempRoot();
     await initProject(root);
 
-    await createTask(root, { id: "0001-selected-baseline", title: "Selected baseline" });
-    await ensureBaselineDelta(root, "0001-selected-baseline");
+    await createTaskViaCli(root, { id: "0001-selected-baseline", title: "Selected baseline" });
+    await ensureBaselineDeltaViaCli(root, "0001-selected-baseline");
     await writeFile(
       path.join(root, ".cw/tasks/0001-selected-baseline/baseline-delta.md"),
       "# Baseline Delta\n\n## commands.md\n\nUse `npm test`.\n\n## rules.md\n\nReview checklist before finish.\n",
       "utf8"
     );
-    const selected = await syncBaselineDelta(root, "0001-selected-baseline", "selected", {
+    const selected = await syncBaselineDeltaViaCli(root, "0001-selected-baseline", "selected", {
       selectedFiles: ["commands.md"]
     });
     assert.deepEqual(selected.updated, [".cw/project/commands.md"]);
     assert.doesNotMatch(await readFile(path.join(root, ".cw/project/rules.md"), "utf8"), /Review checklist/);
 
-    await createTask(root, { id: "0002-edited-baseline", title: "Edited baseline" });
-    await ensureBaselineDelta(root, "0002-edited-baseline");
-    const edited = await syncBaselineDelta(root, "0002-edited-baseline", "edited", {
+    await createTaskViaCli(root, { id: "0002-edited-baseline", title: "Edited baseline" });
+    await ensureBaselineDeltaViaCli(root, "0002-edited-baseline");
+    const edited = await syncBaselineDeltaViaCli(root, "0002-edited-baseline", "edited", {
       editedMarkdown: "# Baseline Delta\n\n## rules.md\n\nEdited baseline rule.\n"
     });
     assert.deepEqual(edited.updated, [".cw/project/rules.md"]);
     assert.match(await readFile(path.join(root, ".cw/project/rules.md"), "utf8"), /Edited baseline rule/);
 
-    await createTask(root, { id: "0003-skipped-baseline", title: "Skipped baseline" });
-    await ensureBaselineDelta(root, "0003-skipped-baseline");
-    const skipped = await syncBaselineDelta(root, "0003-skipped-baseline", "skipped");
+    await createTaskViaCli(root, { id: "0003-skipped-baseline", title: "Skipped baseline" });
+    await ensureBaselineDeltaViaCli(root, "0003-skipped-baseline");
+    const skipped = await syncBaselineDeltaViaCli(root, "0003-skipped-baseline", "skipped");
     assert.deepEqual(skipped.updated, []);
   });
 
   it("finishes a task only through the closure gate", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await createTask(root, { id: "0001-finish-test", title: "Finish test" });
+    await createTaskViaCli(root, { id: "0001-finish-test", title: "Finish test" });
 
     await assert.rejects(
-      updateTaskState(root, "0001-finish-test", { lifecycle: "closed" }),
+      setTaskStateViaCli(root, "0001-finish-test", { lifecycle: "closed" }),
       /use finishTask/
     );
     await assert.rejects(
-      finishTask(root, "0001-finish-test", { summary: "Done" }),
+      finishTaskViaCli(root, "0001-finish-test", { summary: "Done" }),
       /closure gate failed/
     );
 
@@ -973,23 +906,23 @@ describe("cw kernel", () => {
       "# Task\n\n## Implementation\n- [x] Implemented\n\n## Verification\n- [x] Tested\n\n## Check\n- [x] Acceptance criteria in spec.md are covered.\n",
       "utf8"
     );
-    await updateTaskState(root, "0001-finish-test", {
+    await setTaskStateViaCli(root, "0001-finish-test", {
       phase: "finish",
       nextAction: "Run cw-finish after user confirmation"
     });
 
-    const finished = await finishTask(root, "0001-finish-test", { summary: "Task finished" });
+    const finished = await finishTaskViaCli(root, "0001-finish-test", { summary: "Task finished" });
     assert.equal(finished.lifecycle, "closed");
     assert.equal(finished.phase, "finish");
     assert.equal(finished.next_action, "Task is closed");
     await assert.rejects(access(path.join(root, ".cw/tasks/0001-finish-test")));
     assert.match(await readFile(path.join(root, ".cw/tasks/archived/0001-finish-test/task.json"), "utf8"), /"lifecycle": "closed"/);
     assert.match(await readFile(path.join(root, ".cw/tasks/archived/0001-finish-test/trace.jsonl"), "utf8"), /task.finished/);
-    assert.deepEqual(await listTasks(root), []);
-    assert.deepEqual((await listTasks(root, { scope: "archived" })).map((task) => task.id), ["0001-finish-test"]);
+    assert.deepEqual(await listTasksViaCli(root), []);
+    assert.deepEqual((await listTasksViaCli(root, { scope: "archived" })).map((task) => task.id), ["0001-finish-test"]);
     assert.deepEqual(await validateProject(root), []);
-    await assert.rejects(selectTask(root, { taskId: "0001" }), /archived/);
-    const report = await preflight(root, { action: "work" });
+    await assert.rejects(selectTaskViaCli(root, { taskId: "0001" }), /archived/);
+    const report = await runPreflightViaCli(root, { action: "work" });
     assert.equal(report.task, null);
   });
 
@@ -1035,7 +968,7 @@ describe("cw kernel", () => {
       summary: "Manual review passed.",
       manualVerification: "Reviewed architecture wording."
     });
-    await ensureBaselineDelta(root, "0001-high-impact-baseline");
+    await ensureBaselineDeltaViaCli(root, "0001-high-impact-baseline");
     await writeFile(
       path.join(root, ".cw/tasks/0001-high-impact-baseline/baseline-delta.md"),
       "# Baseline Delta\n\n## architecture.md\n\nArchitecture now documents the workflow kernel boundary.\n",
@@ -1064,21 +997,21 @@ describe("cw kernel", () => {
   it("discards a task only with explicit confirmation", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await createTask(root, { id: "0001-discard-test", title: "Discard test" });
+    await createTaskViaCli(root, { id: "0001-discard-test", title: "Discard test" });
 
     await assert.rejects(
-      discardTask(root, "0001-discard-test", { confirmed: false, worktreeHandling: "none" }),
+      discardTaskViaCli(root, "0001-discard-test", { confirmed: false, worktreeHandling: "none" }),
       /confirmation/
     );
 
-    await discardTask(root, "0001-discard-test", { confirmed: true, worktreeHandling: "none" });
+    await discardTaskViaCli(root, "0001-discard-test", { confirmed: true, worktreeHandling: "none" });
     await assert.rejects(access(path.join(root, ".cw/tasks/0001-discard-test")));
   });
 
   it("doctor reports malformed task state and stale generated skills", async () => {
     const root = await tempRoot();
     await initProject(root, { harnesses: ["codex"] });
-    await createTask(root, { id: "0001-unhealthy-task", title: "Unhealthy task" });
+    await createTaskViaCli(root, { id: "0001-unhealthy-task", title: "Unhealthy task" });
     const taskJsonPath = path.join(root, ".cw/tasks/0001-unhealthy-task/task.json");
     const state = JSON.parse(await readFile(taskJsonPath, "utf8")) as Record<string, unknown>;
     state.next_action = "";
@@ -1110,7 +1043,7 @@ describe("cw kernel", () => {
       createdAt: "2026-07-03T02:00:00.000Z"
     });
 
-    const result = await migrateTasks(root, new Date("2026-07-03T03:00:00.000Z"));
+    const result = await migrateTasksViaCli(root, new Date("2026-07-03T03:00:00.000Z"));
 
     assert.deepEqual(result.migrated.map((item) => [item.from, item.to, item.to_location]), [
       ["task-old-closed", "0001-old-closed", "archived"],
@@ -1127,8 +1060,8 @@ describe("cw kernel", () => {
       "0002-old-open"
     );
     assert.match(await readFile(path.join(root, ".cw/tasks/archived/0001-old-closed/trace.jsonl"), "utf8"), /task.migrated/);
-    assert.deepEqual((await listTasks(root)).map((task) => task.id), ["0002-old-open"]);
-    assert.deepEqual((await listTasks(root, { scope: "archived" })).map((task) => task.id), ["0001-old-closed"]);
+    assert.deepEqual((await listTasksViaCli(root)).map((task) => task.id), ["0002-old-open"]);
+    assert.deepEqual((await listTasksViaCli(root, { scope: "archived" })).map((task) => task.id), ["0001-old-closed"]);
     assert.deepEqual(await validateProject(root), []);
   });
 
@@ -1197,7 +1130,7 @@ describe("cw kernel", () => {
     assert.equal(check.task?.phase, "finish");
     assert.deepEqual((check.details?.commands as Array<{ command: string }>).map((result) => result.command), ["test -f README.md"]);
 
-    await ensureBaselineDelta(root, "0001-create-readme");
+    await ensureBaselineDeltaViaCli(root, "0001-create-readme");
     await writeFile(
       path.join(root, ".cw/tasks/0001-create-readme/baseline-delta.md"),
       "# Baseline Delta\n\n## commands.md\n\nUse `npm test` to verify fixture behavior.\n",
@@ -1212,12 +1145,12 @@ describe("cw kernel", () => {
     assert.equal(finish.task?.lifecycle, "closed");
     assert.match(await readFile(path.join(root, ".cw/project/commands.md"), "utf8"), /verify fixture behavior/);
 
-    await createTask(root, { id: "0002-resume-flow", title: "Resume flow" });
-    await createResumeNote(root, "0002-resume-flow", "# Resume\n\nContinue.\n");
+    await createTaskViaCli(root, { id: "0002-resume-flow", title: "Resume flow" });
+    await createResumeNoteViaCli(root, "0002-resume-flow", "# Resume\n\nContinue.\n");
     const resume = await runWorkflowAction(root, "resume", { taskId: "0002-resume-flow" });
     assert.equal(resume.task?.artifacts.resume, null);
 
-    await createTask(root, { id: "0003-discard-flow", title: "Discard flow" });
+    await createTaskViaCli(root, { id: "0003-discard-flow", title: "Discard flow" });
     const discard = await runWorkflowAction(root, "discard", {
       taskId: "0003-discard-flow",
       confirm: true,
@@ -1290,6 +1223,200 @@ function parseCliJson(stdout: string): Record<string, unknown> {
   const offset = stdout.lastIndexOf(marker);
   assert.notEqual(offset, -1, stdout);
   return JSON.parse(stdout.slice(offset)) as Record<string, unknown>;
+}
+
+type TaskSummary = Pick<TaskStateRecord, "id" | "title" | "lifecycle" | "phase" | "next_action" | "updated_at">;
+type PreflightAction = Exclude<WorkflowCommandAction, "doctor">;
+type PreflightReport = {
+  ok: boolean;
+  action: PreflightAction;
+  task: TaskStateRecord | null;
+  issues: Array<{ path: string; message: string }>;
+  warnings: Array<{ path: string; message: string }>;
+  git: unknown;
+};
+type BaselineSyncResult = {
+  decision: BaselineDecision;
+  updated: string[];
+  preview: Partial<Record<BaselineFile, string>>;
+  highImpact: boolean;
+};
+type LegacyTaskMigrationResult = {
+  migrated: Array<{
+    from: string;
+    to: string;
+    from_location: "active" | "archived";
+    to_location: "active" | "archived";
+  }>;
+};
+
+async function cliJson<T>(args: string[]): Promise<T> {
+  const cli = await runCli(args);
+  if (cli.code !== 0) {
+    throw new Error((cli.stderr || cli.stdout).trim());
+  }
+  return parseJsonOutput<T>(cli.stdout);
+}
+
+function parseJsonOutput<T>(stdout: string): T {
+  const text = stdout.trim();
+  assert.notEqual(text.length, 0, stdout);
+  return JSON.parse(text) as T;
+}
+
+async function createTaskViaCli(
+  root: string,
+  input: { id?: string; title: string; phase?: string; nextAction?: string; now?: Date }
+): Promise<TaskStateRecord> {
+  const args = ["internal", "create-task", "--root", root, "--title", input.title];
+  if (input.id !== undefined) {
+    args.push("--id", input.id);
+  }
+  if (input.phase !== undefined) {
+    args.push("--phase", input.phase);
+  }
+  if (input.nextAction !== undefined) {
+    args.push("--next-action", input.nextAction);
+  }
+  return cliJson<TaskStateRecord>(args);
+}
+
+async function setTaskStateViaCli(
+  root: string,
+  taskId: string,
+  input: {
+    lifecycle?: TaskStateRecord["lifecycle"];
+    phase?: string;
+    nextAction?: string;
+    blockedReason?: string | null;
+    parkedReason?: string | null;
+    resumeCondition?: string | null;
+    now?: Date;
+  }
+): Promise<TaskStateRecord> {
+  const args = ["internal", "set-state", "--root", root, "--task", taskId];
+  if (input.lifecycle !== undefined) {
+    args.push("--lifecycle", input.lifecycle);
+  }
+  if (input.phase !== undefined) {
+    args.push("--phase", input.phase);
+  }
+  if (input.nextAction !== undefined) {
+    args.push("--next-action", input.nextAction);
+  }
+  if (input.blockedReason !== undefined) {
+    args.push("--blocked-reason", input.blockedReason ?? "null");
+  }
+  if (input.parkedReason !== undefined) {
+    args.push("--parked-reason", input.parkedReason ?? "null");
+  }
+  if (input.resumeCondition !== undefined) {
+    args.push("--resume-condition", input.resumeCondition ?? "null");
+  }
+  return cliJson<TaskStateRecord>(args);
+}
+
+async function readTaskStateFile(root: string, taskId: string): Promise<TaskStateRecord> {
+  return JSON.parse(await readFile(path.join(root, ".cw/tasks", taskId, "task.json"), "utf8")) as TaskStateRecord;
+}
+
+async function selectTaskViaCli(root: string, input: { taskId?: string } = {}): Promise<TaskStateRecord> {
+  const args = ["internal", "select-task", "--root", root];
+  if (input.taskId !== undefined) {
+    args.push("--task", input.taskId);
+  }
+  return cliJson<TaskStateRecord>(args);
+}
+
+async function listTasksViaCli(root: string, input: { scope?: "active" | "archived" | "all" } = {}): Promise<TaskSummary[]> {
+  const args = ["tasks", "--root", root];
+  if (input.scope === "archived") {
+    args.push("--archived");
+  } else if (input.scope === "all") {
+    args.push("--all");
+  }
+  return (await cliJson<{ tasks: TaskSummary[] }>(args)).tasks;
+}
+
+async function runPreflightViaCli(root: string, input: { action: PreflightAction; taskId?: string }): Promise<PreflightReport> {
+  const args = ["preflight", "--root", root, "--action", input.action];
+  if (input.taskId !== undefined) {
+    args.push("--task", input.taskId);
+  }
+  return cliJson<PreflightReport>(args);
+}
+
+async function createResumeNoteViaCli(
+  root: string,
+  taskId: string,
+  content: string,
+  resumeCondition?: string | null
+): Promise<TaskStateRecord> {
+  const args = ["internal", "create-resume", "--root", root, "--task", taskId, "--content", content];
+  if (resumeCondition !== undefined) {
+    args.push("--resume-condition", resumeCondition ?? "null");
+  }
+  return cliJson<TaskStateRecord>(args);
+}
+
+async function consumeResumeNoteViaCli(root: string, taskId: string): Promise<TaskStateRecord> {
+  return cliJson<TaskStateRecord>(["internal", "consume-resume", "--root", root, "--task", taskId]);
+}
+
+async function ensureBaselineDeltaViaCli(root: string, taskId: string): Promise<TaskStateRecord> {
+  return cliJson<TaskStateRecord>(["internal", "ensure-baseline-delta", "--root", root, "--task", taskId]);
+}
+
+async function syncBaselineDeltaViaCli(
+  root: string,
+  taskId: string,
+  decision: BaselineDecision,
+  options: { selectedFiles?: BaselineFile[]; editedMarkdown?: string } = {}
+): Promise<BaselineSyncResult> {
+  const args = ["internal", "sync-baseline-delta", "--root", root, "--task", taskId, "--decision", decision];
+  if (options.selectedFiles !== undefined) {
+    args.push("--selected-files", options.selectedFiles.join(","));
+  }
+  if (options.editedMarkdown !== undefined) {
+    args.push("--edited-content", options.editedMarkdown);
+  }
+  return cliJson<BaselineSyncResult>(args);
+}
+
+async function finishTaskViaCli(
+  root: string,
+  taskId: string,
+  input: {
+    summary: string;
+    dirtyWorktreeHandling?: DirtyWorktreeDecision;
+    baselineDecision?: BaselineDecision | "none";
+    now?: Date;
+  }
+): Promise<TaskStateRecord> {
+  const args = ["internal", "finish-task", "--root", root, "--task", taskId, "--summary", input.summary];
+  if (input.dirtyWorktreeHandling !== undefined) {
+    args.push("--dirty-worktree", input.dirtyWorktreeHandling);
+  }
+  if (input.baselineDecision !== undefined) {
+    args.push("--baseline", input.baselineDecision);
+  }
+  return cliJson<TaskStateRecord>(args);
+}
+
+async function discardTaskViaCli(
+  root: string,
+  taskId: string,
+  input: { confirmed: boolean; worktreeHandling: "keep" | "stash" | "revert" | "delete-worktree" | "none"; now?: Date }
+): Promise<void> {
+  const args = ["internal", "discard-task", "--root", root, "--task", taskId, "--worktree", input.worktreeHandling];
+  if (input.confirmed) {
+    args.push("--confirm");
+  }
+  await cliJson<{ ok: true }>(args);
+}
+
+async function migrateTasksViaCli(root: string, _now?: Date): Promise<LegacyTaskMigrationResult> {
+  return cliJson<LegacyTaskMigrationResult>(["internal", "migrate-task-ids", "--root", root]);
 }
 
 async function readTrace(root: string, taskId: string): Promise<Array<Record<string, unknown>>> {
