@@ -1,9 +1,10 @@
 import path from "node:path";
-import { access, readdir, readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { GENERATED_MARKER } from "./adapters.js";
 import { readJsonFile } from "./json.js";
-import { getCwPaths } from "./paths.js";
+import { getCwPaths, TaskLocation, taskDir } from "./paths.js";
 import { validateEnhancementConfigRecord, validateTaskStateRecord, validateVersionRecord } from "./schema.js";
+import { listTaskDirectoryEntries } from "./task-storage.js";
 import { PROJECT_BASELINE_TEMPLATES, TASK_ARTIFACT_TEMPLATES } from "./templates.js";
 import { AGENT_COMMANDS } from "./templates.js";
 import { DoctorReport, EnhancementConfigRecord, TaskStateRecord, ValidationIssue } from "./types.js";
@@ -37,8 +38,9 @@ export async function validateProject(root: string): Promise<ValidationIssue[]> 
     issues.push(...(await validateRequiredFile(path.join(paths.templates, fileName))));
   }
 
-  for (const taskId of await listTaskIds(root)) {
-    const taskRoot = path.join(paths.tasks, taskId);
+  for (const entry of await listTaskDirectoryEntries(root, "active")) {
+    const taskId = entry.id;
+    const taskRoot = entry.dir;
     const taskJson = path.join(taskRoot, "task.json");
     const traceJsonl = path.join(taskRoot, "trace.jsonl");
     issues.push(...(await validateRequiredFile(taskJson)));
@@ -47,7 +49,10 @@ export async function validateProject(root: string): Promise<ValidationIssue[]> 
       try {
         const state = await readJsonFile<TaskStateRecord>(taskJson);
         issues.push(...validateTaskStateRecord(state, `.cw/tasks/${taskId}/task.json`));
-        issues.push(...(await validateTaskArtifacts(root, taskId, state)));
+        if (state.id !== taskId) {
+          issues.push({ path: `.cw/tasks/${taskId}/task.json.id`, message: "task id must match its directory name" });
+        }
+        issues.push(...(await validateTaskArtifacts(root, taskId, state, entry.location)));
       } catch (error) {
         issues.push({ path: `.cw/tasks/${taskId}/task.json`, message: formatError(error) });
       }
@@ -65,8 +70,9 @@ export async function doctorProject(root: string): Promise<DoctorReport> {
   const warnings: ValidationIssue[] = [];
   const enhancements = await readEnhancementStatus(root);
 
-  for (const taskId of await listTaskIds(root)) {
-    const taskJson = path.join(getCwPaths(root).tasks, taskId, "task.json");
+  for (const entry of await listTaskDirectoryEntries(root, "active")) {
+    const taskId = entry.id;
+    const taskJson = path.join(entry.dir, "task.json");
     if (!(await exists(taskJson))) {
       continue;
     }
@@ -117,9 +123,14 @@ async function readEnhancementStatus(root: string): Promise<DoctorReport["enhanc
   }
 }
 
-async function validateTaskArtifacts(root: string, taskId: string, state: TaskStateRecord): Promise<ValidationIssue[]> {
+async function validateTaskArtifacts(
+  root: string,
+  taskId: string,
+  state: TaskStateRecord,
+  location: TaskLocation
+): Promise<ValidationIssue[]> {
   const issues: ValidationIssue[] = [];
-  const taskRoot = path.join(getCwPaths(root).tasks, taskId);
+  const taskRoot = taskDir(root, taskId, location);
   for (const artifactPath of Object.values(state.artifacts)) {
     if (artifactPath === null) {
       continue;
@@ -179,15 +190,6 @@ async function validateRequiredFile(filePath: string): Promise<ValidationIssue[]
     return [];
   }
   return [{ path: filePath, message: "missing required file" }];
-}
-
-async function listTaskIds(root: string): Promise<string[]> {
-  const tasksPath = getCwPaths(root).tasks;
-  if (!(await exists(tasksPath))) {
-    return [];
-  }
-  const entries = await readdir(tasksPath, { withFileTypes: true });
-  return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
 }
 
 async function exists(filePath: string): Promise<boolean> {

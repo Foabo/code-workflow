@@ -1,7 +1,5 @@
-import path from "node:path";
-import { access, readdir } from "node:fs/promises";
-import { readTaskState } from "./tasks.js";
-import { getCwPaths } from "./paths.js";
+import { readTaskStateAt } from "./tasks.js";
+import { resolveTaskReference, listTaskDirectoryEntries, TaskListScope } from "./task-storage.js";
 import { TaskLifecycle, TaskStateRecord } from "./types.js";
 
 export type TaskSummary = Pick<
@@ -14,11 +12,15 @@ export type SelectTaskInput = {
   lifecycles?: TaskLifecycle[];
 };
 
-export async function listTasks(root: string): Promise<TaskSummary[]> {
-  const taskIds = await listTaskIds(root);
+export type ListTasksInput = {
+  scope?: TaskListScope;
+};
+
+export async function listTasks(root: string, input: ListTasksInput = {}): Promise<TaskSummary[]> {
+  const taskEntries = await listTaskDirectoryEntries(root, input.scope ?? "active");
   const tasks: TaskSummary[] = [];
-  for (const taskId of taskIds) {
-    const task = await readTaskState(root, taskId);
+  for (const entry of taskEntries) {
+    const task = await readTaskStateAt(root, entry.id, { location: entry.location });
     tasks.push({
       id: task.id,
       title: task.title,
@@ -33,7 +35,8 @@ export async function listTasks(root: string): Promise<TaskSummary[]> {
 
 export async function selectTask(root: string, input: SelectTaskInput = {}): Promise<TaskStateRecord> {
   if (input.taskId !== undefined) {
-    return readTaskState(root, input.taskId);
+    const resolved = await resolveTaskReference(root, input.taskId, "active");
+    return readTaskStateAt(root, resolved.id, { location: resolved.location });
   }
 
   const lifecycles = input.lifecycles ?? ["open", "blocked", "parked"];
@@ -46,23 +49,5 @@ export async function selectTask(root: string, input: SelectTaskInput = {}): Pro
     throw new Error(`multiple matching tasks found: ${candidates.map((task) => task.id).join(", ")}`);
   }
 
-  return readTaskState(root, candidates[0].id);
-}
-
-async function listTaskIds(root: string): Promise<string[]> {
-  const tasksPath = getCwPaths(root).tasks;
-  if (!(await exists(tasksPath))) {
-    return [];
-  }
-  const entries = await readdir(tasksPath, { withFileTypes: true });
-  return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
-}
-
-async function exists(filePath: string): Promise<boolean> {
-  try {
-    await access(path.resolve(filePath));
-    return true;
-  } catch {
-    return false;
-  }
+  return readTaskStateAt(root, candidates[0].id);
 }

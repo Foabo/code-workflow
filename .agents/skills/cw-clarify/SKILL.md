@@ -54,7 +54,7 @@ Clarify the task contract and update spec.md with user-confirmed goal, scope, co
 - cw doctor
 - cw tasks
 - cw preflight --action <action> [--task <task-id>]
-- cw internal create-task --id <task-id> --title <title>
+- cw internal create-task --title <title> [--id <task-id>]
 - cw internal select-task [--task <task-id>]
 - cw internal append-trace --task <task-id> --type <event-type> --summary <summary>
 - cw internal set-state --task <task-id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]

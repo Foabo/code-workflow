@@ -99,8 +99,7 @@ async function runWork(root: string, options: WorkflowOptions): Promise<Workflow
   }
 
   const title = required(options.title, "--title is required when cw-work creates a task");
-  const id = options.taskId ?? slugify(title);
-  const task = await createTask(root, { id, title });
+  const task = await createTask(root, { id: options.taskId, title });
   return {
     action: "work",
     task,
@@ -555,11 +554,6 @@ function required(value: string | undefined, message: string): string {
     throw new Error(message);
   }
   return value;
-}
-
-function slugify(title: string): string {
-  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  return slug.length > 0 ? `task-${slug}` : `task-${Date.now()}`;
 }
 
 export async function createBaselineDeltaForTask(root: string, taskId: string): Promise<TaskStateRecord> {

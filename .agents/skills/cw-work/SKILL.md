@@ -42,7 +42,7 @@ Default task progress action. Create or select a task, advance the next responsi
 ## Workflow Steps
 
 1. Run `cw preflight --action work`.
-2. If no task exists, create one with `cw internal create-task --id <task-id> --title <title>` after deriving a clear title from the user request.
+2. If no task exists, create one with `cw internal create-task --title <title>` after deriving a clear title from the user request.
 3. Select the task with `cw internal select-task` or `cw internal select-task --task <task-id>`.
 4. Read spec.md, plan.md, task.md, and relevant project baseline files.
 5. If the task needs clarification, follow cw-clarify behavior.
@@ -57,7 +57,7 @@ Default task progress action. Create or select a task, advance the next responsi
 - cw doctor
 - cw tasks
 - cw preflight --action <action> [--task <task-id>]
-- cw internal create-task --id <task-id> --title <title>
+- cw internal create-task --title <title> [--id <task-id>]
 - cw internal select-task [--task <task-id>]
 - cw internal append-trace --task <task-id> --type <event-type> --summary <summary>
 - cw internal set-state --task <task-id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]

@@ -8,3 +8,4 @@
 {"ts":"2026-07-04T07:31:23.401Z","type":"task.state.updated","summary":"phase check -> finish; next action updated"}
 {"ts":"2026-07-04T07:31:23.401Z","type":"check.passed","summary":"Verification suite passed.","data":{"commands":[],"manual_verification":"Ran typecheck, test, build, CW validate, and OpenSpec strict validate."}}
 {"ts":"2026-07-04T07:31:27.137Z","type":"task.finished","summary":"CW v1 workflow kernel implementation complete.","data":{"baseline_decision":"none","dirty_worktree_handling":"covered"}}
+{"ts":"2026-07-05T02:46:33.578Z","type":"task.migrated","summary":"Task id migrated from task-cw-v1-workflow-kernel to 0002-implement-cw-v1-workflow-kernel.","data":{"from":"task-cw-v1-workflow-kernel","to":"0002-implement-cw-v1-workflow-kernel"}}

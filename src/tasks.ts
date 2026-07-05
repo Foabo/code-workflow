@@ -1,10 +1,11 @@
 import path from "node:path";
-import { appendFile, readFile, rm, writeFile } from "node:fs/promises";
+import { appendFile, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { ensureDir, writeFileIfMissing } from "./fs.js";
 import { getGitStatus } from "./git.js";
 import { readJsonFile, writeJsonFile } from "./json.js";
-import { getCwPaths, taskDir, taskJsonPath, tracePath } from "./paths.js";
+import { getCwPaths, TaskLocation, taskDir, taskJsonPath, tracePath } from "./paths.js";
 import { assertTaskStateRecord } from "./schema.js";
+import { allocateTaskId, isFullNumericTaskId, listTaskIds, migrateLegacyTaskIds, LegacyTaskMigrationResult } from "./task-storage.js";
 import { TASK_ARTIFACT_TEMPLATES } from "./templates.js";
 import {
   BaselineDecision,
@@ -16,7 +17,7 @@ import {
 } from "./types.js";
 
 export type CreateTaskInput = {
-  id: string;
+  id?: string;
   title: string;
   phase?: string;
   nextAction?: string;
@@ -49,16 +50,22 @@ export type DiscardTaskInput = {
   now?: Date;
 };
 
+export type TaskFileInput = {
+  location?: TaskLocation;
+};
+
 export async function createTask(root: string, input: CreateTaskInput): Promise<TaskStateRecord> {
-  validateTaskId(input.id);
+  const id = input.id ?? (await allocateTaskId(root, input.title));
+  validateTaskId(id);
+  await ensureTaskIdAvailable(root, id);
   const paths = getCwPaths(root);
-  const dir = taskDir(root, input.id);
+  const dir = taskDir(root, id);
   await ensureDir(paths.tasks);
   await ensureDir(dir);
 
   const now = (input.now ?? new Date()).toISOString();
   const state: TaskStateRecord = {
-    id: input.id,
+    id,
     title: input.title,
     lifecycle: "open",
     phase: input.phase ?? "clarify",
@@ -84,14 +91,14 @@ export async function createTask(root: string, input: CreateTaskInput): Promise<
     await writeFileIfMissing(path.join(dir, fileName), TASK_ARTIFACT_TEMPLATES[fileName]);
   }
 
-  await writeFile(taskJsonPath(root, input.id), `${JSON.stringify(state, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
-  await writeFile(tracePath(root, input.id), "", { encoding: "utf8", flag: "wx" }).catch((error: unknown) => {
+  await writeFile(taskJsonPath(root, id), `${JSON.stringify(state, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+  await writeFile(tracePath(root, id), "", { encoding: "utf8", flag: "wx" }).catch((error: unknown) => {
     if (isAlreadyExists(error)) {
       return;
     }
     throw error;
   });
-  await appendTrace(root, input.id, {
+  await appendTrace(root, id, {
     ts: now,
     type: "task.created",
     summary: `Task created: ${input.title}`
@@ -103,6 +110,14 @@ export async function createTask(root: string, input: CreateTaskInput): Promise<
 export async function readTaskState(root: string, taskId: string): Promise<TaskStateRecord> {
   const state = await readJsonFile<unknown>(taskJsonPath(root, taskId));
   assertTaskStateRecord(state, `.cw/tasks/${taskId}/task.json`);
+  return state;
+}
+
+export async function readTaskStateAt(root: string, taskId: string, input: TaskFileInput = {}): Promise<TaskStateRecord> {
+  const location = input.location ?? "active";
+  const state = await readJsonFile<unknown>(taskJsonPath(root, taskId, location));
+  const display = location === "archived" ? `.cw/tasks/archived/${taskId}/task.json` : `.cw/tasks/${taskId}/task.json`;
+  assertTaskStateRecord(state, display);
   return state;
 }
 
@@ -174,6 +189,8 @@ export async function finishTask(root: string, taskId: string, input: FinishTask
       dirty_worktree_handling: input.dirtyWorktreeHandling ?? "clean"
     }
   });
+  await ensureDir(getCwPaths(root).tasksArchive);
+  await rename(taskDir(root, taskId), taskDir(root, taskId, "archived"));
   return next;
 }
 
@@ -203,11 +220,15 @@ export async function discardTask(root: string, taskId: string, input: DiscardTa
   await rm(taskDir(root, taskId), { recursive: true, force: true });
 }
 
-export async function appendTrace(root: string, taskId: string, event: TraceEvent): Promise<void> {
+export async function appendTrace(root: string, taskId: string, event: TraceEvent, input: TaskFileInput = {}): Promise<void> {
   if (!event.ts || !event.type || !event.summary) {
     throw new Error("trace event requires ts, type, and summary");
   }
-  await appendFile(tracePath(root, taskId), `${JSON.stringify(event)}\n`, "utf8");
+  await appendFile(tracePath(root, taskId, input.location ?? "active"), `${JSON.stringify(event)}\n`, "utf8");
+}
+
+export async function migrateTasks(root: string, now = new Date()): Promise<LegacyTaskMigrationResult> {
+  return migrateLegacyTaskIds(root, now);
 }
 
 export async function createResumeNote(
@@ -318,8 +339,16 @@ function hasUncheckedCheckbox(markdown: string): boolean {
 }
 
 function validateTaskId(taskId: string): void {
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(taskId)) {
-    throw new Error("task id must use lowercase letters, numbers, and hyphens");
+  if (!isFullNumericTaskId(taskId)) {
+    throw new Error("task id must use four digits, a hyphen, and a lowercase slug");
+  }
+}
+
+async function ensureTaskIdAvailable(root: string, taskId: string): Promise<void> {
+  const prefix = taskId.slice(0, 4);
+  const conflict = (await listTaskIds(root, "all")).find((existing) => existing.startsWith(`${prefix}-`));
+  if (conflict !== undefined) {
+    throw new Error(`task number ${prefix} is already used by ${conflict}`);
   }
 }
 

@@ -23,8 +23,10 @@ import {
   createTask,
   discardTask,
   finishTask,
+  migrateTasks,
   updateTaskState
 } from "./tasks.js";
+import { resolveTaskReference } from "./task-storage.js";
 import { doctorProject, validateProject } from "./validate.js";
 import { DirtyWorktreeDecision, EnhancementCategory, EnhancementChoice, EnhancementProviderRecord, TaskLifecycle, TraceEvent } from "./types.js";
 import { HarnessName } from "./adapters.js";
@@ -120,7 +122,8 @@ async function main(argv: string[]): Promise<number> {
         return result.validation.ok ? 0 : 1;
       }
       case "tasks": {
-        printJson({ tasks: await listTasks(root) });
+        const scope = flagEnabled(publicFlags, "all") ? "all" : flagEnabled(publicFlags, "archived") ? "archived" : "active";
+        printJson({ tasks: await listTasks(root, { scope }) });
         return 0;
       }
       case "preflight": {
@@ -148,10 +151,9 @@ async function runInternal(subcommand: string | undefined, args: string[], root:
 
   switch (subcommand) {
     case "create-task": {
-      const id = requiredString(flags, "id");
       const title = requiredString(flags, "title");
       const task = await createTask(root, {
-        id,
+        id: optionalString(flags, "id"),
         title,
         phase: optionalString(flags, "phase"),
         nextAction: optionalString(flags, "next-action")
@@ -165,7 +167,7 @@ async function runInternal(subcommand: string | undefined, args: string[], root:
       return 0;
     }
     case "append-trace": {
-      const taskId = requiredString(flags, "task");
+      const taskId = await requiredActiveTaskId(root, flags);
       const event: TraceEvent = {
         ts: optionalString(flags, "ts") ?? new Date().toISOString(),
         type: requiredString(flags, "type"),
@@ -176,7 +178,7 @@ async function runInternal(subcommand: string | undefined, args: string[], root:
       return 0;
     }
     case "set-state": {
-      const taskId = requiredString(flags, "task");
+      const taskId = await requiredActiveTaskId(root, flags);
       const task = await updateTaskState(root, taskId, {
         lifecycle: optionalLifecycle(flags, "lifecycle"),
         phase: optionalString(flags, "phase"),
@@ -189,7 +191,7 @@ async function runInternal(subcommand: string | undefined, args: string[], root:
       return 0;
     }
     case "finish-task": {
-      const taskId = requiredString(flags, "task");
+      const taskId = await requiredActiveTaskId(root, flags);
       const baselineDecision = optionalBaselineDecision(flags, "baseline");
       const dirtyWorktreeHandling = optionalDirtyWorktreeHandling(flags, "dirty-worktree");
       const gateIssues = await checkClosureGate(root, taskId, {
@@ -220,7 +222,7 @@ async function runInternal(subcommand: string | undefined, args: string[], root:
       return 0;
     }
     case "discard-task": {
-      const taskId = requiredString(flags, "task");
+      const taskId = await requiredActiveTaskId(root, flags);
       await discardTask(root, taskId, {
         confirmed: flags.confirm === true || flags.confirm === "true",
         worktreeHandling: optionalDiscardWorktreeHandling(flags, "worktree") ?? "none"
@@ -229,20 +231,20 @@ async function runInternal(subcommand: string | undefined, args: string[], root:
       return 0;
     }
     case "create-resume": {
-      const taskId = requiredString(flags, "task");
+      const taskId = await requiredActiveTaskId(root, flags);
       const content = requiredString(flags, "content");
       const task = await createResumeNote(root, taskId, content, optionalNullableString(flags, "resume-condition"));
       printJson(task);
       return 0;
     }
     case "ensure-baseline-delta": {
-      const taskId = requiredString(flags, "task");
+      const taskId = await requiredActiveTaskId(root, flags);
       const task = await ensureBaselineDelta(root, taskId);
       printJson(task);
       return 0;
     }
     case "sync-baseline-delta": {
-      const taskId = requiredString(flags, "task");
+      const taskId = await requiredActiveTaskId(root, flags);
       const result = await syncBaselineDelta(root, taskId, requiredBaselineDecision(flags, "decision"), {
         selectedFiles: optionalBaselineFiles(flags, "selected-files"),
         editedMarkdown: optionalString(flags, "edited-content")
@@ -251,15 +253,24 @@ async function runInternal(subcommand: string | undefined, args: string[], root:
       return 0;
     }
     case "consume-resume": {
-      const taskId = requiredString(flags, "task");
+      const taskId = await requiredActiveTaskId(root, flags);
       const task = await consumeResumeNote(root, taskId);
       printJson(task);
+      return 0;
+    }
+    case "migrate-task-ids": {
+      const result = await migrateTasks(root);
+      printJson(result);
       return 0;
     }
     default:
       printInternalUsage();
       return 1;
   }
+}
+
+async function requiredActiveTaskId(root: string, flags: Flags): Promise<string> {
+  return (await resolveTaskReference(root, requiredString(flags, "task"), "active")).id;
 }
 
 function parseFlags(args: string[]): { flags: Flags; positional: string[] } {
@@ -748,14 +759,14 @@ function printUsage(): void {
   cw validate [--root <path>]
   cw doctor [--root <path>]
   cw update [--root <path>] [--harness codex|claude|opencode|pi]
-  cw tasks [--root <path>]
+  cw tasks [--root <path>] [--archived|--all]
   cw preflight --action <action> [--task <id>] [--root <path>]
   cw internal <helper> [flags]`);
 }
 
 function printInternalUsage(): void {
   console.log(`Internal helpers:
-  cw internal create-task --id <id> --title <title> [--phase <phase>] [--next-action <text>]
+  cw internal create-task --title <title> [--id <id>] [--phase <phase>] [--next-action <text>]
   cw internal select-task [--task <id>]
   cw internal append-trace --task <id> --type <type> --summary <text>
   cw internal set-state --task <id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
@@ -764,7 +775,8 @@ function printInternalUsage(): void {
   cw internal create-resume --task <id> --content <markdown>
   cw internal ensure-baseline-delta --task <id>
   cw internal sync-baseline-delta --task <id> --decision accepted|selected|edited|skipped
-  cw internal consume-resume --task <id>`);
+  cw internal consume-resume --task <id>
+  cw internal migrate-task-ids`);
 }
 
 main(process.argv.slice(2)).then((code) => {

@@ -5,6 +5,7 @@ export * from "./git.js";
 export * from "./init.js";
 export * from "./preflight.js";
 export * from "./schema.js";
+export * from "./task-storage.js";
 export * from "./task-store.js";
 export * from "./tasks.js";
 export * from "./types.js";

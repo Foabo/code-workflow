@@ -11,3 +11,4 @@
 {"ts":"2026-07-04T02:46:03.369Z","type":"baseline_delta.synced","summary":"Baseline delta synced to .cw/project/architecture.md, .cw/project/rules.md, .cw/project/commands.md.","data":{"decision":"accepted","updated":[".cw/project/architecture.md",".cw/project/rules.md",".cw/project/commands.md"]}}
 {"ts":"2026-07-04T02:46:03.384Z","type":"task.finished","summary":"Codex adapter and self-evolution flow completed.","data":{"baseline_decision":"accepted","dirty_worktree_handling":"covered"}}
 {"ts":"2026-07-04T02:51:03.582Z","type":"correction.codex_surface","summary":"Corrected Codex adapter from undocumented repository .codex/prompts output to documented repository marketplace plugin skills."}
+{"ts":"2026-07-05T02:46:33.578Z","type":"task.migrated","summary":"Task id migrated from task-codex-self-evolution to 0001-adapt-cw-for-codex-self-evolution.","data":{"from":"task-codex-self-evolution","to":"0001-adapt-cw-for-codex-self-evolution"}}

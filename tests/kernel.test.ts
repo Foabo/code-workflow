@@ -17,6 +17,7 @@ import {
   buildEnhancementSetupPlan,
   initProject,
   listTasks,
+  migrateTasks,
   normalizeEnhancementProviderRecord,
   preflight,
   providerChoicesFor,
@@ -688,7 +689,7 @@ describe("cw kernel", () => {
     await initProject(root);
 
     const state = await createTask(root, {
-      id: "task-auth-rate-limit",
+      id: "0001-auth-rate-limit",
       title: "Add auth rate limiting",
       now: new Date("2026-07-03T01:00:00.000Z")
     });
@@ -701,7 +702,7 @@ describe("cw kernel", () => {
         artifacts: state.artifacts
       },
       {
-      id: "task-auth-rate-limit",
+      id: "0001-auth-rate-limit",
       lifecycle: "open",
       phase: "clarify",
       artifacts: {
@@ -714,19 +715,40 @@ describe("cw kernel", () => {
       }
     );
 
-    assert.match(await readFile(path.join(root, ".cw/tasks/task-auth-rate-limit/spec.md"), "utf8"), /# Spec/);
-    const trace = await readTrace(root, "task-auth-rate-limit");
+    assert.match(await readFile(path.join(root, ".cw/tasks/0001-auth-rate-limit/spec.md"), "utf8"), /# Spec/);
+    const trace = await readTrace(root, "0001-auth-rate-limit");
     assert.equal(trace.length, 1);
     assert.equal(trace[0]?.type, "task.created");
     assert.deepEqual(await validateProject(root), []);
   });
 
+  it("generates numeric task ids without reusing active or archived prefixes", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await mkdir(path.join(root, ".cw/tasks/archived/0007-old-task"), { recursive: true });
+
+    const generated = await createTask(root, {
+      title: "Ship docs",
+      now: new Date("2026-07-03T01:00:00.000Z")
+    });
+
+    assert.equal(generated.id, "0008-ship-docs");
+    assert.match(await readFile(path.join(root, ".cw/tasks/0008-ship-docs/spec.md"), "utf8"), /# Spec/);
+    await assert.rejects(
+      createTask(root, {
+        id: "0007-reused-number",
+        title: "Reused number"
+      }),
+      /task number 0007/
+    );
+  });
+
   it("updates task state and records the change in trace", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await createTask(root, { id: "task-docs", title: "Update docs" });
+    await createTask(root, { id: "0001-update-docs", title: "Update docs" });
 
-    const updated = await updateTaskState(root, "task-docs", {
+    const updated = await updateTaskState(root, "0001-update-docs", {
       phase: "run",
       nextAction: "Execute the implementation checklist",
       now: new Date("2026-07-03T02:00:00.000Z")
@@ -734,7 +756,7 @@ describe("cw kernel", () => {
 
     assert.equal(updated.phase, "run");
     assert.equal(updated.next_action, "Execute the implementation checklist");
-    const trace = await readTrace(root, "task-docs");
+    const trace = await readTrace(root, "0001-update-docs");
     assert.deepEqual(
       {
         type: trace.at(-1)?.type,
@@ -750,45 +772,71 @@ describe("cw kernel", () => {
   it("lists tasks, selects a single task, and reports ambiguous selection", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await createTask(root, { id: "task-one", title: "One", now: new Date("2026-07-03T01:00:00.000Z") });
+    await createTask(root, { id: "0001-one", title: "One", now: new Date("2026-07-03T01:00:00.000Z") });
 
-    assert.equal((await selectTask(root)).id, "task-one");
-    assert.deepEqual((await listTasks(root)).map((task) => task.id), ["task-one"]);
+    assert.equal((await selectTask(root)).id, "0001-one");
+    assert.deepEqual((await listTasks(root)).map((task) => task.id), ["0001-one"]);
 
-    await createTask(root, { id: "task-two", title: "Two", now: new Date("2026-07-03T02:00:00.000Z") });
+    await createTask(root, { id: "0002-two", title: "Two", now: new Date("2026-07-03T02:00:00.000Z") });
     await assert.rejects(selectTask(root), /multiple matching tasks/);
-    assert.equal((await selectTask(root, { taskId: "task-two" })).id, "task-two");
+    assert.equal((await selectTask(root, { taskId: "0002-two" })).id, "0002-two");
+    assert.equal((await selectTask(root, { taskId: "0002" })).id, "0002-two");
+    await assert.rejects(selectTask(root, { taskId: "9999" }), /no task found/);
+    await mkdir(path.join(root, ".cw/tasks/0002-two-duplicate"), { recursive: true });
+    await assert.rejects(selectTask(root, { taskId: "0002" }), /ambiguous/);
   });
 
   it("runs preflight for a selected task", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await createTask(root, { id: "task-preflight", title: "Preflight test" });
+    await createTask(root, { id: "0001-preflight-test", title: "Preflight test" });
 
-    const report = await preflight(root, { action: "run", taskId: "task-preflight" });
+    const report = await preflight(root, { action: "run", taskId: "0001-preflight-test" });
 
     assert.equal(report.ok, true);
-    assert.equal(report.task?.id, "task-preflight");
+    assert.equal(report.task?.id, "0001-preflight-test");
+  });
+
+  it("resolves numeric task references in internal CLI commands", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await createTask(root, { id: "0001-cli-reference", title: "CLI reference" });
+
+    const cli = await runCli([
+      "internal",
+      "set-state",
+      "--root",
+      root,
+      "--task",
+      "0001",
+      "--phase",
+      "run",
+      "--next-action",
+      "Execute the implementation checklist"
+    ]);
+
+    assert.equal(cli.code, 0, cli.stderr);
+    assert.equal((await readTaskState(root, "0001-cli-reference")).phase, "run");
   });
 
   it("blocks clarification and planning when required task facts are missing", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await createTask(root, { id: "task-needs-input", title: "Needs input" });
+    await createTask(root, { id: "0001-needs-input", title: "Needs input" });
 
-    const clarify = await runWorkflowAction(root, "clarify", { taskId: "task-needs-input" });
+    const clarify = await runWorkflowAction(root, "clarify", { taskId: "0001-needs-input" });
 
     assert.equal(clarify.task?.lifecycle, "blocked");
     assert.equal(clarify.task?.phase, "clarify");
     assert.match(clarify.task?.blocked_reason ?? "", /goal/);
 
-    await updateTaskState(root, "task-needs-input", {
+    await updateTaskState(root, "0001-needs-input", {
       lifecycle: "open",
       blockedReason: null,
       phase: "plan",
       nextAction: "Try planning"
     });
-    const plan = await runWorkflowAction(root, "plan", { taskId: "task-needs-input" });
+    const plan = await runWorkflowAction(root, "plan", { taskId: "0001-needs-input" });
 
     assert.equal(plan.task?.lifecycle, "blocked");
     assert.equal(plan.task?.phase, "clarify");
@@ -798,20 +846,20 @@ describe("cw kernel", () => {
   it("creates and consumes a task-local resume note", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await createTask(root, { id: "task-resume", title: "Resume test" });
+    await createTask(root, { id: "0001-resume-test", title: "Resume test" });
 
-    const withResume = await createResumeNote(root, "task-resume", "# Resume\n\nContinue from check.\n", "User resumes work");
+    const withResume = await createResumeNote(root, "0001-resume-test", "# Resume\n\nContinue from check.\n", "User resumes work");
     assert.equal(withResume.artifacts.resume, "resume.md");
     assert.equal(withResume.resume_condition, "User resumes work");
     await assert.rejects(
-      createResumeNote(root, "task-resume", "# Resume\n\nSecond note.\n"),
+      createResumeNote(root, "0001-resume-test", "# Resume\n\nSecond note.\n"),
       /already has a resume note/
     );
 
-    const consumed = await consumeResumeNote(root, "task-resume");
+    const consumed = await consumeResumeNote(root, "0001-resume-test");
     assert.equal(consumed.artifacts.resume, null);
     assert.equal(consumed.resume_condition, null);
-    const stored = await readTaskState(root, "task-resume");
+    const stored = await readTaskState(root, "0001-resume-test");
     assert.equal(stored.artifacts.resume, null);
     assert.equal(stored.resume_condition, null);
   });
@@ -819,17 +867,17 @@ describe("cw kernel", () => {
   it("creates and syncs a baseline delta", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await createTask(root, { id: "task-baseline", title: "Baseline test" });
+    await createTask(root, { id: "0001-baseline-test", title: "Baseline test" });
 
-    const withDelta = await ensureBaselineDelta(root, "task-baseline");
+    const withDelta = await ensureBaselineDelta(root, "0001-baseline-test");
     assert.equal(withDelta.artifacts.baseline_delta, "baseline-delta.md");
     await writeFile(
-      path.join(root, ".cw/tasks/task-baseline/baseline-delta.md"),
+      path.join(root, ".cw/tasks/0001-baseline-test/baseline-delta.md"),
       "# Baseline Delta\n\n## commands.md\n\nRun `npm test` before finish.\n",
       "utf8"
     );
 
-    const result = await syncBaselineDelta(root, "task-baseline", "accepted");
+    const result = await syncBaselineDelta(root, "0001-baseline-test", "accepted");
     assert.deepEqual(result.updated, [".cw/project/commands.md"]);
     assert.match(await readFile(path.join(root, ".cw/project/commands.md"), "utf8"), /Run `npm test` before finish\./);
   });
@@ -838,82 +886,91 @@ describe("cw kernel", () => {
     const root = await tempRoot();
     await initProject(root);
 
-    await createTask(root, { id: "task-selected-baseline", title: "Selected baseline" });
-    await ensureBaselineDelta(root, "task-selected-baseline");
+    await createTask(root, { id: "0001-selected-baseline", title: "Selected baseline" });
+    await ensureBaselineDelta(root, "0001-selected-baseline");
     await writeFile(
-      path.join(root, ".cw/tasks/task-selected-baseline/baseline-delta.md"),
+      path.join(root, ".cw/tasks/0001-selected-baseline/baseline-delta.md"),
       "# Baseline Delta\n\n## commands.md\n\nUse `npm test`.\n\n## rules.md\n\nReview checklist before finish.\n",
       "utf8"
     );
-    const selected = await syncBaselineDelta(root, "task-selected-baseline", "selected", {
+    const selected = await syncBaselineDelta(root, "0001-selected-baseline", "selected", {
       selectedFiles: ["commands.md"]
     });
     assert.deepEqual(selected.updated, [".cw/project/commands.md"]);
     assert.doesNotMatch(await readFile(path.join(root, ".cw/project/rules.md"), "utf8"), /Review checklist/);
 
-    await createTask(root, { id: "task-edited-baseline", title: "Edited baseline" });
-    await ensureBaselineDelta(root, "task-edited-baseline");
-    const edited = await syncBaselineDelta(root, "task-edited-baseline", "edited", {
+    await createTask(root, { id: "0002-edited-baseline", title: "Edited baseline" });
+    await ensureBaselineDelta(root, "0002-edited-baseline");
+    const edited = await syncBaselineDelta(root, "0002-edited-baseline", "edited", {
       editedMarkdown: "# Baseline Delta\n\n## rules.md\n\nEdited baseline rule.\n"
     });
     assert.deepEqual(edited.updated, [".cw/project/rules.md"]);
     assert.match(await readFile(path.join(root, ".cw/project/rules.md"), "utf8"), /Edited baseline rule/);
 
-    await createTask(root, { id: "task-skipped-baseline", title: "Skipped baseline" });
-    await ensureBaselineDelta(root, "task-skipped-baseline");
-    const skipped = await syncBaselineDelta(root, "task-skipped-baseline", "skipped");
+    await createTask(root, { id: "0003-skipped-baseline", title: "Skipped baseline" });
+    await ensureBaselineDelta(root, "0003-skipped-baseline");
+    const skipped = await syncBaselineDelta(root, "0003-skipped-baseline", "skipped");
     assert.deepEqual(skipped.updated, []);
   });
 
   it("finishes a task only through the closure gate", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await createTask(root, { id: "task-finish", title: "Finish test" });
+    await createTask(root, { id: "0001-finish-test", title: "Finish test" });
 
     await assert.rejects(
-      updateTaskState(root, "task-finish", { lifecycle: "closed" }),
+      updateTaskState(root, "0001-finish-test", { lifecycle: "closed" }),
       /use finishTask/
     );
     await assert.rejects(
-      finishTask(root, "task-finish", { summary: "Done" }),
+      finishTask(root, "0001-finish-test", { summary: "Done" }),
       /closure gate failed/
     );
 
     await writeFile(
-      path.join(root, ".cw/tasks/task-finish/spec.md"),
+      path.join(root, ".cw/tasks/0001-finish-test/spec.md"),
       "# Spec\n\n## Acceptance Criteria\n- [x] Works\n",
       "utf8"
     );
     await writeFile(
-      path.join(root, ".cw/tasks/task-finish/task.md"),
+      path.join(root, ".cw/tasks/0001-finish-test/task.md"),
       "# Task\n\n## Implementation\n- [x] Implemented\n\n## Verification\n- [x] Tested\n\n## Check\n- [x] Acceptance criteria in spec.md are covered.\n",
       "utf8"
     );
-    await updateTaskState(root, "task-finish", {
+    await updateTaskState(root, "0001-finish-test", {
       phase: "finish",
       nextAction: "Run cw-finish after user confirmation"
     });
 
-    const finished = await finishTask(root, "task-finish", { summary: "Task finished" });
+    const finished = await finishTask(root, "0001-finish-test", { summary: "Task finished" });
     assert.equal(finished.lifecycle, "closed");
     assert.equal(finished.phase, "finish");
     assert.equal(finished.next_action, "Task is closed");
+    await assert.rejects(access(path.join(root, ".cw/tasks/0001-finish-test")));
+    assert.match(await readFile(path.join(root, ".cw/tasks/archived/0001-finish-test/task.json"), "utf8"), /"lifecycle": "closed"/);
+    assert.match(await readFile(path.join(root, ".cw/tasks/archived/0001-finish-test/trace.jsonl"), "utf8"), /task.finished/);
+    assert.deepEqual(await listTasks(root), []);
+    assert.deepEqual((await listTasks(root, { scope: "archived" })).map((task) => task.id), ["0001-finish-test"]);
+    assert.deepEqual(await validateProject(root), []);
+    await assert.rejects(selectTask(root, { taskId: "0001" }), /archived/);
+    const report = await preflight(root, { action: "work" });
+    assert.equal(report.task, null);
   });
 
   it("blocks finish when check records unresolved drift", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await runWorkflowAction(root, "work", { taskId: "task-drift", title: "Drift test" });
+    await runWorkflowAction(root, "work", { taskId: "0001-drift-test", title: "Drift test" });
     await runWorkflowAction(root, "clarify", {
-      taskId: "task-drift",
+      taskId: "0001-drift-test",
       goal: "Keep behavior aligned.",
       acceptance: ["Drift is resolved before finish"]
     });
-    await runWorkflowAction(root, "plan", { taskId: "task-drift" });
-    await runWorkflowAction(root, "run", { taskId: "task-drift", summary: "Implementation changed behavior." });
+    await runWorkflowAction(root, "plan", { taskId: "0001-drift-test" });
+    await runWorkflowAction(root, "run", { taskId: "0001-drift-test", summary: "Implementation changed behavior." });
 
     const check = await runWorkflowAction(root, "check", {
-      taskId: "task-drift",
+      taskId: "0001-drift-test",
       drift: true,
       summary: "Spec drift found."
     });
@@ -921,7 +978,7 @@ describe("cw kernel", () => {
     assert.equal(check.task?.phase, "check");
     assert.ok(check.task?.health_flags.includes("drift_suspected"));
     await assert.rejects(
-      runWorkflowAction(root, "finish", { taskId: "task-drift", summary: "Done" }),
+      runWorkflowAction(root, "finish", { taskId: "0001-drift-test", summary: "Done" }),
       /unresolved drift/
     );
   });
@@ -929,29 +986,29 @@ describe("cw kernel", () => {
   it("requires explicit confirmation before syncing high-impact baseline deltas during finish", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await runWorkflowAction(root, "work", { taskId: "task-high-impact", title: "High impact baseline" });
+    await runWorkflowAction(root, "work", { taskId: "0001-high-impact-baseline", title: "High impact baseline" });
     await runWorkflowAction(root, "clarify", {
-      taskId: "task-high-impact",
+      taskId: "0001-high-impact-baseline",
       goal: "Document an architecture fact.",
       acceptance: ["Architecture fact is documented"]
     });
-    await runWorkflowAction(root, "plan", { taskId: "task-high-impact" });
-    await runWorkflowAction(root, "run", { taskId: "task-high-impact", summary: "Architecture note prepared." });
+    await runWorkflowAction(root, "plan", { taskId: "0001-high-impact-baseline" });
+    await runWorkflowAction(root, "run", { taskId: "0001-high-impact-baseline", summary: "Architecture note prepared." });
     await runWorkflowAction(root, "check", {
-      taskId: "task-high-impact",
+      taskId: "0001-high-impact-baseline",
       summary: "Manual review passed.",
       manualVerification: "Reviewed architecture wording."
     });
-    await ensureBaselineDelta(root, "task-high-impact");
+    await ensureBaselineDelta(root, "0001-high-impact-baseline");
     await writeFile(
-      path.join(root, ".cw/tasks/task-high-impact/baseline-delta.md"),
+      path.join(root, ".cw/tasks/0001-high-impact-baseline/baseline-delta.md"),
       "# Baseline Delta\n\n## architecture.md\n\nArchitecture now documents the workflow kernel boundary.\n",
       "utf8"
     );
 
     await assert.rejects(
       runWorkflowAction(root, "finish", {
-        taskId: "task-high-impact",
+        taskId: "0001-high-impact-baseline",
         summary: "Done",
         decision: "accepted"
       }),
@@ -959,7 +1016,7 @@ describe("cw kernel", () => {
     );
 
     const finished = await runWorkflowAction(root, "finish", {
-      taskId: "task-high-impact",
+      taskId: "0001-high-impact-baseline",
       summary: "Done",
       decision: "accepted",
       confirmBaselineImpact: true
@@ -971,22 +1028,22 @@ describe("cw kernel", () => {
   it("discards a task only with explicit confirmation", async () => {
     const root = await tempRoot();
     await initProject(root);
-    await createTask(root, { id: "task-discard", title: "Discard test" });
+    await createTask(root, { id: "0001-discard-test", title: "Discard test" });
 
     await assert.rejects(
-      discardTask(root, "task-discard", { confirmed: false, worktreeHandling: "none" }),
+      discardTask(root, "0001-discard-test", { confirmed: false, worktreeHandling: "none" }),
       /confirmation/
     );
 
-    await discardTask(root, "task-discard", { confirmed: true, worktreeHandling: "none" });
-    await assert.rejects(access(path.join(root, ".cw/tasks/task-discard")));
+    await discardTask(root, "0001-discard-test", { confirmed: true, worktreeHandling: "none" });
+    await assert.rejects(access(path.join(root, ".cw/tasks/0001-discard-test")));
   });
 
   it("doctor reports malformed task state and stale generated skills", async () => {
     const root = await tempRoot();
     await initProject(root, { harnesses: ["codex"] });
-    await createTask(root, { id: "task-unhealthy", title: "Unhealthy task" });
-    const taskJsonPath = path.join(root, ".cw/tasks/task-unhealthy/task.json");
+    await createTask(root, { id: "0001-unhealthy-task", title: "Unhealthy task" });
+    const taskJsonPath = path.join(root, ".cw/tasks/0001-unhealthy-task/task.json");
     const state = JSON.parse(await readFile(taskJsonPath, "utf8")) as Record<string, unknown>;
     state.next_action = "";
     state.result = "done";
@@ -999,6 +1056,44 @@ describe("cw kernel", () => {
     assert.ok(report.issues.some((issue) => issue.path.endsWith("task.json.next_action")));
     assert.ok(report.issues.some((issue) => issue.path.endsWith("task.json.result")));
     assert.ok(report.warnings.some((warning) => warning.message.includes("stale")));
+  });
+
+  it("migrates legacy task directories to numeric ids and archives closed tasks", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await writeLegacyTask(root, {
+      id: "task-old-closed",
+      title: "Old closed",
+      lifecycle: "closed",
+      createdAt: "2026-07-03T01:00:00.000Z"
+    });
+    await writeLegacyTask(root, {
+      id: "task-old-open",
+      title: "Old open",
+      lifecycle: "open",
+      createdAt: "2026-07-03T02:00:00.000Z"
+    });
+
+    const result = await migrateTasks(root, new Date("2026-07-03T03:00:00.000Z"));
+
+    assert.deepEqual(result.migrated.map((item) => [item.from, item.to, item.to_location]), [
+      ["task-old-closed", "0001-old-closed", "archived"],
+      ["task-old-open", "0002-old-open", "active"]
+    ]);
+    await assert.rejects(access(path.join(root, ".cw/tasks/task-old-closed")));
+    await assert.rejects(access(path.join(root, ".cw/tasks/task-old-open")));
+    assert.equal(
+      (JSON.parse(await readFile(path.join(root, ".cw/tasks/archived/0001-old-closed/task.json"), "utf8")) as { id: string }).id,
+      "0001-old-closed"
+    );
+    assert.equal(
+      (JSON.parse(await readFile(path.join(root, ".cw/tasks/0002-old-open/task.json"), "utf8")) as { id: string }).id,
+      "0002-old-open"
+    );
+    assert.match(await readFile(path.join(root, ".cw/tasks/archived/0001-old-closed/trace.jsonl"), "utf8"), /task.migrated/);
+    assert.deepEqual((await listTasks(root)).map((task) => task.id), ["0002-old-open"]);
+    assert.deepEqual((await listTasks(root, { scope: "archived" })).map((task) => task.id), ["0001-old-closed"]);
+    assert.deepEqual(await validateProject(root), []);
   });
 
   it("understand writes drafts without directly overwriting project baseline files", async () => {
@@ -1029,24 +1124,24 @@ describe("cw kernel", () => {
     assert.deepEqual(init.adapters, []);
 
     const work = await runWorkflowAction(root, "work", {
-      taskId: "task-create-readme",
+      taskId: "0001-create-readme",
       title: "Create README"
     });
     assert.equal(work.task?.phase, "clarify");
 
     const clarify = await runWorkflowAction(root, "clarify", {
-      taskId: "task-create-readme",
+      taskId: "0001-create-readme",
       goal: "Create a README file for the fixture project.",
       scope: "Add concise project documentation.",
       acceptance: ["README.md exists", "README explains how to test"]
     });
     assert.equal(clarify.task?.phase, "plan");
 
-    const plan = await runWorkflowAction(root, "plan", { taskId: "task-create-readme" });
+    const plan = await runWorkflowAction(root, "plan", { taskId: "0001-create-readme" });
     assert.equal(plan.task?.phase, "run");
 
     const run = await runWorkflowAction(root, "run", {
-      taskId: "task-create-readme",
+      taskId: "0001-create-readme",
       summary: "README.md created.",
       writeFile: "README.md",
       content: "# Fixture\n\nRun `npm test`.\n"
@@ -1055,21 +1150,21 @@ describe("cw kernel", () => {
     assert.match(await readFile(path.join(root, "README.md"), "utf8"), /Run `npm test`/);
 
     const check = await runWorkflowAction(root, "check", {
-      taskId: "task-create-readme",
+      taskId: "0001-create-readme",
       summary: "README.md reviewed against spec.",
       commands: ["test -f README.md"]
     });
     assert.equal(check.task?.phase, "finish");
     assert.deepEqual((check.details?.commands as Array<{ command: string }>).map((result) => result.command), ["test -f README.md"]);
 
-    await ensureBaselineDelta(root, "task-create-readme");
+    await ensureBaselineDelta(root, "0001-create-readme");
     await writeFile(
-      path.join(root, ".cw/tasks/task-create-readme/baseline-delta.md"),
+      path.join(root, ".cw/tasks/0001-create-readme/baseline-delta.md"),
       "# Baseline Delta\n\n## commands.md\n\nUse `npm test` to verify fixture behavior.\n",
       "utf8"
     );
     const finish = await runWorkflowAction(root, "finish", {
-      taskId: "task-create-readme",
+      taskId: "0001-create-readme",
       summary: "README task complete.",
       decision: "accepted",
       dirtyWorktree: "covered"
@@ -1077,19 +1172,19 @@ describe("cw kernel", () => {
     assert.equal(finish.task?.lifecycle, "closed");
     assert.match(await readFile(path.join(root, ".cw/project/commands.md"), "utf8"), /verify fixture behavior/);
 
-    await createTask(root, { id: "task-resume-flow", title: "Resume flow" });
-    await createResumeNote(root, "task-resume-flow", "# Resume\n\nContinue.\n");
-    const resume = await runWorkflowAction(root, "resume", { taskId: "task-resume-flow" });
+    await createTask(root, { id: "0002-resume-flow", title: "Resume flow" });
+    await createResumeNote(root, "0002-resume-flow", "# Resume\n\nContinue.\n");
+    const resume = await runWorkflowAction(root, "resume", { taskId: "0002-resume-flow" });
     assert.equal(resume.task?.artifacts.resume, null);
 
-    await createTask(root, { id: "task-discard-flow", title: "Discard flow" });
+    await createTask(root, { id: "0003-discard-flow", title: "Discard flow" });
     const discard = await runWorkflowAction(root, "discard", {
-      taskId: "task-discard-flow",
+      taskId: "0003-discard-flow",
       confirm: true,
       worktreeHandling: "none"
     });
     assert.equal(discard.task, null);
-    await assert.rejects(access(path.join(root, ".cw/tasks/task-discard-flow")));
+    await assert.rejects(access(path.join(root, ".cw/tasks/0003-discard-flow")));
 
     const understand = await runWorkflowAction(root, "understand");
     assert.equal(understand.details?.draft_dir, ".cw/understand-draft");
@@ -1163,4 +1258,42 @@ async function readTrace(root: string, taskId: string): Promise<Array<Record<str
     .split(/\r?\n/)
     .filter(Boolean)
     .map((line) => JSON.parse(line) as Record<string, unknown>);
+}
+
+async function writeLegacyTask(
+  root: string,
+  input: { id: string; title: string; lifecycle: "open" | "closed"; createdAt: string }
+): Promise<void> {
+  const dir = path.join(root, ".cw/tasks", input.id);
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, "spec.md"), "# Spec\n", "utf8");
+  await writeFile(path.join(dir, "plan.md"), "# Plan\n", "utf8");
+  await writeFile(path.join(dir, "task.md"), "# Task\n", "utf8");
+  await writeFile(path.join(dir, "trace.jsonl"), "", "utf8");
+  await writeFile(
+    path.join(dir, "task.json"),
+    `${JSON.stringify({
+      id: input.id,
+      title: input.title,
+      lifecycle: input.lifecycle,
+      phase: input.lifecycle === "closed" ? "finish" : "run",
+      next_action: input.lifecycle === "closed" ? "Task is closed" : "Execute implementation",
+      health_flags: [],
+      artifacts: {
+        spec: "spec.md",
+        plan: "plan.md",
+        task: "task.md",
+        baseline_delta: null,
+        resume: null
+      },
+      invalidated_artifacts: [],
+      blocked_reason: null,
+      parked_reason: null,
+      resume_condition: null,
+      created_at: input.createdAt,
+      updated_at: input.createdAt,
+      schema_version: 1
+    }, null, 2)}\n`,
+    "utf8"
+  );
 }
