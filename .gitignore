@@ -2,3 +2,6 @@
 node_modules/
 dist/
 coverage/
+.learnings/
+DESIGN.md
+.codebase-memory/
