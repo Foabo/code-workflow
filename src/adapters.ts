@@ -124,6 +124,7 @@ const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>
     "`cw-work` is the routine progress command. Repeated `/cw-work` calls should be enough to advance ordinary work through clarify, plan, run, and check.",
     "The executable `work` helper creates or selects the task and returns actionable status. The generated skill performs the judgment-heavy orchestration: questioning, planning, code edits, verification, and review.",
     "Use task truth to choose the next responsibility: clarify means challenge and accept the task contract, plan means create or repair plan.md and task.md, run means execute unchecked implementation items, check means verify and review evidence, and finish means stop before closure.",
+    "Delegation may help with implementation or checking only when the harness, tools, and user or environment permission allow it; otherwise route phases and perform the same responsibilities inline.",
     "Do not close tasks from `cw-work`. When the task is ready for finish, summarize the closure readiness and ask whether to run `cw-finish`.",
     "If the phase, artifacts, or user request conflict, stop and resolve the conflict through the matching phase guidance before making code changes."
   ],
@@ -150,7 +151,8 @@ const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>
   "cw-run": [
     "Run executes the accepted task contract. Do not expand product behavior or implementation scope beyond spec.md and plan.md without user confirmation.",
     "Behavior changes require test evidence by default. Use red-green TDD when a clear public seam exists; use commands, fixtures, snapshots, file checks, or manual review when those are the right evidence.",
-    "Subagents are optional. Use them for independent vertical slices when the harness supports delegation; continue inline when unavailable.",
+    "Use delegated implementers for independent vertical slices only when the harness, tools, and user or environment permission allow delegation; otherwise implement the same checklist items inline.",
+    "Delegated implementers may write code and update checklist progress, but they must not close tasks or decide requirement drift.",
     "Domain modeling is optional. Use it only when terms or stable reusable project concepts change; otherwise record task-local terms in spec.md or task.md.",
     "External TDD, domain modeling, implement, Superpowers, or subagent skills may help when installed, but this generated guidance is sufficient to proceed without them."
   ],
@@ -159,6 +161,7 @@ const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>
     "Implementation evidence review maps every acceptance criterion to evidence in task.md Verification or Check entries. Evidence can be tests, commands, file checks, CI/CD or test-environment notes, or manual verification.",
     "CI/CD or test-environment evidence states environment, action, and result without relying on commit identity.",
     "Small local defects may be fixed during check when the accepted spec.md contract is unchanged. Changes to spec.md or out-of-scope implementation behavior return to clarify for user confirmation.",
+    "Use an independent reviewer for broad, behaviorally large, or workflow-semantics changes only when the harness, tools, and user or environment permission allow delegation; otherwise perform the same artifact and evidence review inline.",
     "Run a final broad review when the change is cross-cutting, behaviorally large, or touches workflow semantics shared by multiple commands."
   ],
   "cw-finish": [
@@ -190,6 +193,13 @@ const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>
     "Do not promote task-local plans, aspirations, or one-off implementation details into Project Baseline."
   ]
 };
+
+const executionStrategyCommands = new Set<(typeof AGENT_COMMANDS)[number]>([
+  "cw-work",
+  "cw-plan",
+  "cw-run",
+  "cw-check"
+]);
 
 export async function generateAdapter(
   root: string,
@@ -264,18 +274,9 @@ ${commandPurposes[command]}
 - Use cw internal helpers for deterministic task state changes and trace events.
 - Keep edits scoped to the current workflow action.
 - Stop for user judgment when requirements, product behavior, destructive worktree handling, workflow overrides, or baseline promotion need confirmation.
-- If a subagent, skill, hook, MCP tool, or code intelligence tool is unavailable, continue inline when responsible.
+- Inline execution must remain complete; if optional helpers are unavailable, continue inline when responsible.
 
-## Execution Strategy Guidance
-
-- Inline execution is fully supported and must remain complete.
-- Subagent use requires harness support, available tools, and user or environment permission. If delegation is unavailable or unauthorized, continue inline with the same responsibilities.
-- Hybrid execution is recommended when delegation is supported and allowed: keep coordination in the main session while delegating implementation or checking.
-- Subagents receive task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
-- Implementer subagents may write code and update checklist progress, but must not close tasks.
-- Checker subagents must return spec drift or product behavior changes to the main session for user confirmation.
-
-## Workflow Steps
+${renderExecutionStrategyGuidance(command)}## Workflow Steps
 
 ${commandSteps[command].map((step, index) => `${index + 1}. ${step}`).join("\n")}${renderCommandGuidance(command)}
 
@@ -295,6 +296,21 @@ ${commandSteps[command].map((step, index) => `${index + 1}. ${step}`).join("\n")
 - cw internal ensure-baseline-delta --task <task-id>
 - cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped
 - cw internal consume-resume --task <task-id>
+`;
+}
+
+function renderExecutionStrategyGuidance(command: (typeof AGENT_COMMANDS)[number]): string {
+  if (!executionStrategyCommands.has(command)) {
+    return "";
+  }
+
+  return `## Execution Strategy Guidance
+
+- Inline execution is fully supported and must remain complete.
+- Delegation is optional and permission-bound; continue inline when delegation is unavailable or unauthorized.
+- Delegated work receives task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
+- Delegated agents must not close tasks; closure decisions and unresolved drift return to the main session.
+
 `;
 }
 

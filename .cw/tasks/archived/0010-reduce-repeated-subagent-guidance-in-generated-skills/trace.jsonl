@@ -1,0 +1,17 @@
+{"ts":"2026-07-05T07:19:43.131Z","type":"task.created","summary":"Task created: Reduce repeated subagent guidance in generated skills"}
+{"ts":"2026-07-05T07:22:18.882Z","type":"spec.accepted","summary":"Subagent guidance reduction spec accepted."}
+{"ts":"2026-07-05T07:22:22.897Z","type":"task.state.updated","summary":"phase clarify -> plan; next action updated"}
+{"ts":"2026-07-05T07:23:40.568Z","type":"plan.updated","summary":"Plan and executable checklist created for reducing repeated subagent guidance."}
+{"ts":"2026-07-05T07:23:45.985Z","type":"task.state.updated","summary":"phase plan -> run; next action updated"}
+{"ts":"2026-07-05T07:28:55.409Z","type":"run.updated","summary":"Reduced repeated common delegation guidance, moved detailed delegation rules to command-specific guidance, updated tests, and regenerated Codex skills."}
+{"ts":"2026-07-05T07:29:00.130Z","type":"task.state.updated","summary":"phase run -> check; next action updated"}
+{"ts":"2026-07-05T07:32:40.729Z","type":"task.state.updated","summary":"phase check -> clarify; next action updated"}
+{"ts":"2026-07-05T07:33:05.845Z","type":"clarify.updated","summary":"Expanded task to conditionally generate Execution Strategy Guidance only for commands with strategy choices."}
+{"ts":"2026-07-05T07:33:12.161Z","type":"task.state.updated","summary":"phase clarify -> plan; next action updated"}
+{"ts":"2026-07-05T07:36:16.288Z","type":"plan.updated","summary":"Updated plan and checklist for conditional Execution Strategy Guidance generation."}
+{"ts":"2026-07-05T07:36:21.262Z","type":"task.state.updated","summary":"phase plan -> run; next action updated"}
+{"ts":"2026-07-05T07:42:51.316Z","type":"run.updated","summary":"Implemented conditional Execution Strategy Guidance generation, updated tests, regenerated Codex skills, and passed deterministic verification."}
+{"ts":"2026-07-05T07:42:55.006Z","type":"task.state.updated","summary":"phase run -> check; next action updated"}
+{"ts":"2026-07-05T07:46:50.014Z","type":"check.passed","summary":"Check passed for conditional Execution Strategy Guidance generation; deterministic verification and artifact alignment review passed."}
+{"ts":"2026-07-05T07:46:53.217Z","type":"task.state.updated","summary":"phase check -> finish; next action updated"}
+{"ts":"2026-07-05T07:50:35.531Z","type":"task.finished","summary":"Closed 0010 after conditional Execution Strategy Guidance generation, regenerated Codex skills, tests, and check review passed. Dirty worktree changes for 0010 are covered; unrelated 0011 task directory remains untouched.","data":{"baseline_decision":"none","dirty_worktree_handling":"covered"}}

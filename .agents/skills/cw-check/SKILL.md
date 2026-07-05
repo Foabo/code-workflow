@@ -27,16 +27,14 @@ Run verification and review, reconcile drift, and update task.md before finish i
 - Use cw internal helpers for deterministic task state changes and trace events.
 - Keep edits scoped to the current workflow action.
 - Stop for user judgment when requirements, product behavior, destructive worktree handling, workflow overrides, or baseline promotion need confirmation.
-- If a subagent, skill, hook, MCP tool, or code intelligence tool is unavailable, continue inline when responsible.
+- Inline execution must remain complete; if optional helpers are unavailable, continue inline when responsible.
 
 ## Execution Strategy Guidance
 
 - Inline execution is fully supported and must remain complete.
-- Subagent use requires harness support, available tools, and user or environment permission. If delegation is unavailable or unauthorized, continue inline with the same responsibilities.
-- Hybrid execution is recommended when delegation is supported and allowed: keep coordination in the main session while delegating implementation or checking.
-- Subagents receive task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
-- Implementer subagents may write code and update checklist progress, but must not close tasks.
-- Checker subagents must return spec drift or product behavior changes to the main session for user confirmation.
+- Delegation is optional and permission-bound; continue inline when delegation is unavailable or unauthorized.
+- Delegated work receives task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
+- Delegated agents must not close tasks; closure decisions and unresolved drift return to the main session.
 
 ## Workflow Steps
 
@@ -57,6 +55,7 @@ Run verification and review, reconcile drift, and update task.md before finish i
 - Implementation evidence review maps every acceptance criterion to evidence in task.md Verification or Check entries. Evidence can be tests, commands, file checks, CI/CD or test-environment notes, or manual verification.
 - CI/CD or test-environment evidence states environment, action, and result without relying on commit identity.
 - Small local defects may be fixed during check when the accepted spec.md contract is unchanged. Changes to spec.md or out-of-scope implementation behavior return to clarify for user confirmation.
+- Use an independent reviewer for broad, behaviorally large, or workflow-semantics changes only when the harness, tools, and user or environment permission allow delegation; otherwise perform the same artifact and evidence review inline.
 - Run a final broad review when the change is cross-cutting, behaviorally large, or touches workflow semantics shared by multiple commands.
 
 

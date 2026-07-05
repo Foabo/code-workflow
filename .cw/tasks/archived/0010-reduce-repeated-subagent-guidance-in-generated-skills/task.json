@@ -1,0 +1,22 @@
+{
+  "id": "0010-reduce-repeated-subagent-guidance-in-generated-skills",
+  "title": "Reduce repeated subagent guidance in generated skills",
+  "lifecycle": "closed",
+  "phase": "finish",
+  "next_action": "Task is closed",
+  "health_flags": [],
+  "artifacts": {
+    "spec": "spec.md",
+    "plan": "plan.md",
+    "task": "task.md",
+    "baseline_delta": null,
+    "resume": null
+  },
+  "invalidated_artifacts": [],
+  "blocked_reason": null,
+  "parked_reason": null,
+  "resume_condition": null,
+  "created_at": "2026-07-05T07:19:43.131Z",
+  "updated_at": "2026-07-05T07:50:35.531Z",
+  "schema_version": 1
+}

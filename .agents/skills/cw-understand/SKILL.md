@@ -27,16 +27,7 @@ Draft project baseline updates for an existing repository, then ask the user wha
 - Use cw internal helpers for deterministic task state changes and trace events.
 - Keep edits scoped to the current workflow action.
 - Stop for user judgment when requirements, product behavior, destructive worktree handling, workflow overrides, or baseline promotion need confirmation.
-- If a subagent, skill, hook, MCP tool, or code intelligence tool is unavailable, continue inline when responsible.
-
-## Execution Strategy Guidance
-
-- Inline execution is fully supported and must remain complete.
-- Subagent use requires harness support, available tools, and user or environment permission. If delegation is unavailable or unauthorized, continue inline with the same responsibilities.
-- Hybrid execution is recommended when delegation is supported and allowed: keep coordination in the main session while delegating implementation or checking.
-- Subagents receive task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
-- Implementer subagents may write code and update checklist progress, but must not close tasks.
-- Checker subagents must return spec drift or product behavior changes to the main session for user confirmation.
+- Inline execution must remain complete; if optional helpers are unavailable, continue inline when responsible.
 
 ## Workflow Steps
 

@@ -27,16 +27,14 @@ Execute the next checklist items from task.md, modify repository code, update pr
 - Use cw internal helpers for deterministic task state changes and trace events.
 - Keep edits scoped to the current workflow action.
 - Stop for user judgment when requirements, product behavior, destructive worktree handling, workflow overrides, or baseline promotion need confirmation.
-- If a subagent, skill, hook, MCP tool, or code intelligence tool is unavailable, continue inline when responsible.
+- Inline execution must remain complete; if optional helpers are unavailable, continue inline when responsible.
 
 ## Execution Strategy Guidance
 
 - Inline execution is fully supported and must remain complete.
-- Subagent use requires harness support, available tools, and user or environment permission. If delegation is unavailable or unauthorized, continue inline with the same responsibilities.
-- Hybrid execution is recommended when delegation is supported and allowed: keep coordination in the main session while delegating implementation or checking.
-- Subagents receive task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
-- Implementer subagents may write code and update checklist progress, but must not close tasks.
-- Checker subagents must return spec drift or product behavior changes to the main session for user confirmation.
+- Delegation is optional and permission-bound; continue inline when delegation is unavailable or unauthorized.
+- Delegated work receives task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
+- Delegated agents must not close tasks; closure decisions and unresolved drift return to the main session.
 
 ## Workflow Steps
 
@@ -55,7 +53,8 @@ Execute the next checklist items from task.md, modify repository code, update pr
 
 - Run executes the accepted task contract. Do not expand product behavior or implementation scope beyond spec.md and plan.md without user confirmation.
 - Behavior changes require test evidence by default. Use red-green TDD when a clear public seam exists; use commands, fixtures, snapshots, file checks, or manual review when those are the right evidence.
-- Subagents are optional. Use them for independent vertical slices when the harness supports delegation; continue inline when unavailable.
+- Use delegated implementers for independent vertical slices only when the harness, tools, and user or environment permission allow delegation; otherwise implement the same checklist items inline.
+- Delegated implementers may write code and update checklist progress, but they must not close tasks or decide requirement drift.
 - Domain modeling is optional. Use it only when terms or stable reusable project concepts change; otherwise record task-local terms in spec.md or task.md.
 - External TDD, domain modeling, implement, Superpowers, or subagent skills may help when installed, but this generated guidance is sufficient to proceed without them.
 

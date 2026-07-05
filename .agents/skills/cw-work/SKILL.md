@@ -27,16 +27,14 @@ Default task progress action. Create or select a task, advance the next responsi
 - Use cw internal helpers for deterministic task state changes and trace events.
 - Keep edits scoped to the current workflow action.
 - Stop for user judgment when requirements, product behavior, destructive worktree handling, workflow overrides, or baseline promotion need confirmation.
-- If a subagent, skill, hook, MCP tool, or code intelligence tool is unavailable, continue inline when responsible.
+- Inline execution must remain complete; if optional helpers are unavailable, continue inline when responsible.
 
 ## Execution Strategy Guidance
 
 - Inline execution is fully supported and must remain complete.
-- Subagent use requires harness support, available tools, and user or environment permission. If delegation is unavailable or unauthorized, continue inline with the same responsibilities.
-- Hybrid execution is recommended when delegation is supported and allowed: keep coordination in the main session while delegating implementation or checking.
-- Subagents receive task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
-- Implementer subagents may write code and update checklist progress, but must not close tasks.
-- Checker subagents must return spec drift or product behavior changes to the main session for user confirmation.
+- Delegation is optional and permission-bound; continue inline when delegation is unavailable or unauthorized.
+- Delegated work receives task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
+- Delegated agents must not close tasks; closure decisions and unresolved drift return to the main session.
 
 ## Workflow Steps
 
@@ -54,6 +52,7 @@ Default task progress action. Create or select a task, advance the next responsi
 - `cw-work` is the routine progress command. Repeated `/cw-work` calls should be enough to advance ordinary work through clarify, plan, run, and check.
 - The executable `work` helper creates or selects the task and returns actionable status. The generated skill performs the judgment-heavy orchestration: questioning, planning, code edits, verification, and review.
 - Use task truth to choose the next responsibility: clarify means challenge and accept the task contract, plan means create or repair plan.md and task.md, run means execute unchecked implementation items, check means verify and review evidence, and finish means stop before closure.
+- Delegation may help with implementation or checking only when the harness, tools, and user or environment permission allow it; otherwise route phases and perform the same responsibilities inline.
 - Do not close tasks from `cw-work`. When the task is ready for finish, summarize the closure readiness and ask whether to run `cw-finish`.
 - If the phase, artifacts, or user request conflict, stop and resolve the conflict through the matching phase guidance before making code changes.
 
