@@ -81,6 +81,17 @@ describe("cw kernel", () => {
     assert.match(skill, /cw preflight --action work/);
     assert.match(skill, /Implementer subagents may write code/);
     assert.match(skill, /Checker subagents must return spec drift/);
+    const clarifySkill = await readFile(path.join(root, ".agents/skills/cw-clarify/SKILL.md"), "utf8");
+    assert.match(clarifySkill, /strict requirements review/);
+    assert.match(clarifySkill, /light mode/);
+    assert.match(clarifySkill, /Expand only when/);
+    assert.match(clarifySkill, /Grill after/);
+    assert.match(clarifySkill, /Proposed Spec/);
+    const planSkill = await readFile(path.join(root, ".agents/skills/cw-plan/SKILL.md"), "utf8");
+    assert.match(planSkill, /spec quality gate/);
+    assert.match(planSkill, /Do not modify spec\.md during planning/);
+    assert.match(planSkill, /one concrete next question/);
+    assert.match(planSkill, /vertical slices/);
 
     await writeFile(path.join(root, ".agents/skills/cw-work/SKILL.md"), "stale", "utf8");
     const staleReport = await doctorProject(root);
@@ -840,7 +851,32 @@ describe("cw kernel", () => {
 
     assert.equal(plan.task?.lifecycle, "blocked");
     assert.equal(plan.task?.phase, "clarify");
-    assert.match(plan.task?.blocked_reason ?? "", /spec/);
+    assert.match(plan.task?.blocked_reason ?? "", /spec quality gate/);
+    assert.match(plan.task?.next_action ?? "", /concrete outcome/);
+  });
+
+  it("blocks planning with a concrete next question when acceptance criteria are missing", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await createTask(root, { id: "0001-missing-acceptance", title: "Missing acceptance" });
+    await writeFile(
+      path.join(root, ".cw/tasks/0001-missing-acceptance/spec.md"),
+      "# Spec\n\n## Goal\n\nCreate a README file.\n\n## Scope\n\nAdd project documentation.\n\n## Non-goals\n\n\n## Constraints\n\n\n## Decisions\n\n\n## Acceptance Criteria\n",
+      "utf8"
+    );
+    await updateTaskState(root, "0001-missing-acceptance", {
+      lifecycle: "open",
+      blockedReason: null,
+      phase: "plan",
+      nextAction: "Try planning"
+    });
+
+    const plan = await runWorkflowAction(root, "plan", { taskId: "0001-missing-acceptance" });
+
+    assert.equal(plan.task?.lifecycle, "blocked");
+    assert.equal(plan.task?.phase, "clarify");
+    assert.match(plan.task?.blocked_reason ?? "", /Acceptance Criteria/);
+    assert.match(plan.task?.next_action ?? "", /observable result/);
   });
 
   it("creates and consumes a task-local resume note", async () => {
@@ -1139,6 +1175,10 @@ describe("cw kernel", () => {
 
     const plan = await runWorkflowAction(root, "plan", { taskId: "0001-create-readme" });
     assert.equal(plan.task?.phase, "run");
+    assert.match(
+      await readFile(path.join(root, ".cw/tasks/0001-create-readme/task.md"), "utf8"),
+      /small, verifiable vertical slices/
+    );
 
     const run = await runWorkflowAction(root, "run", {
       taskId: "0001-create-readme",

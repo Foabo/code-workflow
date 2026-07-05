@@ -19,8 +19,8 @@ export const GENERATED_MARKER = "<!-- generated-by-cw:v1 -->";
 
 const commandPurposes: Record<(typeof AGENT_COMMANDS)[number], string> = {
   "cw-work": "Default task progress action. Create or select a task, advance the next responsible phase, run check when appropriate, then stop before finish.",
-  "cw-clarify": "Clarify the task contract and update spec.md with user-confirmed goal, scope, constraints, decisions, and acceptance criteria.",
-  "cw-plan": "Read the accepted spec and project baseline, then update plan.md and task.md without writing implementation code.",
+  "cw-clarify": "Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md with the accepted task contract.",
+  "cw-plan": "Apply the spec quality gate, then turn accepted spec.md into plan.md and task.md without changing the spec.",
   "cw-run": "Execute the next checklist items from task.md, modify repository code, update progress, and append trace events through helpers.",
   "cw-check": "Run verification and review, reconcile drift, and update task.md before finish is allowed.",
   "cw-finish": "Run the closure gate, handle dirty worktree state, sync accepted baseline delta, consume resume notes, and close the task.",
@@ -45,15 +45,18 @@ const commandSteps: Record<(typeof AGENT_COMMANDS)[number], string[]> = {
   "cw-clarify": [
     "Run `cw preflight --action clarify --task <task-id>` when a task id is known.",
     "Read the current spec.md and relevant project baseline files.",
+    "Choose strict or light clarify behavior using the Phase Guidance below.",
     "Ask only the questions needed to settle goal, scope, non-goals, constraints, decisions, and acceptance criteria.",
-    "Edit spec.md with the accepted task contract.",
+    "Present a short Proposed Spec and wait for user confirmation before editing spec.md.",
+    "Edit spec.md only with the accepted task contract.",
     "Run `cw internal set-state --task <task-id> --phase plan --next-action <text>` when the spec is accepted.",
     "If required information is missing, run `cw internal set-state --task <task-id> --lifecycle blocked --phase clarify --blocked-reason <reason> --next-action <text>`."
   ],
   "cw-plan": [
     "Run `cw preflight --action plan --task <task-id>`.",
     "Read spec.md and relevant project baseline files.",
-    "If the spec is unclear, return to cw-clarify behavior.",
+    "Apply the spec quality gate described below.",
+    "If the spec quality gate fails, return to cw-clarify behavior with one concrete next question.",
     "Edit plan.md with the implementation approach, key decisions, risks, and validation strategy.",
     "Edit task.md with executable implementation, verification, and check items.",
     "Run `cw internal set-state --task <task-id> --phase run --next-action <text>`."
@@ -111,6 +114,24 @@ const commandSteps: Record<(typeof AGENT_COMMANDS)[number], string[]> = {
     "Draft candidate updates for .cw/project/overview.md, architecture.md, rules.md, and commands.md.",
     "Ask the user what to merge before editing project baseline files.",
     "After accepted edits, run `cw internal append-trace --task <task-id> --type baseline.updated --summary <summary>` only if this is tied to a task."
+  ]
+};
+
+const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>> = {
+  "cw-clarify": [
+    "Default to strict requirements review. Use light mode only when the user explicitly asks for fast handling, or when the task is low risk, goal-complete, reversible, and has obvious verification.",
+    "Escalate to strict mode when the request affects product behavior, workflow semantics, CLI/API behavior, task lifecycle, state machines, cross-module behavior, irreversible work, or unclear acceptance criteria.",
+    "Expand only when the user gives background or a loose desire instead of a clear target. Expand around user results, offer at most three candidate directions, and recommend one.",
+    "Grill after a candidate direction exists. Ask one important question at a time, include your recommended answer, and name the trade-off when it matters.",
+    "Clarification is complete only when the goal, boundary, acceptance criteria, and key risks are clear enough to write spec.md without high-risk assumptions.",
+    "Before writing spec.md, present a Proposed Spec using the existing sections: Goal, Scope, Non-goals, Constraints, Decisions, and Acceptance Criteria. Continue asking if any high-risk assumption remains.",
+    "Clarify terminology lightly. Task-local terms belong in spec.md; stable reusable project concepts may become baseline-delta.md candidates."
+  ],
+  "cw-plan": [
+    "The spec quality gate checks that Goal is concrete, Scope bounds the work, Acceptance Criteria are checkable, and Decisions cover product trade-offs that affect implementation.",
+    "Do not modify spec.md during planning. If the gate fails, block the task in clarify phase and provide one concrete next question in the blocked reason or next action.",
+    "Plan from the accepted contract. Implementation choices may be recorded in plan.md only when they stay inside the confirmed spec.",
+    "Break task.md implementation items into small, verifiable vertical slices. Keep file-level edits as implementation details, not primary checklist items."
   ]
 };
 
@@ -201,7 +222,7 @@ ${commandPurposes[command]}
 
 ## Workflow Steps
 
-${commandSteps[command].map((step, index) => `${index + 1}. ${step}`).join("\n")}
+${commandSteps[command].map((step, index) => `${index + 1}. ${step}`).join("\n")}${renderCommandGuidance(command)}
 
 ## Helper Commands
 
@@ -219,6 +240,19 @@ ${commandSteps[command].map((step, index) => `${index + 1}. ${step}`).join("\n")
 - cw internal ensure-baseline-delta --task <task-id>
 - cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped
 - cw internal consume-resume --task <task-id>
+`;
+}
+
+function renderCommandGuidance(command: (typeof AGENT_COMMANDS)[number]): string {
+  const guidance = commandGuidance[command];
+  if (guidance === undefined || guidance.length === 0) {
+    return "";
+  }
+  return `
+
+## Phase Guidance
+
+${guidance.map((item) => `- ${item}`).join("\n")}
 `;
 }
 

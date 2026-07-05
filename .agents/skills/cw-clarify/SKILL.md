@@ -1,6 +1,6 @@
 ---
 name: cw-clarify
-description: Clarify the task contract and update spec.md with user-confirmed goal, scope, constraints, decisions, and acceptance criteria.
+description: Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md with the accepted task contract.
 ---
 
 Use this skill when the user asks Codex to run `cw-clarify` or the matching CW workflow action in this repository.
@@ -11,7 +11,7 @@ Before acting, read the repository's `.cw` files relevant to the current task. T
 
 # cw-clarify
 
-Clarify the task contract and update spec.md with user-confirmed goal, scope, constraints, decisions, and acceptance criteria.
+Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md with the accepted task contract.
 
 ## Required Reading
 
@@ -43,10 +43,23 @@ Clarify the task contract and update spec.md with user-confirmed goal, scope, co
 
 1. Run `cw preflight --action clarify --task <task-id>` when a task id is known.
 2. Read the current spec.md and relevant project baseline files.
-3. Ask only the questions needed to settle goal, scope, non-goals, constraints, decisions, and acceptance criteria.
-4. Edit spec.md with the accepted task contract.
-5. Run `cw internal set-state --task <task-id> --phase plan --next-action <text>` when the spec is accepted.
-6. If required information is missing, run `cw internal set-state --task <task-id> --lifecycle blocked --phase clarify --blocked-reason <reason> --next-action <text>`.
+3. Choose strict or light clarify behavior using the Phase Guidance below.
+4. Ask only the questions needed to settle goal, scope, non-goals, constraints, decisions, and acceptance criteria.
+5. Present a short Proposed Spec and wait for user confirmation before editing spec.md.
+6. Edit spec.md only with the accepted task contract.
+7. Run `cw internal set-state --task <task-id> --phase plan --next-action <text>` when the spec is accepted.
+8. If required information is missing, run `cw internal set-state --task <task-id> --lifecycle blocked --phase clarify --blocked-reason <reason> --next-action <text>`.
+
+## Phase Guidance
+
+- Default to strict requirements review. Use light mode only when the user explicitly asks for fast handling, or when the task is low risk, goal-complete, reversible, and has obvious verification.
+- Escalate to strict mode when the request affects product behavior, workflow semantics, CLI/API behavior, task lifecycle, state machines, cross-module behavior, irreversible work, or unclear acceptance criteria.
+- Expand only when the user gives background or a loose desire instead of a clear target. Expand around user results, offer at most three candidate directions, and recommend one.
+- Grill after a candidate direction exists. Ask one important question at a time, include your recommended answer, and name the trade-off when it matters.
+- Clarification is complete only when the goal, boundary, acceptance criteria, and key risks are clear enough to write spec.md without high-risk assumptions.
+- Before writing spec.md, present a Proposed Spec using the existing sections: Goal, Scope, Non-goals, Constraints, Decisions, and Acceptance Criteria. Continue asking if any high-risk assumption remains.
+- Clarify terminology lightly. Task-local terms belong in spec.md; stable reusable project concepts may become baseline-delta.md candidates.
+
 
 ## Helper Commands
 

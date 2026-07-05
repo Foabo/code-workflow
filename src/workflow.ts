@@ -154,17 +154,18 @@ async function runPlan(root: string, options: WorkflowOptions): Promise<Workflow
   const task = await selected(root, options);
   await preflight(root, { action: "plan", taskId: task.id });
   const spec = await readFile(path.join(taskDir(root, task.id), task.artifacts.spec), "utf8");
-  if (!hasSectionContent(spec, "Goal") || hasUncheckedCheckbox(spec)) {
+  const specIssue = specQualityIssue(spec);
+  if (specIssue !== null) {
     const blocked = await updateTaskState(root, task.id, {
       lifecycle: "blocked",
       phase: "clarify",
-      blockedReason: "Task spec is not accepted or lacks a goal.",
-      nextAction: "Clarify and accept spec.md before planning"
+      blockedReason: `Task spec quality gate failed: ${specIssue.reason}`,
+      nextAction: specIssue.question
     });
     await appendTrace(root, task.id, {
       ts: blocked.updated_at,
       type: "plan.blocked",
-      summary: "Planning blocked because spec.md is insufficient."
+      summary: `Planning blocked because spec.md is insufficient: ${specIssue.reason}`
     });
     return { action: "plan", task: blocked, message: `Planning blocked for ${task.id}.` };
   }
@@ -489,7 +490,9 @@ function renderPlan(goal: string): string {
 
 ## Approach
 
-Implement the accepted task goal: ${goal}
+Plan from the accepted task goal: ${goal}
+
+Break implementation into small, verifiable vertical slices that stay within spec.md.
 
 ## Key Decisions
 
@@ -505,7 +508,7 @@ function renderTask(): string {
   return `# Task
 
 ## Implementation
-- [ ] Implement the accepted plan.
+- [ ] Implement the accepted plan as small, verifiable vertical slices.
 
 ## Verification
 - [ ] Run relevant verification commands.
@@ -537,12 +540,62 @@ function checkSection(markdown: string, section: string): string {
 }
 
 function extractSection(markdown: string, section: string): string | null {
-  const match = new RegExp(`## ${section}\\n\\n([\\s\\S]*?)(\\n## |$)`).exec(markdown);
-  return match?.[1]?.trim() || null;
+  const lines = markdown.split(/\r?\n/);
+  const collected: string[] = [];
+  let inside = false;
+  for (const line of lines) {
+    if (line.startsWith("## ")) {
+      if (inside) {
+        break;
+      }
+      inside = line.trim() === `## ${section}`;
+      continue;
+    }
+    if (inside) {
+      collected.push(line);
+    }
+  }
+  return collected.join("\n").trim() || null;
 }
 
 function hasSectionContent(markdown: string, section: string): boolean {
   return (extractSection(markdown, section) ?? "").trim().length > 0;
+}
+
+function specQualityIssue(markdown: string): { reason: string; question: string } | null {
+  if (!hasSectionContent(markdown, "Goal")) {
+    return {
+      reason: "spec.md is missing a concrete Goal.",
+      question: "What concrete outcome should this task achieve?"
+    };
+  }
+  if (!hasSectionContent(markdown, "Scope")) {
+    return {
+      reason: "spec.md is missing Scope that bounds the work.",
+      question: "What is included in this task, and what should stay out of scope?"
+    };
+  }
+  if (hasUncheckedCheckbox(markdown)) {
+    return {
+      reason: "spec.md still has unchecked placeholder checklist items.",
+      question: "Which acceptance criteria are confirmed and checkable?"
+    };
+  }
+  if (!hasCheckedAcceptanceCriterion(markdown)) {
+    return {
+      reason: "spec.md is missing confirmed Acceptance Criteria.",
+      question: "What observable result, command, file change, or behavior proves this task is complete?"
+    };
+  }
+  return null;
+}
+
+function hasCheckedAcceptanceCriterion(markdown: string): boolean {
+  const section = extractSection(markdown, "Acceptance Criteria");
+  if (section === null) {
+    return false;
+  }
+  return section.split(/\r?\n/).some((line) => /^- \[x\] \S/.test(line.trim()));
 }
 
 function hasUncheckedCheckbox(markdown: string): boolean {
