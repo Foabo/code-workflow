@@ -7,8 +7,6 @@ Use this skill when the user asks Codex to run `cw-resume` or the matching CW wo
 
 Before acting, read the repository's `.cw` files relevant to the current task. Treat `.cw` as Repo Truth, generated skills as invocation surfaces, and Git as the source of truth for code changes.
 
-<!-- generated-by-cw:v1 -->
-
 # cw-resume
 
 Use a task-local resume.md only when the user explicitly asks to resume from it, then consume it after progress is recorded.

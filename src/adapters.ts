@@ -15,8 +15,6 @@ export type AdapterOptions = {
   overwrite?: boolean;
 };
 
-export const GENERATED_MARKER = "<!-- generated-by-cw:v1 -->";
-
 const commandPurposes: Record<(typeof AGENT_COMMANDS)[number], string> = {
   "cw-work": "Default task progress action. Create or select a task, advance the next responsible phase, run check when appropriate, then stop before finish.",
   "cw-clarify": "Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md with the accepted task contract.",
@@ -45,7 +43,7 @@ const commandSteps: Record<(typeof AGENT_COMMANDS)[number], string[]> = {
   "cw-clarify": [
     "Run `cw preflight --action clarify --task <task-id>` when a task id is known.",
     "Read the current spec.md and relevant project baseline files.",
-    "Choose strict or light clarify behavior using the Phase Guidance below.",
+    "Apply the clarify quality gate described below.",
     "Ask only the questions needed to settle goal, scope, non-goals, constraints, decisions, and acceptance criteria.",
     "Present a short Proposed Spec and wait for user confirmation before editing spec.md.",
     "Edit spec.md only with the accepted task contract.",
@@ -59,12 +57,15 @@ const commandSteps: Record<(typeof AGENT_COMMANDS)[number], string[]> = {
     "If the spec quality gate fails, return to cw-clarify behavior with one concrete next question.",
     "Edit plan.md with the implementation approach, key decisions, risks, and validation strategy.",
     "Edit task.md with executable implementation, verification, and check items.",
+    "Run a post-plan artifact cross-review of spec.md, plan.md, and task.md before moving to run.",
     "Run `cw internal set-state --task <task-id> --phase run --next-action <text>`."
   ],
   "cw-run": [
     "Run `cw preflight --action run --task <task-id>`.",
     "Read spec.md, plan.md, task.md, and relevant code.",
-    "Implement the next unchecked implementation items in task.md.",
+    "Implement the next unchecked task.md items against the accepted spec.md and plan.md contract.",
+    "Stop for user confirmation when work reveals requirement drift, plan contradiction, or product behavior outside scope.",
+    "Add or update tests by default for behavior, workflow semantics, CLI/API behavior, state transitions, parsing, validation, and error handling.",
     "For simple file creation or replacement tasks, the executable shim may be called with `cw-run --task <task-id> --write-file <path> --content <text>`.",
     "Update task.md checklist progress.",
     "Record material progress with `cw internal append-trace --task <task-id> --type run.updated --summary <summary>`.",
@@ -75,7 +76,8 @@ const commandSteps: Record<(typeof AGENT_COMMANDS)[number], string[]> = {
     "Run `cw preflight --action check --task <task-id>`.",
     "Run the relevant commands from .cw/project/commands.md.",
     "For deterministic verification commands, the executable shim may be called with repeated `cw-check --task <task-id> --command <cmd>` flags.",
-    "Review the implementation against spec.md, plan.md, and task.md.",
+    "Run artifact alignment review against spec.md, plan.md, and task.md.",
+    "Run implementation evidence review against every acceptance criterion.",
     "Fix small local defects when the task contract is unchanged.",
     "If spec drift appears, stop for user confirmation and update spec.md only after confirmation.",
     "Update task.md verification and check items.",
@@ -85,8 +87,9 @@ const commandSteps: Record<(typeof AGENT_COMMANDS)[number], string[]> = {
   "cw-finish": [
     "Run `cw preflight --action finish --task <task-id>`.",
     "Confirm dirty worktree handling when needed.",
-    "If baseline-delta.md exists, preview it and ask whether to accept, select, edit, or skip it.",
-    "After confirmation, run `cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped` when applicable.",
+    "Review check evidence, unresolved drift flags, dirty worktree handling, baseline decision, and final summary as the closure packet.",
+    "If baseline-delta.md exists, prepare a current-state candidate diff for .cw/project files and ask whether to accept, select, edit, or skip it.",
+    "After confirmation, run `cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped --edited-content <confirmed-current-state-sections>` when applicable.",
     "Run `cw internal finish-task --task <task-id> --summary <summary> --dirty-worktree <covered|unrelated|clean> --baseline <accepted|selected|edited|skipped|none>`.",
     "Report the closed task id and any project baseline files updated."
   ],
@@ -119,10 +122,11 @@ const commandSteps: Record<(typeof AGENT_COMMANDS)[number], string[]> = {
 
 const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>> = {
   "cw-clarify": [
-    "Default to strict requirements review. Use light mode only when the user explicitly asks for fast handling, or when the task is low risk, goal-complete, reversible, and has obvious verification.",
-    "Escalate to strict mode when the request affects product behavior, workflow semantics, CLI/API behavior, task lifecycle, state machines, cross-module behavior, irreversible work, or unclear acceptance criteria.",
-    "Expand only when the user gives background or a loose desire instead of a clear target. Expand around user results, offer at most three candidate directions, and recommend one.",
-    "Grill after a candidate direction exists. Ask one important question at a time, include your recommended answer, and name the trade-off when it matters.",
+    "The clarify quality gate checks that the goal is concrete, scope is bounded, acceptance criteria are checkable, and risk is low enough to write a Proposed Spec without high-risk assumptions.",
+    "Use the fast path only when all quality gate facts are already observable. The fast path still presents a Proposed Spec before editing spec.md.",
+    "Use expand-then-grill when any gate fact is missing or the request affects workflow semantics, CLI/API behavior, task lifecycle, state machines, cross-module behavior, irreversible work, or baseline promotion.",
+    "Expand around user-visible results, offer at most three candidate directions, and recommend one.",
+    "Grill after a candidate direction exists. Ask one important question at a time, include your recommended answer, and name the trade-off when it matters. This guidance is self-contained; an external grill skill is optional.",
     "Clarification is complete only when the goal, boundary, acceptance criteria, and key risks are clear enough to write spec.md without high-risk assumptions.",
     "Before writing spec.md, present a Proposed Spec using the existing sections: Goal, Scope, Non-goals, Constraints, Decisions, and Acceptance Criteria. Continue asking if any high-risk assumption remains.",
     "Clarify terminology lightly. Task-local terms belong in spec.md; stable reusable project concepts may become baseline-delta.md candidates."
@@ -131,7 +135,29 @@ const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>
     "The spec quality gate checks that Goal is concrete, Scope bounds the work, Acceptance Criteria are checkable, and Decisions cover product trade-offs that affect implementation.",
     "Do not modify spec.md during planning. If the gate fails, block the task in clarify phase and provide one concrete next question in the blocked reason or next action.",
     "Plan from the accepted contract. Implementation choices may be recorded in plan.md only when they stay inside the confirmed spec.",
-    "Break task.md implementation items into small, verifiable vertical slices. Keep file-level edits as implementation details, not primary checklist items."
+    "Break task.md implementation items into small, verifiable vertical slices. Keep file-level edits as implementation details, not primary checklist items.",
+    "Post-plan artifact cross-review checks spec.md, plan.md, and task.md for contradiction, missing coverage, overbuilding, unclear interfaces, and placeholder work. Prefer an independent reviewer subagent for nontrivial tasks when supported; otherwise run the same check inline."
+  ],
+  "cw-run": [
+    "Run executes the accepted task contract. Do not expand product behavior or implementation scope beyond spec.md and plan.md without user confirmation.",
+    "Behavior changes require test evidence by default. Use red-green TDD when a clear public seam exists; use commands, fixtures, snapshots, file checks, or manual review when those are the right evidence.",
+    "Subagents are optional. Use them for independent vertical slices when the harness supports delegation; continue inline when unavailable.",
+    "Domain modeling is optional. Use it only when terms or stable reusable project concepts change; otherwise record task-local terms in spec.md or task.md.",
+    "External TDD, domain modeling, implement, Superpowers, or subagent skills may help when installed, but this generated guidance is sufficient to proceed without them."
+  ],
+  "cw-check": [
+    "Artifact alignment review checks spec.md, plan.md, and task.md for contradiction, missing coverage, overbuilding, unclear interfaces, and placeholder work.",
+    "Implementation evidence review maps every acceptance criterion to evidence in task.md Verification or Check entries. Evidence can be tests, commands, file checks, CI/CD or test-environment notes, or manual verification.",
+    "CI/CD or test-environment evidence states environment, action, and result without relying on commit identity.",
+    "Small local defects may be fixed during check when the accepted spec.md contract is unchanged. Changes to spec.md or out-of-scope implementation behavior return to clarify for user confirmation.",
+    "Run a final broad review when the change is cross-cutting, behaviorally large, or touches workflow semantics shared by multiple commands."
+  ],
+  "cw-finish": [
+    "Finish closes the CW task. It does not create commits, require one final commit, push branches, open PRs, deploy, clean up branches, or record a commit ledger.",
+    "The closure packet covers check evidence, unresolved drift, dirty worktree handling, baseline decision, and final summary.",
+    "Project Baseline files are current-state descriptions. If baseline-delta.md exists, the finish-stage agent prepares a candidate diff that integrates the delta into existing .cw/project files.",
+    "A fast inexpensive model may help draft the candidate baseline diff when available, but the generated skill must support inline preparation. The CLI core must not call an LLM.",
+    "Apply baseline changes only after user confirmation. Helpers apply accepted current-state markdown sections or record skipped/selected decisions."
   ]
 };
 
@@ -188,9 +214,7 @@ async function generateClaudeAdapter(root: string, options: AdapterOptions): Pro
 }
 
 function renderWorkflowInstructions(command: (typeof AGENT_COMMANDS)[number]): string {
-  return `${GENERATED_MARKER}
-
-# ${command}
+  return `# ${command}
 
 ${commandPurposes[command]}
 
@@ -268,6 +292,15 @@ Before acting, read the repository's \`.cw\` files relevant to the current task.
 
 ${renderWorkflowInstructions(command)}
 `;
+}
+
+export function isGeneratedSkillCurrent(
+  command: (typeof AGENT_COMMANDS)[number],
+  content: string,
+  skillsPath: ".agents/skills" | ".claude/skills"
+): boolean {
+  const harnesses: HarnessName[] = skillsPath === ".claude/skills" ? ["claude"] : ["codex", "opencode", "pi"];
+  return harnesses.some((harness) => content === renderHarnessSkill(command, harness));
 }
 
 async function writeGenerated(

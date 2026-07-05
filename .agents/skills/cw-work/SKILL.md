@@ -7,8 +7,6 @@ Use this skill when the user asks Codex to run `cw-work` or the matching CW work
 
 Before acting, read the repository's `.cw` files relevant to the current task. Treat `.cw` as Repo Truth, generated skills as invocation surfaces, and Git as the source of truth for code changes.
 
-<!-- generated-by-cw:v1 -->
-
 # cw-work
 
 Default task progress action. Create or select a task, advance the next responsible phase, run check when appropriate, then stop before finish.

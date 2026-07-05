@@ -7,8 +7,6 @@ Use this skill when the user asks Codex to run `cw-plan` or the matching CW work
 
 Before acting, read the repository's `.cw` files relevant to the current task. Treat `.cw` as Repo Truth, generated skills as invocation surfaces, and Git as the source of truth for code changes.
 
-<!-- generated-by-cw:v1 -->
-
 # cw-plan
 
 Apply the spec quality gate, then turn accepted spec.md into plan.md and task.md without changing the spec.
@@ -47,7 +45,8 @@ Apply the spec quality gate, then turn accepted spec.md into plan.md and task.md
 4. If the spec quality gate fails, return to cw-clarify behavior with one concrete next question.
 5. Edit plan.md with the implementation approach, key decisions, risks, and validation strategy.
 6. Edit task.md with executable implementation, verification, and check items.
-7. Run `cw internal set-state --task <task-id> --phase run --next-action <text>`.
+7. Run a post-plan artifact cross-review of spec.md, plan.md, and task.md before moving to run.
+8. Run `cw internal set-state --task <task-id> --phase run --next-action <text>`.
 
 ## Phase Guidance
 
@@ -55,6 +54,7 @@ Apply the spec quality gate, then turn accepted spec.md into plan.md and task.md
 - Do not modify spec.md during planning. If the gate fails, block the task in clarify phase and provide one concrete next question in the blocked reason or next action.
 - Plan from the accepted contract. Implementation choices may be recorded in plan.md only when they stay inside the confirmed spec.
 - Break task.md implementation items into small, verifiable vertical slices. Keep file-level edits as implementation details, not primary checklist items.
+- Post-plan artifact cross-review checks spec.md, plan.md, and task.md for contradiction, missing coverage, overbuilding, unclear interfaces, and placeholder work. Prefer an independent reviewer subagent for nontrivial tasks when supported; otherwise run the same check inline.
 
 
 ## Helper Commands

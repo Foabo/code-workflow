@@ -1,0 +1,23 @@
+{"ts":"2026-07-05T04:58:50.649Z","type":"task.created","summary":"Task created: Improve run check and finish workflow boundaries"}
+{"ts":"2026-07-05T04:59:28.712Z","type":"spec.accepted","summary":"Run, check, and finish workflow boundary spec accepted."}
+{"ts":"2026-07-05T04:59:35.699Z","type":"task.state.updated","summary":"phase clarify -> plan; next action updated"}
+{"ts":"2026-07-05T05:02:47.104Z","type":"task.state.updated","summary":"phase plan -> clarify; next action updated"}
+{"ts":"2026-07-05T05:04:45.428Z","type":"spec.updated","summary":"Added generated skill marker removal and stale detection preservation to the accepted scope."}
+{"ts":"2026-07-05T05:06:08.185Z","type":"spec.updated","summary":"Added narrow cw-clarify quality gate update to replace strict/light mode labels."}
+{"ts":"2026-07-05T05:09:32.095Z","type":"spec.updated","summary":"Accepted post-plan artifact cross-review rule: prefer independent reviewer subagent for nontrivial tasks with inline fallback."}
+{"ts":"2026-07-05T05:13:16.248Z","type":"spec.updated","summary":"Accepted self-contained generated skill rule for grill, TDD, domain modeling, subagent, implement, and Superpowers references."}
+{"ts":"2026-07-05T05:17:17.223Z","type":"spec.updated","summary":"Accepted cw-run testing rule: behavior changes need test evidence by default; red-green TDD is preferred when a clear seam exists."}
+{"ts":"2026-07-05T05:18:25.257Z","type":"spec.updated","summary":"Accepted cw-check evidence rule: keep evidence in task.md Verification or Check entries without a separate report artifact."}
+{"ts":"2026-07-05T05:20:35.446Z","type":"spec.updated","summary":"Accepted Git cadence boundary: CW finish does not commit, push, deploy, open PRs, or require a single final commit."}
+{"ts":"2026-07-05T05:21:54.556Z","type":"spec.updated","summary":"Accepted no commit ledger rule: check evidence describes verified behavior or artifacts, not commit SHA or HEAD boundaries."}
+{"ts":"2026-07-05T05:23:16.815Z","type":"spec.updated","summary":"Accepted CI/CD evidence rule: record environment, action, and result without relying on commit identity."}
+{"ts":"2026-07-05T05:24:21.314Z","type":"spec.updated","summary":"Accepted check drift handling rule: fix plan/task alignment when spec is unchanged; return to clarify for spec changes or out-of-scope behavior."}
+{"ts":"2026-07-05T05:31:43.139Z","type":"spec.updated","summary":"Accepted baseline semantics change: project baseline is current-state description; finish defaults to user-reviewed candidate baseline diff instead of append-only sync."}
+{"ts":"2026-07-05T05:36:38.688Z","type":"spec.updated","summary":"Accepted baseline merge responsibility: finish-stage agent prepares candidate diff; deterministic helpers apply accepted content."}
+{"ts":"2026-07-05T05:42:58.630Z","type":"plan.updated","summary":"Plan and executable checklist created; post-plan artifact cross-review completed with reviewer feedback applied."}
+{"ts":"2026-07-05T05:43:03.943Z","type":"task.state.updated","summary":"phase clarify -> run; next action updated"}
+{"ts":"2026-07-05T05:51:36.807Z","type":"run.updated","summary":"Implemented generated guidance updates, marker-free stale detection, current-state baseline sync, tests, and regenerated Codex skills."}
+{"ts":"2026-07-05T05:51:42.667Z","type":"task.state.updated","summary":"phase run -> check; next action updated"}
+{"ts":"2026-07-05T05:55:10.530Z","type":"check.passed","summary":"Verified generated guidance, marker-free stale detection, current-state baseline sync, tests, build, doctor, validation, artifact alignment, and dirty worktree scope."}
+{"ts":"2026-07-05T05:55:15.185Z","type":"task.state.updated","summary":"phase check -> finish; next action updated"}
+{"ts":"2026-07-05T05:56:56.167Z","type":"task.finished","summary":"Improved run, check, finish, clarify guidance, marker-free stale detection, and current-state baseline sync.","data":{"baseline_decision":"none","dirty_worktree_handling":"covered"}}

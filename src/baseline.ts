@@ -1,5 +1,5 @@
 import path from "node:path";
-import { appendFile, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { appendTrace, readTaskState } from "./tasks.js";
 import { getCwPaths, taskDir, taskJsonPath } from "./paths.js";
 import { TASK_ARTIFACT_TEMPLATES } from "./templates.js";
@@ -71,6 +71,14 @@ export async function syncBaselineDelta(
     return { decision, updated: [], preview: preview.sections, highImpact: preview.highImpact };
   }
 
+  if (normalized.editedMarkdown === undefined || normalized.editedMarkdown.trim().length === 0) {
+    throw new Error("baseline sync requires confirmed current-state content");
+  }
+  if (decision === "selected" && (normalized.selectedFiles === undefined || normalized.selectedFiles.length === 0)) {
+    throw new Error("selected baseline sync requires at least one selected baseline file");
+  }
+
+  const confirmed = await previewBaselineDelta(root, taskId, normalized.editedMarkdown);
   const selected = decision === "selected" ? new Set(normalized.selectedFiles ?? []) : null;
   const updated: string[] = [];
 
@@ -78,13 +86,17 @@ export async function syncBaselineDelta(
     if (selected !== null && !selected.has(fileName)) {
       continue;
     }
-    const content = preview.sections[fileName]?.trim();
+    const content = confirmed.sections[fileName]?.trim();
     if (content === undefined || content.length === 0) {
       continue;
     }
     const projectFile = path.join(getCwPaths(root).project, fileName);
-    await appendFile(projectFile, `\n## From ${taskId}\n\n${content}\n`, "utf8");
+    await writeFile(projectFile, `${content}\n`, "utf8");
     updated.push(`.cw/project/${fileName}`);
+  }
+
+  if (updated.length === 0) {
+    throw new Error("baseline sync requires at least one confirmed baseline section");
   }
 
   await appendTrace(root, taskId, {
@@ -95,11 +107,11 @@ export async function syncBaselineDelta(
       decision,
       updated,
       selected: normalized.selectedFiles ?? null,
-      highImpact: preview.highImpact
+      highImpact: confirmed.highImpact
     }
   });
 
-  return { decision, updated, preview: preview.sections, highImpact: preview.highImpact };
+  return { decision, updated, preview: confirmed.sections, highImpact: confirmed.highImpact };
 }
 
 export async function previewBaselineDelta(

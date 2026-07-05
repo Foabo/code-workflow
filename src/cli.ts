@@ -770,11 +770,11 @@ function printInternalUsage(): void {
   cw internal select-task [--task <id>]
   cw internal append-trace --task <id> --type <type> --summary <text>
   cw internal set-state --task <id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
-  cw internal finish-task --task <id> --summary <text> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none]
+  cw internal finish-task --task <id> --summary <text> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none] [--edited-content <confirmed-current-state-sections>]
   cw internal discard-task --task <id> --confirm [--worktree keep|stash|revert|delete-worktree|none]
   cw internal create-resume --task <id> --content <markdown>
   cw internal ensure-baseline-delta --task <id>
-  cw internal sync-baseline-delta --task <id> --decision accepted|selected|edited|skipped
+  cw internal sync-baseline-delta --task <id> --decision accepted|selected|edited|skipped [--edited-content <confirmed-current-state-sections>]
   cw internal consume-resume --task <id>
   cw internal migrate-task-ids`);
 }

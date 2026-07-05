@@ -7,8 +7,6 @@ Use this skill when the user asks Codex to run `cw-clarify` or the matching CW w
 
 Before acting, read the repository's `.cw` files relevant to the current task. Treat `.cw` as Repo Truth, generated skills as invocation surfaces, and Git as the source of truth for code changes.
 
-<!-- generated-by-cw:v1 -->
-
 # cw-clarify
 
 Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md with the accepted task contract.
@@ -43,7 +41,7 @@ Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md
 
 1. Run `cw preflight --action clarify --task <task-id>` when a task id is known.
 2. Read the current spec.md and relevant project baseline files.
-3. Choose strict or light clarify behavior using the Phase Guidance below.
+3. Apply the clarify quality gate described below.
 4. Ask only the questions needed to settle goal, scope, non-goals, constraints, decisions, and acceptance criteria.
 5. Present a short Proposed Spec and wait for user confirmation before editing spec.md.
 6. Edit spec.md only with the accepted task contract.
@@ -52,10 +50,11 @@ Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md
 
 ## Phase Guidance
 
-- Default to strict requirements review. Use light mode only when the user explicitly asks for fast handling, or when the task is low risk, goal-complete, reversible, and has obvious verification.
-- Escalate to strict mode when the request affects product behavior, workflow semantics, CLI/API behavior, task lifecycle, state machines, cross-module behavior, irreversible work, or unclear acceptance criteria.
-- Expand only when the user gives background or a loose desire instead of a clear target. Expand around user results, offer at most three candidate directions, and recommend one.
-- Grill after a candidate direction exists. Ask one important question at a time, include your recommended answer, and name the trade-off when it matters.
+- The clarify quality gate checks that the goal is concrete, scope is bounded, acceptance criteria are checkable, and risk is low enough to write a Proposed Spec without high-risk assumptions.
+- Use the fast path only when all quality gate facts are already observable. The fast path still presents a Proposed Spec before editing spec.md.
+- Use expand-then-grill when any gate fact is missing or the request affects workflow semantics, CLI/API behavior, task lifecycle, state machines, cross-module behavior, irreversible work, or baseline promotion.
+- Expand around user-visible results, offer at most three candidate directions, and recommend one.
+- Grill after a candidate direction exists. Ask one important question at a time, include your recommended answer, and name the trade-off when it matters. This guidance is self-contained; an external grill skill is optional.
 - Clarification is complete only when the goal, boundary, acceptance criteria, and key risks are clear enough to write spec.md without high-risk assumptions.
 - Before writing spec.md, present a Proposed Spec using the existing sections: Goal, Scope, Non-goals, Constraints, Decisions, and Acceptance Criteria. Continue asking if any high-risk assumption remains.
 - Clarify terminology lightly. Task-local terms belong in spec.md; stable reusable project concepts may become baseline-delta.md candidates.

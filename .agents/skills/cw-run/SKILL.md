@@ -7,8 +7,6 @@ Use this skill when the user asks Codex to run `cw-run` or the matching CW workf
 
 Before acting, read the repository's `.cw` files relevant to the current task. Treat `.cw` as Repo Truth, generated skills as invocation surfaces, and Git as the source of truth for code changes.
 
-<!-- generated-by-cw:v1 -->
-
 # cw-run
 
 Execute the next checklist items from task.md, modify repository code, update progress, and append trace events through helpers.
@@ -43,12 +41,23 @@ Execute the next checklist items from task.md, modify repository code, update pr
 
 1. Run `cw preflight --action run --task <task-id>`.
 2. Read spec.md, plan.md, task.md, and relevant code.
-3. Implement the next unchecked implementation items in task.md.
-4. For simple file creation or replacement tasks, the executable shim may be called with `cw-run --task <task-id> --write-file <path> --content <text>`.
-5. Update task.md checklist progress.
-6. Record material progress with `cw internal append-trace --task <task-id> --type run.updated --summary <summary>`.
-7. Run `cw internal ensure-baseline-delta --task <task-id>` when stable reusable project facts are discovered.
-8. Run `cw internal set-state --task <task-id> --phase check --next-action <text>` when implementation items are complete enough to verify.
+3. Implement the next unchecked task.md items against the accepted spec.md and plan.md contract.
+4. Stop for user confirmation when work reveals requirement drift, plan contradiction, or product behavior outside scope.
+5. Add or update tests by default for behavior, workflow semantics, CLI/API behavior, state transitions, parsing, validation, and error handling.
+6. For simple file creation or replacement tasks, the executable shim may be called with `cw-run --task <task-id> --write-file <path> --content <text>`.
+7. Update task.md checklist progress.
+8. Record material progress with `cw internal append-trace --task <task-id> --type run.updated --summary <summary>`.
+9. Run `cw internal ensure-baseline-delta --task <task-id>` when stable reusable project facts are discovered.
+10. Run `cw internal set-state --task <task-id> --phase check --next-action <text>` when implementation items are complete enough to verify.
+
+## Phase Guidance
+
+- Run executes the accepted task contract. Do not expand product behavior or implementation scope beyond spec.md and plan.md without user confirmation.
+- Behavior changes require test evidence by default. Use red-green TDD when a clear public seam exists; use commands, fixtures, snapshots, file checks, or manual review when those are the right evidence.
+- Subagents are optional. Use them for independent vertical slices when the harness supports delegation; continue inline when unavailable.
+- Domain modeling is optional. Use it only when terms or stable reusable project concepts change; otherwise record task-local terms in spec.md or task.md.
+- External TDD, domain modeling, implement, Superpowers, or subagent skills may help when installed, but this generated guidance is sufficient to proceed without them.
+
 
 ## Helper Commands
 

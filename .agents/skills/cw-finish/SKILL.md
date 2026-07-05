@@ -7,8 +7,6 @@ Use this skill when the user asks Codex to run `cw-finish` or the matching CW wo
 
 Before acting, read the repository's `.cw` files relevant to the current task. Treat `.cw` as Repo Truth, generated skills as invocation surfaces, and Git as the source of truth for code changes.
 
-<!-- generated-by-cw:v1 -->
-
 # cw-finish
 
 Run the closure gate, handle dirty worktree state, sync accepted baseline delta, consume resume notes, and close the task.
@@ -43,10 +41,20 @@ Run the closure gate, handle dirty worktree state, sync accepted baseline delta,
 
 1. Run `cw preflight --action finish --task <task-id>`.
 2. Confirm dirty worktree handling when needed.
-3. If baseline-delta.md exists, preview it and ask whether to accept, select, edit, or skip it.
-4. After confirmation, run `cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped` when applicable.
-5. Run `cw internal finish-task --task <task-id> --summary <summary> --dirty-worktree <covered|unrelated|clean> --baseline <accepted|selected|edited|skipped|none>`.
-6. Report the closed task id and any project baseline files updated.
+3. Review check evidence, unresolved drift flags, dirty worktree handling, baseline decision, and final summary as the closure packet.
+4. If baseline-delta.md exists, prepare a current-state candidate diff for .cw/project files and ask whether to accept, select, edit, or skip it.
+5. After confirmation, run `cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped --edited-content <confirmed-current-state-sections>` when applicable.
+6. Run `cw internal finish-task --task <task-id> --summary <summary> --dirty-worktree <covered|unrelated|clean> --baseline <accepted|selected|edited|skipped|none>`.
+7. Report the closed task id and any project baseline files updated.
+
+## Phase Guidance
+
+- Finish closes the CW task. It does not create commits, require one final commit, push branches, open PRs, deploy, clean up branches, or record a commit ledger.
+- The closure packet covers check evidence, unresolved drift, dirty worktree handling, baseline decision, and final summary.
+- Project Baseline files are current-state descriptions. If baseline-delta.md exists, the finish-stage agent prepares a candidate diff that integrates the delta into existing .cw/project files.
+- A fast inexpensive model may help draft the candidate baseline diff when available, but the generated skill must support inline preparation. The CLI core must not call an LLM.
+- Apply baseline changes only after user confirmation. Helpers apply accepted current-state markdown sections or record skipped/selected decisions.
+
 
 ## Helper Commands
 

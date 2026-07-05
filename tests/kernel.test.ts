@@ -70,17 +70,35 @@ describe("cw kernel", () => {
     assert.match(skill, /cw preflight --action work/);
     assert.match(skill, /Implementer subagents may write code/);
     assert.match(skill, /Checker subagents must return spec drift/);
+    assert.doesNotMatch(skill, /generated-by-cw/);
     const clarifySkill = await readFile(path.join(root, ".agents/skills/cw-clarify/SKILL.md"), "utf8");
-    assert.match(clarifySkill, /strict requirements review/);
-    assert.match(clarifySkill, /light mode/);
-    assert.match(clarifySkill, /Expand only when/);
-    assert.match(clarifySkill, /Grill after/);
+    assert.match(clarifySkill, /clarify quality gate/);
+    assert.match(clarifySkill, /fast path/);
+    assert.match(clarifySkill, /expand-then-grill/);
+    assert.match(clarifySkill, /external grill skill is optional/);
     assert.match(clarifySkill, /Proposed Spec/);
     const planSkill = await readFile(path.join(root, ".agents/skills/cw-plan/SKILL.md"), "utf8");
     assert.match(planSkill, /spec quality gate/);
     assert.match(planSkill, /Do not modify spec\.md during planning/);
     assert.match(planSkill, /one concrete next question/);
     assert.match(planSkill, /vertical slices/);
+    assert.match(planSkill, /Post-plan artifact cross-review/);
+    assert.match(planSkill, /independent reviewer subagent/);
+    const runSkill = await readFile(path.join(root, ".agents/skills/cw-run/SKILL.md"), "utf8");
+    assert.match(runSkill, /accepted task contract/);
+    assert.match(runSkill, /requirement drift/);
+    assert.match(runSkill, /Behavior changes require test evidence/);
+    assert.match(runSkill, /External TDD, domain modeling, implement, Superpowers, or subagent skills may help when installed/);
+    const checkSkill = await readFile(path.join(root, ".agents/skills/cw-check/SKILL.md"), "utf8");
+    assert.match(checkSkill, /Artifact alignment review/);
+    assert.match(checkSkill, /Implementation evidence review/);
+    assert.match(checkSkill, /environment, action, and result/);
+    assert.match(checkSkill, /final broad review/);
+    const finishSkill = await readFile(path.join(root, ".agents/skills/cw-finish/SKILL.md"), "utf8");
+    assert.match(finishSkill, /closure packet/);
+    assert.match(finishSkill, /does not create commits/);
+    assert.match(finishSkill, /current-state descriptions/);
+    assert.match(finishSkill, /CLI core must not call an LLM/);
 
     await writeFile(path.join(root, ".agents/skills/cw-work/SKILL.md"), "stale", "utf8");
     const staleReport = await doctorProject(root);
@@ -846,14 +864,26 @@ describe("cw kernel", () => {
       "utf8"
     );
 
-    const result = await syncBaselineDeltaViaCli(root, "0001-baseline-test", "accepted");
+    await assert.rejects(
+      syncBaselineDeltaViaCli(root, "0001-baseline-test", "accepted"),
+      /confirmed current-state content/
+    );
+
+    const result = await syncBaselineDeltaViaCli(root, "0001-baseline-test", "accepted", {
+      editedMarkdown: "# Baseline Delta\n\n## commands.md\n\n# Commands\n\n## Test\n\nRun `npm test` before finish.\n"
+    });
     assert.deepEqual(result.updated, [".cw/project/commands.md"]);
-    assert.match(await readFile(path.join(root, ".cw/project/commands.md"), "utf8"), /Run `npm test` before finish\./);
+    assert.equal(
+      await readFile(path.join(root, ".cw/project/commands.md"), "utf8"),
+      "# Commands\n\n## Test\n\nRun `npm test` before finish.\n"
+    );
+    assert.doesNotMatch(await readFile(path.join(root, ".cw/project/commands.md"), "utf8"), /## From/);
   });
 
   it("syncs selected, edited, and skipped baseline delta decisions", async () => {
     const root = await tempRoot();
     await initProject(root);
+    const originalRules = await readFile(path.join(root, ".cw/project/rules.md"), "utf8");
 
     await createTaskViaCli(root, { id: "0001-selected-baseline", title: "Selected baseline" });
     await ensureBaselineDeltaViaCli(root, "0001-selected-baseline");
@@ -863,18 +893,26 @@ describe("cw kernel", () => {
       "utf8"
     );
     const selected = await syncBaselineDeltaViaCli(root, "0001-selected-baseline", "selected", {
-      selectedFiles: ["commands.md"]
+      selectedFiles: ["commands.md"],
+      editedMarkdown: "# Baseline Delta\n\n## commands.md\n\n# Commands\n\n## Test\n\nUse `npm test`.\n\n## rules.md\n\n# Rules\n\n## Review\n\nReview checklist before finish.\n"
     });
     assert.deepEqual(selected.updated, [".cw/project/commands.md"]);
-    assert.doesNotMatch(await readFile(path.join(root, ".cw/project/rules.md"), "utf8"), /Review checklist/);
+    assert.equal(
+      await readFile(path.join(root, ".cw/project/commands.md"), "utf8"),
+      "# Commands\n\n## Test\n\nUse `npm test`.\n"
+    );
+    assert.equal(await readFile(path.join(root, ".cw/project/rules.md"), "utf8"), originalRules);
 
     await createTaskViaCli(root, { id: "0002-edited-baseline", title: "Edited baseline" });
     await ensureBaselineDeltaViaCli(root, "0002-edited-baseline");
     const edited = await syncBaselineDeltaViaCli(root, "0002-edited-baseline", "edited", {
-      editedMarkdown: "# Baseline Delta\n\n## rules.md\n\nEdited baseline rule.\n"
+      editedMarkdown: "# Baseline Delta\n\n## rules.md\n\n# Rules\n\n## Review\n\nEdited baseline rule.\n"
     });
     assert.deepEqual(edited.updated, [".cw/project/rules.md"]);
-    assert.match(await readFile(path.join(root, ".cw/project/rules.md"), "utf8"), /Edited baseline rule/);
+    assert.equal(
+      await readFile(path.join(root, ".cw/project/rules.md"), "utf8"),
+      "# Rules\n\n## Review\n\nEdited baseline rule.\n"
+    );
 
     await createTaskViaCli(root, { id: "0003-skipped-baseline", title: "Skipped baseline" });
     await ensureBaselineDeltaViaCli(root, "0003-skipped-baseline");
@@ -979,7 +1017,8 @@ describe("cw kernel", () => {
       runWorkflowAction(root, "finish", {
         taskId: "0001-high-impact-baseline",
         summary: "Done",
-        decision: "accepted"
+        decision: "accepted",
+        editedBaselineDelta: "# Baseline Delta\n\n## architecture.md\n\n# Architecture\n\n## Modules\n\nArchitecture now documents the workflow kernel boundary.\n"
       }),
       /high-impact baseline delta/
     );
@@ -988,6 +1027,7 @@ describe("cw kernel", () => {
       taskId: "0001-high-impact-baseline",
       summary: "Done",
       decision: "accepted",
+      editedBaselineDelta: "# Baseline Delta\n\n## architecture.md\n\n# Architecture\n\n## Modules\n\nArchitecture now documents the workflow kernel boundary.\n",
       confirmBaselineImpact: true
     });
     assert.equal(finished.task?.lifecycle, "closed");
@@ -1140,6 +1180,7 @@ describe("cw kernel", () => {
       taskId: "0001-create-readme",
       summary: "README task complete.",
       decision: "accepted",
+      editedBaselineDelta: "# Baseline Delta\n\n## commands.md\n\n# Commands\n\n## Test\n\nUse `npm test` to verify fixture behavior.\n",
       dirtyWorktree: "covered"
     });
     assert.equal(finish.task?.lifecycle, "closed");

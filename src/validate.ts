@@ -1,6 +1,6 @@
 import path from "node:path";
 import { access, readFile } from "node:fs/promises";
-import { GENERATED_MARKER } from "./adapters.js";
+import { isGeneratedSkillCurrent } from "./adapters.js";
 import { readJsonFile } from "./json.js";
 import { getCwPaths, TaskLocation, taskDir } from "./paths.js";
 import { validateEnhancementConfigRecord, validateTaskStateRecord, validateVersionRecord } from "./schema.js";
@@ -161,7 +161,7 @@ async function generatedSkillWarnings(root: string, skillsPath: ".agents/skills"
       continue;
     }
     const content = await readFile(filePath, "utf8");
-    if (!content.includes(GENERATED_MARKER)) {
+    if (!isGeneratedSkillCurrent(command, content, skillsPath)) {
       warnings.push({ path: displayPath, message: "generated skill entry appears stale" });
     }
   }

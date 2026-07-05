@@ -7,8 +7,6 @@ Use this skill when the user asks Codex to run `cw-check` or the matching CW wor
 
 Before acting, read the repository's `.cw` files relevant to the current task. Treat `.cw` as Repo Truth, generated skills as invocation surfaces, and Git as the source of truth for code changes.
 
-<!-- generated-by-cw:v1 -->
-
 # cw-check
 
 Run verification and review, reconcile drift, and update task.md before finish is allowed.
@@ -44,12 +42,22 @@ Run verification and review, reconcile drift, and update task.md before finish i
 1. Run `cw preflight --action check --task <task-id>`.
 2. Run the relevant commands from .cw/project/commands.md.
 3. For deterministic verification commands, the executable shim may be called with repeated `cw-check --task <task-id> --command <cmd>` flags.
-4. Review the implementation against spec.md, plan.md, and task.md.
-5. Fix small local defects when the task contract is unchanged.
-6. If spec drift appears, stop for user confirmation and update spec.md only after confirmation.
-7. Update task.md verification and check items.
-8. Append a check trace event with `cw internal append-trace --task <task-id> --type check.passed --summary <summary>` or `check.failed`.
-9. When check passes, run `cw internal set-state --task <task-id> --phase finish --next-action <text>`.
+4. Run artifact alignment review against spec.md, plan.md, and task.md.
+5. Run implementation evidence review against every acceptance criterion.
+6. Fix small local defects when the task contract is unchanged.
+7. If spec drift appears, stop for user confirmation and update spec.md only after confirmation.
+8. Update task.md verification and check items.
+9. Append a check trace event with `cw internal append-trace --task <task-id> --type check.passed --summary <summary>` or `check.failed`.
+10. When check passes, run `cw internal set-state --task <task-id> --phase finish --next-action <text>`.
+
+## Phase Guidance
+
+- Artifact alignment review checks spec.md, plan.md, and task.md for contradiction, missing coverage, overbuilding, unclear interfaces, and placeholder work.
+- Implementation evidence review maps every acceptance criterion to evidence in task.md Verification or Check entries. Evidence can be tests, commands, file checks, CI/CD or test-environment notes, or manual verification.
+- CI/CD or test-environment evidence states environment, action, and result without relying on commit identity.
+- Small local defects may be fixed during check when the accepted spec.md contract is unchanged. Changes to spec.md or out-of-scope implementation behavior return to clarify for user confirmation.
+- Run a final broad review when the change is cross-cutting, behaviorally large, or touches workflow semantics shared by multiple commands.
+
 
 ## Helper Commands
 
