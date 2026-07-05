@@ -142,7 +142,8 @@ const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>
     "`cw-work` is the routine progress command. Repeated `/cw-work` calls should be enough to advance ordinary work through clarify, plan, run, and check.",
     "The executable `work` helper creates or selects the task and returns actionable status. The generated skill performs the judgment-heavy orchestration: questioning, planning, code edits, verification, and review.",
     "Use task truth to choose the next responsibility: clarify means challenge and accept the task contract, plan means create or repair plan.md and task.md, run means execute unchecked implementation items, check means verify and review evidence, and finish means stop before closure.",
-    "Delegation may help with implementation or checking only when the harness, tools, and user or environment permission allow it; otherwise route phases and perform the same responsibilities inline.",
+    "When delegation is available, route bounded phase work to the matching role agent: `cw-advisor` for clarify review, `cw-planner` for planning, `cw-implementer` for independent implementation slices, `cw-checker` for verification, `cw-reviewer` for broad review, and `cw-baseline-writer` for baseline merge drafts.",
+    "Delegation may help only when the harness, tools, and user or environment permission allow it; otherwise route phases and perform the same responsibilities inline.",
     "Do not close tasks from `cw-work`. When the task is ready for finish, summarize the closure readiness and ask whether to run `cw-finish`.",
     "If the phase, artifacts, or user request conflict, stop and resolve the conflict through the matching phase guidance before making code changes."
   ],
@@ -167,14 +168,15 @@ const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>
     "Plan from the accepted contract. Implementation choices may be recorded in plan.md only when they stay inside the confirmed spec.",
     "Capture stable design, workflow, command, or rule candidates when they are reusable project facts; keep one-off implementation steps out of baseline candidates.",
     "Break task.md implementation items into small, verifiable vertical slices. Keep file-level edits as implementation details, not primary checklist items.",
-    "Post-plan artifact cross-review checks spec.md, plan.md, and task.md for contradiction, missing coverage, overbuilding, unclear interfaces, and placeholder work. Prefer an independent reviewer subagent only when the harness, tools, and user or environment permission allow delegation; otherwise run the same check inline.",
+    "When delegation is available, ask `cw-planner` to draft plan.md and task.md from the accepted spec, then ask `cw-reviewer` to run the post-plan artifact cross-review. The main session resolves drift and moves phase.",
+    "Post-plan artifact cross-review checks spec.md, plan.md, and task.md for contradiction, missing coverage, overbuilding, unclear interfaces, and placeholder work. Use `cw-reviewer` only when the harness, tools, and user or environment permission allow delegation; otherwise run the same check inline.",
     "For generated workflow guidance changes, include behavior-review checks in task.md. Look for skipped challenge, skipped grill, unclear delegation permission, premature phase movement, and acceptance criteria without evidence.",
     "Keep deterministic tests separate from behavior review. Tests should verify generated output, while check-stage review evaluates likely agent behavior."
   ],
   "cw-run": [
     "Run executes the accepted task contract. Do not expand product behavior or implementation scope beyond spec.md and plan.md without user confirmation.",
     "Behavior changes require test evidence by default. Use red-green TDD when a clear public seam exists; use commands, fixtures, snapshots, file checks, or manual review when those are the right evidence.",
-    "Use delegated implementers for independent vertical slices only when the harness, tools, and user or environment permission allow delegation; otherwise implement the same checklist items inline.",
+    "Use `cw-implementer` for independent vertical slices only when the harness, tools, and user or environment permission allow delegation; otherwise implement the same checklist items inline.",
     "Delegated implementers may write code and update checklist progress, but they must not close tasks or decide requirement drift.",
     "Domain modeling is optional. Use it only when terms or stable reusable project concepts change; otherwise record task-local terms in spec.md or task.md.",
     "External TDD, domain modeling, implement, Superpowers, or subagent skills may help when installed, but this generated guidance is sufficient to proceed without them."
@@ -185,14 +187,16 @@ const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>
     "CI/CD or test-environment evidence states environment, action, and result without relying on commit identity.",
     "Small local defects may be fixed during check when the accepted spec.md contract is unchanged. Changes to spec.md or out-of-scope implementation behavior return to clarify for user confirmation.",
     "Check owns the final Baseline Outcome. Update baseline-delta.md for stable reusable facts, or record that there are no reusable project facts or that candidates are not stable yet.",
-    "Use an independent reviewer for broad, behaviorally large, or workflow-semantics changes only when the harness, tools, and user or environment permission allow delegation; otherwise perform the same artifact and evidence review inline.",
+    "Use `cw-checker` to run verification, record evidence, and repair small in-scope defects when delegation is available.",
+    "Use `cw-reviewer` for broad, behaviorally large, or workflow-semantics changes only when the harness, tools, and user or environment permission allow delegation; otherwise perform the same artifact and evidence review inline.",
     "Run a final broad review when the change is cross-cutting, behaviorally large, or touches workflow semantics shared by multiple commands."
   ],
   "cw-finish": [
     "Finish closes the CW task. It does not create commits, require one final commit, push branches, open PRs, deploy, clean up branches, or record a commit ledger.",
     "The closure packet covers check evidence, unresolved drift, dirty worktree handling, baseline decision, and final summary.",
     "Project Baseline files are current-state descriptions. If baseline-delta.md exists, the finish-stage agent prepares a candidate diff that integrates the delta into existing .cw/project files.",
-    "A fast inexpensive model may help draft the candidate baseline diff when available, but the generated skill must support inline preparation. The CLI core must not call an LLM.",
+    "Use `cw-baseline-writer` to draft the candidate baseline merge when delegation is available and baseline-delta.md is ordinary enough to merge. The main session must review the draft before running sync helpers.",
+    "A fast inexpensive model may help draft the candidate baseline diff when available. The generated skill must support inline preparation, and the CLI core must not call an LLM.",
     "The default baseline decision is accepted: finish applies all merged baseline sections. If the user chooses selected, apply only named baseline files. If the user chooses edited, apply the user's replacement current-state sections. If the user chooses skipped, record no Project Baseline change.",
     "Apply the default merge without asking for a baseline decision again when the delta is ordinary and unambiguous; ask before high-impact, ambiguous, selected, edited, or skipped handling."
   ],
@@ -223,7 +227,8 @@ const executionStrategyCommands = new Set<(typeof AGENT_COMMANDS)[number]>([
   "cw-work",
   "cw-plan",
   "cw-run",
-  "cw-check"
+  "cw-check",
+  "cw-finish"
 ]);
 
 type RoleAgentDefinition = {
@@ -768,11 +773,49 @@ function renderExecutionStrategyGuidance(command: (typeof AGENT_COMMANDS)[number
 
 - Inline execution is fully supported and must remain complete.
 - Use \`.cw/orchestration.json\` and generated \`cw-<role>\` agent files as the role and model contract when delegation is available.
+- Explicitly ask the harness to spawn the named \`cw-<role>\` agent for bounded delegated work; Codex only spawns subagents after the main session asks.
 - Delegation is optional and permission-bound; continue inline when delegation is unavailable or unauthorized.
 - Delegated work receives task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
 - Delegated agents must not close tasks; closure decisions and unresolved drift return to the main session.
+${renderRoleRoutingGuidance(command)}
 
 `;
+}
+
+function renderRoleRoutingGuidance(command: (typeof AGENT_COMMANDS)[number]): string {
+  const routing: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>> = {
+    "cw-work": [
+      "Clarify phase: use `cw-advisor` for Proposed Spec review when advisor mode or risk calls for an independent challenge.",
+      "Plan phase: use `cw-planner` for plan.md/task.md drafting and `cw-reviewer` for artifact cross-review.",
+      "Run phase: use `cw-implementer` for independent task.md implementation slices.",
+      "Check phase: use `cw-checker` for verification and small in-scope repair, then `cw-reviewer` for broad final review when risk warrants it.",
+      "Finish phase: use `cw-baseline-writer` only for candidate Project Baseline merge drafts; the main session still owns closure."
+    ],
+    "cw-plan": [
+      "Use `cw-planner` to draft plan.md and task.md from the accepted spec when delegation is available.",
+      "Use `cw-reviewer` for post-plan cross-review before moving to run."
+    ],
+    "cw-run": [
+      "Use `cw-implementer` only for bounded, independent implementation slices with a clear file or checklist scope.",
+      "Keep requirement drift, scope changes, and phase movement in the main session."
+    ],
+    "cw-check": [
+      "Use `cw-checker` for verification commands, evidence updates, and small in-scope repairs.",
+      "Use `cw-reviewer` for artifact alignment, acceptance-criteria coverage, regressions, and missing tests."
+    ],
+    "cw-finish": [
+      "Use `cw-baseline-writer` to draft current-state Project Baseline updates from accepted baseline-delta.md.",
+      "Keep dirty worktree decisions, baseline promotion choices, and task closure in the main session."
+    ]
+  };
+  const items = routing[command] ?? [];
+  if (items.length === 0) {
+    return "";
+  }
+  return `
+Role routing for this command:
+
+${items.map((item) => `- ${item}`).join("\n")}`;
 }
 
 function renderCommandGuidance(command: (typeof AGENT_COMMANDS)[number]): string {

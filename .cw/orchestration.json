@@ -74,23 +74,23 @@
       },
       "planner": {
         "model": "gpt-5.5",
-        "reasoning_effort": "xhigh"
+        "reasoning_effort": "high"
       },
       "implementer": {
         "model": "gpt-5.5",
-        "reasoning_effort": "xhigh"
+        "reasoning_effort": "medium"
       },
       "reviewer": {
         "model": "gpt-5.5",
-        "reasoning_effort": "xhigh"
+        "reasoning_effort": "high"
       },
       "checker": {
-        "model": "gpt-5.5",
-        "reasoning_effort": "xhigh"
+        "model": "gpt-5.4-mini",
+        "reasoning_effort": "medium"
       },
       "baseline-writer": {
-        "model": "gpt-5.5",
-        "reasoning_effort": "xhigh"
+        "model": "gpt-5.4-mini",
+        "reasoning_effort": "low"
       }
     },
     "claude": {},
@@ -98,5 +98,5 @@
     "pi": {},
     "cursor": {}
   },
-  "updated_at": "2026-07-05T14:20:00.000Z"
+  "updated_at": "2026-07-05T15:42:29.000Z"
 }

@@ -1,7 +1,7 @@
 name = "cw-checker"
 description = "Run verification, repair small in-scope defects, and prepare check evidence for the primary session."
-model = "gpt-5.5"
-model_reasoning_effort = "xhigh"
+model = "gpt-5.4-mini"
+model_reasoning_effort = "medium"
 developer_instructions = """
 # cw-checker
 
@@ -11,7 +11,7 @@ Run verification, repair small in-scope defects, and prepare check evidence for 
 
 - Platform: Codex
 - CW role: checker
-- Model profile: balanced, xhigh reasoning, gpt-5.5, temperature 0.2
+- Model profile: balanced, medium reasoning, gpt-5.4-mini, temperature 0.2
 - Configuration: .cw/orchestration.json owns advisor mode, role model profiles, and per-harness model overrides.
 
 ## Use When

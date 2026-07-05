@@ -1,7 +1,7 @@
 name = "cw-baseline-writer"
 description = "Draft current-state Project Baseline updates from an accepted baseline-delta.md."
-model = "gpt-5.5"
-model_reasoning_effort = "xhigh"
+model = "gpt-5.4-mini"
+model_reasoning_effort = "low"
 developer_instructions = """
 # cw-baseline-writer
 
@@ -11,7 +11,7 @@ Draft current-state Project Baseline updates from an accepted baseline-delta.md.
 
 - Platform: Codex
 - CW role: baseline-writer
-- Model profile: fast, xhigh reasoning, gpt-5.5, temperature 0.1
+- Model profile: fast, low reasoning, gpt-5.4-mini, temperature 0.1
 - Configuration: .cw/orchestration.json owns advisor mode, role model profiles, and per-harness model overrides.
 
 ## Use When

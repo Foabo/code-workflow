@@ -24,3 +24,5 @@
 - Do not claim repository-local `.codex/prompts/` files are Codex commands; Codex custom prompts are documented as local Codex home files and deprecated.
 
 - Clarify proposals must keep stable proposal identity in trace events so advisor review and explicit accept cannot be reused across different Proposed Specs.
+
+- Role agents do not own task closure, baseline promotion decisions, requirement drift, or destructive worktree handling. Those decisions stay in the main session and use CW helpers.

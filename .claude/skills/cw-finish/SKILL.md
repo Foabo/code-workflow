@@ -29,6 +29,20 @@ Run the closure gate, handle dirty worktree state, sync accepted baseline delta,
 - Stop for user judgment when requirements, product behavior, destructive worktree handling, workflow overrides, or baseline promotion need confirmation.
 - Inline execution must remain complete; if optional helpers are unavailable, continue inline when responsible.
 
+## Execution Strategy Guidance
+
+- Inline execution is fully supported and must remain complete.
+- Use `.cw/orchestration.json` and generated `cw-<role>` agent files as the role and model contract when delegation is available.
+- Explicitly ask the harness to spawn the named `cw-<role>` agent for bounded delegated work; Codex only spawns subagents after the main session asks.
+- Delegation is optional and permission-bound; continue inline when delegation is unavailable or unauthorized.
+- Delegated work receives task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
+- Delegated agents must not close tasks; closure decisions and unresolved drift return to the main session.
+
+Role routing for this command:
+
+- Use `cw-baseline-writer` to draft current-state Project Baseline updates from accepted baseline-delta.md.
+- Keep dirty worktree decisions, baseline promotion choices, and task closure in the main session.
+
 ## Workflow Steps
 
 1. Run `cw preflight --action finish --task <task-id>`.
@@ -44,7 +58,8 @@ Run the closure gate, handle dirty worktree state, sync accepted baseline delta,
 - Finish closes the CW task. It does not create commits, require one final commit, push branches, open PRs, deploy, clean up branches, or record a commit ledger.
 - The closure packet covers check evidence, unresolved drift, dirty worktree handling, baseline decision, and final summary.
 - Project Baseline files are current-state descriptions. If baseline-delta.md exists, the finish-stage agent prepares a candidate diff that integrates the delta into existing .cw/project files.
-- A fast inexpensive model may help draft the candidate baseline diff when available, but the generated skill must support inline preparation. The CLI core must not call an LLM.
+- Use `cw-baseline-writer` to draft the candidate baseline merge when delegation is available and baseline-delta.md is ordinary enough to merge. The main session must review the draft before running sync helpers.
+- A fast inexpensive model may help draft the candidate baseline diff when available. The generated skill must support inline preparation, and the CLI core must not call an LLM.
 - The default baseline decision is accepted: finish applies all merged baseline sections. If the user chooses selected, apply only named baseline files. If the user chooses edited, apply the user's replacement current-state sections. If the user chooses skipped, record no Project Baseline change.
 - Apply the default merge without asking for a baseline decision again when the delta is ordinary and unambiguous; ask before high-impact, ambiguous, selected, edited, or skipped handling.
 

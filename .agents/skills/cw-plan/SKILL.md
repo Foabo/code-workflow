@@ -33,9 +33,15 @@ Apply the spec quality gate, then turn accepted spec.md into plan.md and task.md
 
 - Inline execution is fully supported and must remain complete.
 - Use `.cw/orchestration.json` and generated `cw-<role>` agent files as the role and model contract when delegation is available.
+- Explicitly ask the harness to spawn the named `cw-<role>` agent for bounded delegated work; Codex only spawns subagents after the main session asks.
 - Delegation is optional and permission-bound; continue inline when delegation is unavailable or unauthorized.
 - Delegated work receives task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
 - Delegated agents must not close tasks; closure decisions and unresolved drift return to the main session.
+
+Role routing for this command:
+
+- Use `cw-planner` to draft plan.md and task.md from the accepted spec when delegation is available.
+- Use `cw-reviewer` for post-plan cross-review before moving to run.
 
 ## Workflow Steps
 
@@ -56,7 +62,8 @@ Apply the spec quality gate, then turn accepted spec.md into plan.md and task.md
 - Plan from the accepted contract. Implementation choices may be recorded in plan.md only when they stay inside the confirmed spec.
 - Capture stable design, workflow, command, or rule candidates when they are reusable project facts; keep one-off implementation steps out of baseline candidates.
 - Break task.md implementation items into small, verifiable vertical slices. Keep file-level edits as implementation details, not primary checklist items.
-- Post-plan artifact cross-review checks spec.md, plan.md, and task.md for contradiction, missing coverage, overbuilding, unclear interfaces, and placeholder work. Prefer an independent reviewer subagent only when the harness, tools, and user or environment permission allow delegation; otherwise run the same check inline.
+- When delegation is available, ask `cw-planner` to draft plan.md and task.md from the accepted spec, then ask `cw-reviewer` to run the post-plan artifact cross-review. The main session resolves drift and moves phase.
+- Post-plan artifact cross-review checks spec.md, plan.md, and task.md for contradiction, missing coverage, overbuilding, unclear interfaces, and placeholder work. Use `cw-reviewer` only when the harness, tools, and user or environment permission allow delegation; otherwise run the same check inline.
 - For generated workflow guidance changes, include behavior-review checks in task.md. Look for skipped challenge, skipped grill, unclear delegation permission, premature phase movement, and acceptance criteria without evidence.
 - Keep deterministic tests separate from behavior review. Tests should verify generated output, while check-stage review evaluates likely agent behavior.
 

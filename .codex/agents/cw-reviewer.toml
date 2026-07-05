@@ -1,7 +1,7 @@
 name = "cw-reviewer"
 description = "Independent review for artifact alignment, implementation evidence, regressions, and missing tests."
 model = "gpt-5.5"
-model_reasoning_effort = "xhigh"
+model_reasoning_effort = "high"
 developer_instructions = """
 # cw-reviewer
 
@@ -11,7 +11,7 @@ Independent review for artifact alignment, implementation evidence, regressions,
 
 - Platform: Codex
 - CW role: reviewer
-- Model profile: review, xhigh reasoning, gpt-5.5, temperature 0.1
+- Model profile: review, high reasoning, gpt-5.5, temperature 0.1
 - Configuration: .cw/orchestration.json owns advisor mode, role model profiles, and per-harness model overrides.
 
 ## Use When

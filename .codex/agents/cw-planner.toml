@@ -1,7 +1,7 @@
 name = "cw-planner"
 description = "Turn an accepted spec.md into plan.md and executable task.md without changing the spec."
 model = "gpt-5.5"
-model_reasoning_effort = "xhigh"
+model_reasoning_effort = "high"
 developer_instructions = """
 # cw-planner
 
@@ -11,7 +11,7 @@ Turn an accepted spec.md into plan.md and executable task.md without changing th
 
 - Platform: Codex
 - CW role: planner
-- Model profile: high-reasoning, xhigh reasoning, gpt-5.5, temperature 0.1
+- Model profile: high-reasoning, high reasoning, gpt-5.5, temperature 0.1
 - Configuration: .cw/orchestration.json owns advisor mode, role model profiles, and per-harness model overrides.
 
 ## Use When

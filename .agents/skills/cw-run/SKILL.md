@@ -33,9 +33,15 @@ Execute the next checklist items from task.md, modify repository code, update pr
 
 - Inline execution is fully supported and must remain complete.
 - Use `.cw/orchestration.json` and generated `cw-<role>` agent files as the role and model contract when delegation is available.
+- Explicitly ask the harness to spawn the named `cw-<role>` agent for bounded delegated work; Codex only spawns subagents after the main session asks.
 - Delegation is optional and permission-bound; continue inline when delegation is unavailable or unauthorized.
 - Delegated work receives task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
 - Delegated agents must not close tasks; closure decisions and unresolved drift return to the main session.
+
+Role routing for this command:
+
+- Use `cw-implementer` only for bounded, independent implementation slices with a clear file or checklist scope.
+- Keep requirement drift, scope changes, and phase movement in the main session.
 
 ## Workflow Steps
 
@@ -54,7 +60,7 @@ Execute the next checklist items from task.md, modify repository code, update pr
 
 - Run executes the accepted task contract. Do not expand product behavior or implementation scope beyond spec.md and plan.md without user confirmation.
 - Behavior changes require test evidence by default. Use red-green TDD when a clear public seam exists; use commands, fixtures, snapshots, file checks, or manual review when those are the right evidence.
-- Use delegated implementers for independent vertical slices only when the harness, tools, and user or environment permission allow delegation; otherwise implement the same checklist items inline.
+- Use `cw-implementer` for independent vertical slices only when the harness, tools, and user or environment permission allow delegation; otherwise implement the same checklist items inline.
 - Delegated implementers may write code and update checklist progress, but they must not close tasks or decide requirement drift.
 - Domain modeling is optional. Use it only when terms or stable reusable project concepts change; otherwise record task-local terms in spec.md or task.md.
 - External TDD, domain modeling, implement, Superpowers, or subagent skills may help when installed, but this generated guidance is sufficient to proceed without them.

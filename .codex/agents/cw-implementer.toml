@@ -1,7 +1,7 @@
 name = "cw-implementer"
 description = "Execute task.md implementation checklist items against the accepted spec and plan."
 model = "gpt-5.5"
-model_reasoning_effort = "xhigh"
+model_reasoning_effort = "medium"
 developer_instructions = """
 # cw-implementer
 
@@ -11,7 +11,7 @@ Execute task.md implementation checklist items against the accepted spec and pla
 
 - Platform: Codex
 - CW role: implementer
-- Model profile: balanced, xhigh reasoning, gpt-5.5, temperature 0.2
+- Model profile: balanced, medium reasoning, gpt-5.5, temperature 0.2
 - Configuration: .cw/orchestration.json owns advisor mode, role model profiles, and per-harness model overrides.
 
 ## Use When

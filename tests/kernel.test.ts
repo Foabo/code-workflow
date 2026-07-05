@@ -132,8 +132,15 @@ describe("cw kernel", () => {
     assert.match(skill, /Inline execution must remain complete/);
     assert.match(skill, /\.cw\/orchestration\.json/);
     assert.match(skill, /generated `cw-<role>` agent files/);
+    assert.match(skill, /Explicitly ask the harness to spawn the named `cw-<role>` agent/);
     assert.match(skill, /Delegation is optional and permission-bound/);
-    assert.match(skill, /Delegation may help with implementation or checking only when/);
+    assert.match(skill, /Role routing for this command/);
+    assert.match(skill, /Clarify phase: use `cw-advisor`/);
+    assert.match(skill, /Plan phase: use `cw-planner`/);
+    assert.match(skill, /Run phase: use `cw-implementer`/);
+    assert.match(skill, /Check phase: use `cw-checker`/);
+    assert.match(skill, /Finish phase: use `cw-baseline-writer`/);
+    assert.match(skill, /Delegation may help only when/);
     assert.match(skill, /perform the same responsibilities inline/);
     assert.doesNotMatch(skill, /Advisor findings are advisory evidence/);
     assert.doesNotMatch(skill, /Subagent use requires harness support/);
@@ -184,8 +191,9 @@ describe("cw kernel", () => {
     assert.match(planSkill, /## Execution Strategy Guidance/);
     assert.match(planSkill, /Delegation is optional and permission-bound/);
     assert.match(planSkill, /role and model contract/);
+    assert.match(planSkill, /Use `cw-planner` to draft plan\.md and task\.md/);
+    assert.match(planSkill, /Use `cw-reviewer` for post-plan cross-review/);
     assert.match(planSkill, /Post-plan artifact cross-review/);
-    assert.match(planSkill, /independent reviewer subagent/);
     assert.match(planSkill, /user or environment permission allow delegation/);
     assert.match(planSkill, /run the same check inline/);
     assert.match(planSkill, /behavior-review checks/);
@@ -197,7 +205,7 @@ describe("cw kernel", () => {
     assert.match(runSkill, /Behavior changes require test evidence/);
     assert.match(runSkill, /## Execution Strategy Guidance/);
     assert.match(runSkill, /Delegation is optional and permission-bound/);
-    assert.match(runSkill, /Use delegated implementers/);
+    assert.match(runSkill, /Use `cw-implementer` only for bounded, independent implementation slices/);
     assert.doesNotMatch(runSkill, /Advisor findings are advisory evidence/);
     assert.doesNotMatch(runSkill, /blocker findings must be resolved/);
     assert.match(runSkill, /permission allow delegation/);
@@ -212,7 +220,8 @@ describe("cw kernel", () => {
     assert.match(checkSkill, /environment, action, and result/);
     assert.match(checkSkill, /## Execution Strategy Guidance/);
     assert.match(checkSkill, /Delegation is optional and permission-bound/);
-    assert.match(checkSkill, /Use an independent reviewer/);
+    assert.match(checkSkill, /Use `cw-checker` for verification commands/);
+    assert.match(checkSkill, /Use `cw-reviewer` for artifact alignment/);
     assert.match(checkSkill, /permission allow delegation/);
     assert.match(checkSkill, /same artifact and evidence review inline/);
     assert.match(checkSkill, /final broad review/);
@@ -225,6 +234,9 @@ describe("cw kernel", () => {
     assert.match(finishSkill, /merge it by default/);
     assert.match(finishSkill, /default baseline decision is accepted/);
     assert.match(finishSkill, /--selected-files <overview\.md,architecture\.md,rules\.md,commands\.md>/);
+    assert.match(finishSkill, /## Execution Strategy Guidance/);
+    assert.match(finishSkill, /Use `cw-baseline-writer` to draft current-state Project Baseline updates/);
+    assert.match(finishSkill, /main session must review the draft/);
     assert.match(finishSkill, /CLI core must not call an LLM/);
     const resumeSkill = await readFile(path.join(root, ".agents/skills/cw-resume/SKILL.md"), "utf8");
     assert.match(resumeSkill, /user-triggered continuation/);
@@ -239,7 +251,7 @@ describe("cw kernel", () => {
     assert.match(understandSkill, /Separate observed facts from inferences/);
     assert.match(understandSkill, /never overwrite \.cw\/project\/\*/);
     const discardSkill = await readFile(path.join(root, ".agents/skills/cw-discard/SKILL.md"), "utf8");
-    for (const supportSkill of [clarifySkill, finishSkill, resumeSkill, doctorSkill, understandSkill, discardSkill]) {
+    for (const supportSkill of [clarifySkill, resumeSkill, doctorSkill, understandSkill, discardSkill]) {
       assert.match(supportSkill, /Inline execution must remain complete/);
       assert.doesNotMatch(supportSkill, /## Execution Strategy Guidance/);
       assert.doesNotMatch(supportSkill, /Delegation is optional and permission-bound/);
@@ -264,14 +276,19 @@ describe("cw kernel", () => {
     assert.match(await readFile(path.join(root, ".codex/agents/cw-advisor.toml"), "utf8"), /Watch bounded primary-session deltas/);
   });
 
-  it("renders Codex role agents from orchestration model overrides", async () => {
+  it("renders Codex role agents from role-specific orchestration model overrides", async () => {
     const root = await tempRoot();
     await initProject(root, { harnesses: ["codex"] });
     const orchestrationPath = path.join(root, ".cw/orchestration.json");
     const orchestration = JSON.parse(await readFile(orchestrationPath, "utf8")) as Record<string, unknown>;
     const harnessOverrides = orchestration.harness_overrides as Record<string, Record<string, Record<string, unknown>>>;
     harnessOverrides.codex = {
-      advisor: { model: "gpt-5.5", reasoning_effort: "xhigh" }
+      advisor: { model: "gpt-5.5", reasoning_effort: "xhigh" },
+      planner: { model: "gpt-5.5", reasoning_effort: "high" },
+      implementer: { model: "gpt-5.5", reasoning_effort: "medium" },
+      reviewer: { model: "gpt-5.5", reasoning_effort: "high" },
+      checker: { model: "gpt-5.4-mini", reasoning_effort: "medium" },
+      "baseline-writer": { model: "gpt-5.4-mini", reasoning_effort: "low" }
     };
     await writeFile(orchestrationPath, JSON.stringify(orchestration, null, 2), "utf8");
 
@@ -281,10 +298,20 @@ describe("cw kernel", () => {
 
     const update = await updateProject(root, ["codex"]);
     assert.equal(update.validation.ok, true);
-    const advisorAgent = await readFile(path.join(root, ".codex/agents/cw-advisor.toml"), "utf8");
-    assert.match(advisorAgent, /model = "gpt-5\.5"/);
-    assert.match(advisorAgent, /model_reasoning_effort = "xhigh"/);
-    assert.match(advisorAgent, /developer_instructions = """\n# cw-advisor/);
+    const expectedAgents = [
+      ["advisor", "gpt-5.5", "xhigh"],
+      ["planner", "gpt-5.5", "high"],
+      ["implementer", "gpt-5.5", "medium"],
+      ["reviewer", "gpt-5.5", "high"],
+      ["checker", "gpt-5.4-mini", "medium"],
+      ["baseline-writer", "gpt-5.4-mini", "low"]
+    ] as const;
+    for (const [role, model, reasoningEffort] of expectedAgents) {
+      const agent = await readFile(path.join(root, `.codex/agents/cw-${role}.toml`), "utf8");
+      assert.match(agent, new RegExp(`model = "${model.replace(".", "\\.")}"`));
+      assert.match(agent, new RegExp(`model_reasoning_effort = "${reasoningEffort}"`));
+      assert.match(agent, new RegExp(`developer_instructions = """\\n# cw-${role}`));
+    }
   });
 
   it("renders OpenCode role agents with model, optional temperature, and explicit tools permissions", async () => {

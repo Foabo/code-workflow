@@ -33,9 +33,18 @@ Default task progress action. Create or select a task, advance the next responsi
 
 - Inline execution is fully supported and must remain complete.
 - Use `.cw/orchestration.json` and generated `cw-<role>` agent files as the role and model contract when delegation is available.
+- Explicitly ask the harness to spawn the named `cw-<role>` agent for bounded delegated work; Codex only spawns subagents after the main session asks.
 - Delegation is optional and permission-bound; continue inline when delegation is unavailable or unauthorized.
 - Delegated work receives task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
 - Delegated agents must not close tasks; closure decisions and unresolved drift return to the main session.
+
+Role routing for this command:
+
+- Clarify phase: use `cw-advisor` for Proposed Spec review when advisor mode or risk calls for an independent challenge.
+- Plan phase: use `cw-planner` for plan.md/task.md drafting and `cw-reviewer` for artifact cross-review.
+- Run phase: use `cw-implementer` for independent task.md implementation slices.
+- Check phase: use `cw-checker` for verification and small in-scope repair, then `cw-reviewer` for broad final review when risk warrants it.
+- Finish phase: use `cw-baseline-writer` only for candidate Project Baseline merge drafts; the main session still owns closure.
 
 ## Workflow Steps
 
@@ -53,7 +62,8 @@ Default task progress action. Create or select a task, advance the next responsi
 - `cw-work` is the routine progress command. Repeated `/cw-work` calls should be enough to advance ordinary work through clarify, plan, run, and check.
 - The executable `work` helper creates or selects the task and returns actionable status. The generated skill performs the judgment-heavy orchestration: questioning, planning, code edits, verification, and review.
 - Use task truth to choose the next responsibility: clarify means challenge and accept the task contract, plan means create or repair plan.md and task.md, run means execute unchecked implementation items, check means verify and review evidence, and finish means stop before closure.
-- Delegation may help with implementation or checking only when the harness, tools, and user or environment permission allow it; otherwise route phases and perform the same responsibilities inline.
+- When delegation is available, route bounded phase work to the matching role agent: `cw-advisor` for clarify review, `cw-planner` for planning, `cw-implementer` for independent implementation slices, `cw-checker` for verification, `cw-reviewer` for broad review, and `cw-baseline-writer` for baseline merge drafts.
+- Delegation may help only when the harness, tools, and user or environment permission allow it; otherwise route phases and perform the same responsibilities inline.
 - Do not close tasks from `cw-work`. When the task is ready for finish, summarize the closure readiness and ask whether to run `cw-finish`.
 - If the phase, artifacts, or user request conflict, stop and resolve the conflict through the matching phase guidance before making code changes.
 

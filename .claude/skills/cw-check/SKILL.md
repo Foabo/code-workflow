@@ -33,9 +33,15 @@ Run verification and review, reconcile drift, and update task.md before finish i
 
 - Inline execution is fully supported and must remain complete.
 - Use `.cw/orchestration.json` and generated `cw-<role>` agent files as the role and model contract when delegation is available.
+- Explicitly ask the harness to spawn the named `cw-<role>` agent for bounded delegated work; Codex only spawns subagents after the main session asks.
 - Delegation is optional and permission-bound; continue inline when delegation is unavailable or unauthorized.
 - Delegated work receives task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
 - Delegated agents must not close tasks; closure decisions and unresolved drift return to the main session.
+
+Role routing for this command:
+
+- Use `cw-checker` for verification commands, evidence updates, and small in-scope repairs.
+- Use `cw-reviewer` for artifact alignment, acceptance-criteria coverage, regressions, and missing tests.
 
 ## Workflow Steps
 
@@ -58,7 +64,8 @@ Run verification and review, reconcile drift, and update task.md before finish i
 - CI/CD or test-environment evidence states environment, action, and result without relying on commit identity.
 - Small local defects may be fixed during check when the accepted spec.md contract is unchanged. Changes to spec.md or out-of-scope implementation behavior return to clarify for user confirmation.
 - Check owns the final Baseline Outcome. Update baseline-delta.md for stable reusable facts, or record that there are no reusable project facts or that candidates are not stable yet.
-- Use an independent reviewer for broad, behaviorally large, or workflow-semantics changes only when the harness, tools, and user or environment permission allow delegation; otherwise perform the same artifact and evidence review inline.
+- Use `cw-checker` to run verification, record evidence, and repair small in-scope defects when delegation is available.
+- Use `cw-reviewer` for broad, behaviorally large, or workflow-semantics changes only when the harness, tools, and user or environment permission allow delegation; otherwise perform the same artifact and evidence review inline.
 - Run a final broad review when the change is cross-cutting, behaviorally large, or touches workflow semantics shared by multiple commands.
 
 
