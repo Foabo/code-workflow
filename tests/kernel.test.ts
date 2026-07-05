@@ -168,8 +168,22 @@ describe("cw kernel", () => {
       assert.doesNotMatch(skill, /asks Codex to run/);
     }
     const clarifySkill = await readFile(path.join(root, ".agents/skills/cw-clarify/SKILL.md"), "utf8");
-    assert.match(clarifySkill, /Brainstorm Pass/);
-    assert.match(clarifySkill, /Grill Loop/);
+    assert.match(clarifySkill, /## Clarify Protocol/);
+    assert.match(clarifySkill, /### Brainstorm Pass/);
+    assert.match(clarifySkill, /Purpose: clarify the user's desired outcome/);
+    assert.match(clarifySkill, /Restate the goal and motivation/);
+    assert.match(clarifySkill, /at most three viable directions/);
+    assert.match(clarifySkill, /recommend the smallest sufficient path/);
+    assert.match(clarifySkill, /assumptions, risks, and acceptance evidence/);
+    assert.match(clarifySkill, /Open Decisions/);
+    assert.match(clarifySkill, /Do not write spec\.md during Brainstorm Pass/);
+    assert.match(clarifySkill, /### Grill Loop/);
+    assert.match(clarifySkill, /Input: use the Brainstorm Pass Open Decisions and any high-risk assumptions/);
+    assert.match(clarifySkill, /Ask one concrete question at a time/);
+    assert.match(clarifySkill, /recommended answer and the trade-off/);
+    assert.match(clarifySkill, /workflow-semantics, CLI\/API, task-lifecycle, state-machine, cross-module, or baseline-promotion decisions/);
+    assert.match(clarifySkill, /Stop only when the goal, boundary, acceptance criteria, key risks, and important trade-offs are clear enough/);
+    assert.match(clarifySkill, /do not rely on another skill or cross-skill lookup/);
     assert.match(clarifySkill, /advisor review of the current Proposed Spec/);
     assert.match(clarifySkill, /proposal identity/);
     assert.match(clarifySkill, /degraded execution/);
@@ -183,6 +197,19 @@ describe("cw kernel", () => {
     assert.match(clarifySkill, /Inline execution must remain complete/);
     assert.doesNotMatch(clarifySkill, /## Execution Strategy Guidance/);
     assert.doesNotMatch(clarifySkill, /fast path/);
+    assert.doesNotMatch(clarifySkill, /cw-brainstorm/);
+    assert.doesNotMatch(clarifySkill, /cw-grill/);
+    assertInOrder(clarifySkill, ["### Brainstorm Pass", "### Grill Loop"]);
+    assertInOrder(clarifySkill, [
+      "Brainstorm Pass -> Grill Loop -> Proposed Spec",
+      "advisor review of the current Proposed Spec",
+      "concern/blocker handling",
+      "explicit accept",
+      "write spec.md"
+    ]);
+    const skillNames = await readdir(path.join(root, ".agents/skills"));
+    assert.ok(!skillNames.includes("cw-brainstorm"));
+    assert.ok(!skillNames.includes("cw-grill"));
     const planSkill = await readFile(path.join(root, ".agents/skills/cw-plan/SKILL.md"), "utf8");
     assert.match(planSkill, /spec quality gate/);
     assert.match(planSkill, /Do not modify spec\.md during planning/);
@@ -2127,6 +2154,15 @@ async function acceptClarifyViaWorkflow(
     }
   });
   return runWorkflowAction(root, "clarify", { ...input, confirm: true });
+}
+
+function assertInOrder(text: string, fragments: string[]): void {
+  let cursor = -1;
+  for (const fragment of fragments) {
+    const next = text.indexOf(fragment, cursor + 1);
+    assert.notEqual(next, -1, `Expected to find "${fragment}" after offset ${cursor}`);
+    cursor = next;
+  }
 }
 
 async function migrateTasksViaCli(root: string, _now?: Date): Promise<LegacyTaskMigrationResult> {

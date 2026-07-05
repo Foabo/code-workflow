@@ -11,6 +11,7 @@
 - Generated workflow skill trigger text describes the CW workflow action and accepted invocation forms. It must not bind the trigger condition to a host name such as Codex, Claude, OpenCode, Pi, or Cursor.
 - Finish actively consumes an ordinary `baseline-delta.md` by default. Accepted merges all delta sections into existing Project Baseline files, selected merges only named baseline files, edited applies replacement current-state sections, and skipped records no Project Baseline change.
 - Baseline impact classification is based on parsed non-empty section content, not empty baseline-delta template headers.
+- Generated workflow guidance should define internal workflow phases inside the owning workflow skill. Create a separate generated skill only for independently invokable workflow actions, not for internal protocol stages.
 
 ## Agent Rules
 

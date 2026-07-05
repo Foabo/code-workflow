@@ -223,6 +223,35 @@ const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>
   ]
 };
 
+type CommandProtocolSection = {
+  title: string;
+  items: string[];
+};
+
+const commandProtocolSections: Partial<Record<(typeof AGENT_COMMANDS)[number], CommandProtocolSection[]>> = {
+  "cw-clarify": [
+    {
+      title: "Brainstorm Pass",
+      items: [
+        "Purpose: clarify the user's desired outcome before drafting a Proposed Spec. Restate the goal and motivation in concrete terms.",
+        "Required output: present at most three viable directions, recommend the smallest sufficient path, and list assumptions, risks, and acceptance evidence for that path.",
+        "Open Decisions: produce a short list of unresolved product, workflow, risk, or evidence decisions that would materially change the task contract.",
+        "Do not write spec.md during Brainstorm Pass. Move forward only to the Grill Loop or, when no Open Decisions or high-risk assumptions remain, to Proposed Spec."
+      ]
+    },
+    {
+      title: "Grill Loop",
+      items: [
+        "Input: use the Brainstorm Pass Open Decisions and any high-risk assumptions found in the request, baseline, or current task artifacts.",
+        "Ask one concrete question at a time. Include your recommended answer and the trade-off so the user can choose or correct the path.",
+        "Escalate to the full loop for broad, ambiguous, high-risk, irreversible, workflow-semantics, CLI/API, task-lifecycle, state-machine, cross-module, or baseline-promotion decisions.",
+        "Stop only when the goal, boundary, acceptance criteria, key risks, and important trade-offs are clear enough to write spec.md without high-risk assumptions, or when the user explicitly accepts the remaining risk.",
+        "Keep Brainstorm Pass and Grill Loop inside this cw-clarify guidance; do not rely on another skill or cross-skill lookup for these protocol stages."
+      ]
+    }
+  ]
+};
+
 const executionStrategyCommands = new Set<(typeof AGENT_COMMANDS)[number]>([
   "cw-work",
   "cw-plan",
@@ -741,7 +770,7 @@ ${commandPurposes[command]}
 
 ${renderExecutionStrategyGuidance(command)}## Workflow Steps
 
-${commandSteps[command].map((step, index) => `${index + 1}. ${step}`).join("\n")}${renderCommandGuidance(command)}
+${commandSteps[command].map((step, index) => `${index + 1}. ${step}`).join("\n")}${renderCommandGuidance(command)}${renderCommandProtocolSections(command)}
 
 ## Helper Commands
 
@@ -828,6 +857,18 @@ function renderCommandGuidance(command: (typeof AGENT_COMMANDS)[number]): string
 ## Phase Guidance
 
 ${guidance.map((item) => `- ${item}`).join("\n")}
+`;
+}
+
+function renderCommandProtocolSections(command: (typeof AGENT_COMMANDS)[number]): string {
+  const sections = commandProtocolSections[command];
+  if (sections === undefined || sections.length === 0) {
+    return "";
+  }
+  return `
+## Clarify Protocol
+
+${sections.map((section) => `### ${section.title}\n\n${section.items.map((item) => `- ${item}`).join("\n")}`).join("\n\n")}
 `;
 }
 

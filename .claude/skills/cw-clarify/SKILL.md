@@ -62,6 +62,23 @@ Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md
 - Project Baseline files are not updated during clarify. Confirmed long-term facts should be captured as task-local candidates for later Baseline Outcome handling.
 - For generated workflow guidance changes, challenge likely agent behavior directly: would this wording let an agent skip challenge, skip grill, move to plan/run too early, misuse subagents, or accept vague evidence?
 
+## Clarify Protocol
+
+### Brainstorm Pass
+
+- Purpose: clarify the user's desired outcome before drafting a Proposed Spec. Restate the goal and motivation in concrete terms.
+- Required output: present at most three viable directions, recommend the smallest sufficient path, and list assumptions, risks, and acceptance evidence for that path.
+- Open Decisions: produce a short list of unresolved product, workflow, risk, or evidence decisions that would materially change the task contract.
+- Do not write spec.md during Brainstorm Pass. Move forward only to the Grill Loop or, when no Open Decisions or high-risk assumptions remain, to Proposed Spec.
+
+### Grill Loop
+
+- Input: use the Brainstorm Pass Open Decisions and any high-risk assumptions found in the request, baseline, or current task artifacts.
+- Ask one concrete question at a time. Include your recommended answer and the trade-off so the user can choose or correct the path.
+- Escalate to the full loop for broad, ambiguous, high-risk, irreversible, workflow-semantics, CLI/API, task-lifecycle, state-machine, cross-module, or baseline-promotion decisions.
+- Stop only when the goal, boundary, acceptance criteria, key risks, and important trade-offs are clear enough to write spec.md without high-risk assumptions, or when the user explicitly accepts the remaining risk.
+- Keep Brainstorm Pass and Grill Loop inside this cw-clarify guidance; do not rely on another skill or cross-skill lookup for these protocol stages.
+
 
 ## Helper Commands
 
