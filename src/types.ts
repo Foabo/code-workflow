@@ -6,6 +6,11 @@ export type EnhancementCategory = "code_index" | "context_memory";
 export type EnhancementSetupStatus = "skipped" | "pending" | "configured" | "failed";
 export type DirtyWorktreeDecision = "clean" | "covered" | "unrelated";
 export type BaselineDecision = "accepted" | "selected" | "edited" | "skipped";
+export type AgentRoleName = "advisor" | "planner" | "implementer" | "reviewer" | "checker" | "baseline-writer";
+export type AdvisorMode = "off" | "manual" | "gate" | "high-risk" | "always-on";
+export type AdvisorSeverity = "nit" | "concern" | "blocker";
+export type ModelCapabilityTier = "fast" | "balanced" | "high-reasoning" | "review" | "long-context";
+export type ModelReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh" | "auto";
 
 export type TaskArtifacts = {
   spec: string;
@@ -60,6 +65,33 @@ export type EnhancementProviderRecord = {
     ok: boolean;
     exit_code: number | null;
   } | null;
+  updated_at: string;
+};
+
+export type RoleModelProfile = {
+  capability_tier: ModelCapabilityTier;
+  model: string | null;
+  reasoning_effort: ModelReasoningEffort | null;
+  temperature?: number | null;
+  notes: string[];
+};
+
+export type HarnessRoleModelOverride = {
+  model?: string | null;
+  reasoning_effort?: ModelReasoningEffort | null;
+  temperature?: number | null;
+};
+
+export type OrchestrationConfigRecord = {
+  schema_version: 1;
+  advisor: {
+    enabled_by_default: boolean;
+    mode: AdvisorMode;
+    sync_backlog: number;
+    severity_levels: AdvisorSeverity[];
+  };
+  roles: Record<AgentRoleName, RoleModelProfile>;
+  harness_overrides: Record<string, Partial<Record<AgentRoleName, HarnessRoleModelOverride>>>;
   updated_at: string;
 };
 

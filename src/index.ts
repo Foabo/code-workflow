@@ -16,6 +16,7 @@ export type {
   DirtyWorktreeDecision,
   DoctorReport,
   EnhancementChoice,
+  OrchestrationConfigRecord,
   TaskStateRecord,
   ValidationIssue
 } from "./types.js";

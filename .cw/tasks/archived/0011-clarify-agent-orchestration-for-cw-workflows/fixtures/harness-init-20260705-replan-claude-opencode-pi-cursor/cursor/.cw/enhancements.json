@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "code_intelligence": "skipped",
+  "external_context": "skipped",
+  "updated_at": "2026-07-05T14:09:58.649Z",
+  "code_index": {
+    "category": "code_index",
+    "provider_id": "skipped",
+    "status": "skipped",
+    "commands": [],
+    "commands_run": [],
+    "touched_files": [],
+    "message": "Provider setup skipped.",
+    "verification": null,
+    "updated_at": "2026-07-05T14:09:58.649Z"
+  },
+  "context_memory": {
+    "category": "context_memory",
+    "provider_id": "skipped",
+    "status": "skipped",
+    "commands": [],
+    "commands_run": [],
+    "touched_files": [],
+    "message": "Provider setup skipped.",
+    "verification": null,
+    "updated_at": "2026-07-05T14:09:58.649Z"
+  }
+}

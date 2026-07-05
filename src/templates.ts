@@ -65,7 +65,7 @@ export const TASK_ARTIFACT_TEMPLATES: Record<string, string> = {
 ## Decisions
 
 ## Acceptance Criteria
-- [ ] 
+- [ ]
 `,
   "plan.md": `# Plan
 
@@ -80,10 +80,10 @@ export const TASK_ARTIFACT_TEMPLATES: Record<string, string> = {
   "task.md": `# Task
 
 ## Implementation
-- [ ] 
+- [ ]
 
 ## Verification
-- [ ] 
+- [ ]
 
 ## Check
 - [ ] Acceptance criteria in spec.md are covered.

@@ -1,9 +1,19 @@
 import path from "node:path";
 import { writeFile } from "node:fs/promises";
 import { ensureDir, writeFileIfMissing } from "./fs.js";
+import { AGENT_ROLE_NAMES, DEFAULT_ROLE_MODEL_PROFILES } from "./orchestration.js";
+import { readJsonFile } from "./json.js";
+import { getCwPaths } from "./paths.js";
 import { AGENT_COMMANDS } from "./templates.js";
+import {
+  AgentRoleName,
+  HarnessRoleModelOverride,
+  ModelReasoningEffort,
+  OrchestrationConfigRecord,
+  RoleModelProfile
+} from "./types.js";
 
-export type HarnessName = "codex" | "claude" | "opencode" | "pi";
+export type HarnessName = "codex" | "claude" | "opencode" | "pi" | "cursor";
 
 export type AdapterResult = {
   harness: HarnessName;
@@ -201,6 +211,140 @@ const executionStrategyCommands = new Set<(typeof AGENT_COMMANDS)[number]>([
   "cw-check"
 ]);
 
+type RoleAgentDefinition = {
+  role: AgentRoleName;
+  purpose: string;
+  useWhen: string[];
+  responsibilities: string[];
+  boundaries: string[];
+  report: string[];
+  writeAccess: "read-only" | "task-artifacts" | "code-and-task" | "baseline-draft";
+};
+type ResolvedRoleModelProfile = RoleModelProfile & {
+  temperature: number | null;
+};
+
+const roleAgentDefinitions: Record<AgentRoleName, RoleAgentDefinition> = {
+  advisor: {
+    role: "advisor",
+    purpose: "Read-only skeptical reviewer for CW workflow turns, specs, plans, diffs, and closure packets.",
+    useWhen: [
+      "Default-enabled advisor mode is active in .cw/orchestration.json and the harness can run a watcher or peer agent.",
+      "Manual or gate mode asks for an independent challenge pass before accepting specs, plans, implementation, or finish readiness.",
+      "During cw-clarify, review the Proposed Spec before the primary session edits spec.md."
+    ],
+    responsibilities: [
+      "Watch bounded primary-session deltas plus task artifacts, similar to OMP advisor behavior.",
+      "Emit concise advisory feedback with severity nit, concern, or blocker.",
+      "Challenge missing motivation, vague acceptance criteria, skipped verification, unsafe worktree handling, and spec drift.",
+      "Deduplicate advice and stay within sync_backlog from .cw/orchestration.json."
+    ],
+    boundaries: [
+      "Do not ask the user directly.",
+      "Do not edit files, accept a spec, move task phase, or close a task.",
+      "Do not expand product scope; route unresolved decisions back to the primary session.",
+      "Blocker severity means the primary session must stop and resolve the issue before continuing."
+    ],
+    report: [
+      "severity: nit | concern | blocker",
+      "target: spec | plan | task | code | verification | finish",
+      "finding: one concrete issue",
+      "recommended_action: one smallest next action"
+    ],
+    writeAccess: "read-only"
+  },
+  planner: {
+    role: "planner",
+    purpose: "Turn an accepted spec.md into plan.md and executable task.md without changing the spec.",
+    useWhen: ["The current task phase is plan.", "A post-plan cross-review finds missing coverage or contradiction."],
+    responsibilities: [
+      "Apply the spec quality gate.",
+      "Create a scoped implementation approach and verification strategy.",
+      "Break task.md into small checklist items that can be independently verified.",
+      "Record open risks in plan.md without inventing new product behavior."
+    ],
+    boundaries: [
+      "Do not edit spec.md.",
+      "Do not move to run until spec.md, plan.md, and task.md are aligned.",
+      "Return to clarify when a required decision is missing."
+    ],
+    report: ["summary of planned approach", "task checklist coverage", "risks or blocked questions", "recommended next phase"],
+    writeAccess: "task-artifacts"
+  },
+  implementer: {
+    role: "implementer",
+    purpose: "Execute task.md implementation checklist items against the accepted spec and plan.",
+    useWhen: ["The current task phase is run.", "A vertical implementation slice is independent enough for delegation."],
+    responsibilities: [
+      "Read spec.md, plan.md, task.md, relevant Project Baseline, and necessary code.",
+      "Modify code and tests within the accepted task contract.",
+      "Update task.md progress for completed implementation items.",
+      "Append material progress through CW helpers when delegated tooling permits it."
+    ],
+    boundaries: [
+      "Do not decide requirement drift.",
+      "Do not close tasks or perform finish behavior.",
+      "Stop and report when implementation requires product behavior outside spec.md."
+    ],
+    report: ["files changed", "checklist items completed", "tests added or updated", "risks or user decisions needed"],
+    writeAccess: "code-and-task"
+  },
+  reviewer: {
+    role: "reviewer",
+    purpose: "Independent review for artifact alignment, implementation evidence, regressions, and missing tests.",
+    useWhen: ["A plan or implementation touches shared workflow semantics.", "cw-check needs a broad final review."],
+    responsibilities: [
+      "Map every acceptance criterion to evidence.",
+      "Inspect spec.md, plan.md, task.md, and relevant code for contradiction or overbuild.",
+      "Prioritize bugs, regressions, and missing verification.",
+      "Separate findings from style preferences."
+    ],
+    boundaries: [
+      "Do not rewrite the task contract.",
+      "Do not close tasks.",
+      "Small in-scope fixes may be proposed; out-of-scope changes return to the primary session."
+    ],
+    report: ["findings ordered by severity", "acceptance criteria coverage", "test gaps", "residual risk"],
+    writeAccess: "read-only"
+  },
+  checker: {
+    role: "checker",
+    purpose: "Run verification, repair small in-scope defects, and prepare check evidence for the primary session.",
+    useWhen: ["The current task phase is check.", "Verification evidence is missing or stale."],
+    responsibilities: [
+      "Run relevant commands from .cw/project/commands.md.",
+      "Record verification evidence in task.md.",
+      "Fix small local defects when the accepted spec is unchanged.",
+      "Report spec drift or behavior changes instead of resolving them silently."
+    ],
+    boundaries: [
+      "Do not accept unresolved drift.",
+      "Do not sync Project Baseline or close tasks.",
+      "Do not treat external memory as Repo Truth."
+    ],
+    report: ["commands run", "result", "task.md evidence updated", "defects fixed or unresolved blockers"],
+    writeAccess: "code-and-task"
+  },
+  "baseline-writer": {
+    role: "baseline-writer",
+    purpose: "Draft current-state Project Baseline updates from an accepted baseline-delta.md.",
+    useWhen: ["cw-finish has a baseline delta and the user has chosen accepted, selected, or edited baseline handling."],
+    responsibilities: [
+      "Read existing .cw/project files before drafting.",
+      "Integrate accepted facts as current-state documentation.",
+      "Preserve user-authored baseline content unless the accepted delta supersedes it.",
+      "Keep task-local details out of Project Baseline."
+    ],
+    boundaries: [
+      "Do not apply baseline changes without user confirmation.",
+      "Do not invent architecture facts from plans or aspirations.",
+      "Do not close tasks."
+    ],
+    report: ["candidate baseline sections", "source delta coverage", "content intentionally left out", "confirmation needed"],
+    writeAccess: "baseline-draft"
+  }
+};
+
 export async function generateAdapter(
   root: string,
   harness: HarnessName,
@@ -216,6 +360,9 @@ export async function generateAdapter(
     return generateAgentSkillAdapter(root, harness, options);
   }
   if (harness === "pi") {
+    return generateAgentSkillAdapter(root, harness, options);
+  }
+  if (harness === "cursor") {
     return generateAgentSkillAdapter(root, harness, options);
   }
   throw new Error(`unsupported harness: ${harness satisfies never}`);
@@ -236,6 +383,8 @@ async function generateAgentSkillAdapter(
     await writeGenerated(root, path.join(skillDir, "SKILL.md"), renderHarnessSkill(command, harness), options, result);
   }
 
+  await generateRoleAgents(root, harness, options, result);
+
   return result;
 }
 
@@ -250,7 +399,174 @@ async function generateClaudeAdapter(root: string, options: AdapterOptions): Pro
     await writeGenerated(root, path.join(skillDir, "SKILL.md"), renderHarnessSkill(command, "claude"), options, result);
   }
 
+  await generateRoleAgents(root, "claude", options, result);
+
   return result;
+}
+
+async function generateRoleAgents(
+  root: string,
+  harness: HarnessName,
+  options: AdapterOptions,
+  result: AdapterResult
+): Promise<void> {
+  const roleRoot = path.join(root, roleAgentRoot(harness));
+  await ensureDir(roleRoot);
+
+  for (const expected of await expectedGeneratedRoleAgentsForRoot(root, harness)) {
+    await writeGenerated(root, path.join(root, expected.path), expected.content, options, result);
+  }
+}
+
+export async function expectedGeneratedRoleAgentsForRoot(root: string, harness: HarnessName): Promise<Array<{ path: string; content: string }>> {
+  return expectedGeneratedRoleAgents(harness, await readOrchestrationConfig(root));
+}
+
+export function expectedGeneratedRoleAgents(
+  harness: HarnessName,
+  orchestration: OrchestrationConfigRecord | null = null
+): Array<{ path: string; content: string }> {
+  const rootPath = roleAgentRoot(harness);
+  return AGENT_ROLE_NAMES.map((role) => {
+    const fileName = harness === "codex" ? `${roleAgentName(role)}.toml` : `${roleAgentName(role)}.md`;
+    const profile = resolvedRoleProfile(orchestration, harness, role);
+    return {
+      path: path.join(rootPath, fileName),
+      content: renderRoleAgent(roleAgentDefinitions[role], harness, profile)
+    };
+  });
+}
+
+function roleAgentRoot(harness: HarnessName): string {
+  if (harness === "claude") {
+    return ".claude/agents";
+  }
+  if (harness === "codex") {
+    return ".codex/agents";
+  }
+  if (harness === "opencode") {
+    return ".opencode/agents";
+  }
+  if (harness === "cursor") {
+    return ".cursor/agents";
+  }
+  return ".pi/agents";
+}
+
+function renderRoleAgent(definition: RoleAgentDefinition, harness: HarnessName, profile: ResolvedRoleModelProfile): string {
+  const body = renderRoleBody(definition, harness, profile);
+  if (harness === "codex") {
+    return renderCodexRoleAgent(definition, body, profile);
+  }
+  if (harness === "claude") {
+    return renderClaudeRoleAgent(definition, body, profile);
+  }
+  if (harness === "cursor") {
+    return renderCursorRoleAgent(definition, body, profile);
+  }
+  if (harness === "opencode") {
+    return renderOpenCodeRoleAgent(definition, body, profile);
+  }
+  return renderPiRoleGuidance(definition, body, profile);
+}
+
+function renderRoleBody(definition: RoleAgentDefinition, harness: HarnessName, profile: ResolvedRoleModelProfile): string {
+  return `# ${roleAgentName(definition.role)}
+
+${definition.purpose}
+
+## Harness
+
+- Platform: ${harnessLabel(harness)}
+- CW role: ${definition.role}
+- Model profile: ${formatRoleProfile(profile)}
+- Configuration: .cw/orchestration.json owns advisor mode, role model profiles, and per-harness model overrides.
+
+## Use When
+
+${definition.useWhen.map((item) => `- ${item}`).join("\n")}
+
+## Responsibilities
+
+${definition.responsibilities.map((item) => `- ${item}`).join("\n")}
+
+## Boundaries
+
+${definition.boundaries.map((item) => `- ${item}`).join("\n")}
+
+## Required Context
+
+- .cw/version.json
+- .cw/orchestration.json when present
+- Relevant .cw/project files
+- Current task files under .cw/tasks/<task-id>/ when a task exists
+- Minimal code context needed for the assigned role
+
+## Report Format
+
+${definition.report.map((item) => `- ${item}`).join("\n")}
+`;
+}
+
+function renderCodexRoleAgent(definition: RoleAgentDefinition, body: string, profile: ResolvedRoleModelProfile): string {
+  return `name = ${tomlString(roleAgentName(definition.role))}
+description = ${tomlString(definition.purpose)}
+${renderCodexModel(profile.model)}${renderCodexReasoningEffort(profile.reasoning_effort)}developer_instructions = ${tomlMultilineString(body)}
+`;
+}
+
+function renderClaudeRoleAgent(definition: RoleAgentDefinition, body: string, profile: ResolvedRoleModelProfile): string {
+  return `---
+name: ${roleAgentName(definition.role)}
+description: ${definition.purpose}
+model: ${frontmatterModel(profile)}
+tools: ${claudeTools(definition.writeAccess)}
+---
+
+${body}`;
+}
+
+function renderCursorRoleAgent(definition: RoleAgentDefinition, body: string, profile: ResolvedRoleModelProfile): string {
+  return `---
+name: ${roleAgentName(definition.role)}
+description: ${definition.purpose}
+model: ${frontmatterModel(profile)}
+readonly: ${definition.writeAccess === "read-only" ? "true" : "false"}
+is_background: false
+---
+
+${body}`;
+}
+
+function renderOpenCodeRoleAgent(definition: RoleAgentDefinition, body: string, profile: ResolvedRoleModelProfile): string {
+  const tools = openCodeTools(definition.writeAccess);
+  return `---
+description: ${definition.purpose}
+mode: subagent
+model: ${frontmatterModel(profile)}
+${renderOpenCodeTemperature(profile.temperature)}tools:
+  write: ${tools.write ? "true" : "false"}
+  edit: ${tools.edit ? "true" : "false"}
+  bash: ${tools.bash ? "true" : "false"}
+---
+
+${body}`;
+}
+
+function renderPiRoleGuidance(definition: RoleAgentDefinition, body: string, profile: ResolvedRoleModelProfile): string {
+  return `---
+name: ${roleAgentName(definition.role)}
+description: ${definition.purpose}
+capability_tier: ${profile.capability_tier}
+model: ${frontmatterModel(profile)}
+---
+
+${body}
+
+## Pi Compatibility
+
+Pi subagents discover project agents from .pi/agents. Continue inline when the runtime cannot spawn this role.
+`;
 }
 
 function renderWorkflowInstructions(command: (typeof AGENT_COMMANDS)[number]): string {
@@ -307,6 +623,7 @@ function renderExecutionStrategyGuidance(command: (typeof AGENT_COMMANDS)[number
   return `## Execution Strategy Guidance
 
 - Inline execution is fully supported and must remain complete.
+- Use \`.cw/orchestration.json\` and generated \`cw-<role>\` agent files as the role and model contract when delegation is available.
 - Delegation is optional and permission-bound; continue inline when delegation is unavailable or unauthorized.
 - Delegated work receives task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
 - Delegated agents must not close tasks; closure decisions and unresolved drift return to the main session.
@@ -338,7 +655,7 @@ Use this skill when the user asks ${harnessLabel(harness)} to run \`${command}\`
 Before acting, read the repository's \`.cw\` files relevant to the current task. Treat \`.cw\` as Repo Truth, generated skills as invocation surfaces, and Git as the source of truth for code changes.
 
 ${renderWorkflowInstructions(command)}
-`;
+`.replace(/\n+$/, "\n");
 }
 
 export function isGeneratedSkillCurrent(
@@ -346,8 +663,112 @@ export function isGeneratedSkillCurrent(
   content: string,
   skillsPath: ".agents/skills" | ".claude/skills"
 ): boolean {
-  const harnesses: HarnessName[] = skillsPath === ".claude/skills" ? ["claude"] : ["codex", "opencode", "pi"];
+  const harnesses: HarnessName[] = skillsPath === ".claude/skills" ? ["claude"] : ["codex", "opencode", "pi", "cursor"];
   return harnesses.some((harness) => content === renderHarnessSkill(command, harness));
+}
+
+function roleProfile(role: AgentRoleName): RoleModelProfile {
+  return DEFAULT_ROLE_MODEL_PROFILES[role];
+}
+
+async function readOrchestrationConfig(root: string): Promise<OrchestrationConfigRecord | null> {
+  try {
+    return await readJsonFile<OrchestrationConfigRecord>(getCwPaths(root).orchestration);
+  } catch {
+    return null;
+  }
+}
+
+function resolvedRoleProfile(
+  orchestration: OrchestrationConfigRecord | null,
+  harness: HarnessName,
+  role: AgentRoleName
+): ResolvedRoleModelProfile {
+  const base = roleProfile(role);
+  const roleProfileOverride = orchestration?.roles?.[role];
+  const harnessOverride = orchestration?.harness_overrides?.[harness]?.[role];
+  return {
+    capability_tier: roleProfileOverride?.capability_tier ?? base.capability_tier,
+    model: overrideValue(harnessOverride, "model", roleProfileOverride?.model ?? base.model),
+    reasoning_effort: overrideValue(
+      harnessOverride,
+      "reasoning_effort",
+      roleProfileOverride?.reasoning_effort ?? base.reasoning_effort
+    ),
+    temperature: overrideValue(
+      harnessOverride,
+      "temperature",
+      roleProfileOverride?.temperature ?? base.temperature ?? null
+    ),
+    notes: roleProfileOverride?.notes ?? base.notes
+  };
+}
+
+function overrideValue<K extends keyof HarnessRoleModelOverride>(
+  override: HarnessRoleModelOverride | undefined,
+  key: K,
+  inherited: NonNullable<HarnessRoleModelOverride[K]> | null
+): NonNullable<HarnessRoleModelOverride[K]> | null {
+  if (override !== undefined && key in override) {
+    return override[key] ?? null;
+  }
+  return inherited;
+}
+
+function formatRoleProfile(profile: RoleModelProfile): string {
+  const reasoning = profile.reasoning_effort === null ? "default reasoning" : `${profile.reasoning_effort} reasoning`;
+  const model = profile.model === null ? "platform default model" : profile.model;
+  const temperature = profile.temperature === undefined || profile.temperature === null ? "" : `, temperature ${profile.temperature}`;
+  return `${profile.capability_tier}, ${reasoning}, ${model}${temperature}`;
+}
+
+function renderCodexReasoningEffort(reasoningEffort: ModelReasoningEffort | null): string {
+  return reasoningEffort === null ? "" : `model_reasoning_effort = ${tomlString(reasoningEffort)}\n`;
+}
+
+function renderCodexModel(model: string | null): string {
+  return model === null ? "" : `model = ${tomlString(model)}\n`;
+}
+
+function tomlString(value: string): string {
+  return JSON.stringify(value);
+}
+
+function tomlMultilineString(value: string): string {
+  const escaped = value.replace(/\\/g, "\\\\").replace(/"""/g, '\\"\\"\\"');
+  return `"""\n${escaped}\n"""`;
+}
+
+function frontmatterModel(profile: RoleModelProfile): string {
+  return profile.model ?? "inherit";
+}
+
+function renderOpenCodeTemperature(temperature: number | null): string {
+  return temperature === null ? "" : `temperature: ${temperature}\n`;
+}
+
+function openCodeTools(writeAccess: RoleAgentDefinition["writeAccess"]): { write: boolean; edit: boolean; bash: boolean } {
+  if (writeAccess === "read-only") {
+    return { write: false, edit: false, bash: false };
+  }
+  if (writeAccess === "baseline-draft" || writeAccess === "task-artifacts") {
+    return { write: true, edit: true, bash: false };
+  }
+  return { write: true, edit: true, bash: true };
+}
+
+function claudeTools(writeAccess: RoleAgentDefinition["writeAccess"]): string {
+  if (writeAccess === "read-only") {
+    return "Read, Grep, Glob";
+  }
+  if (writeAccess === "baseline-draft" || writeAccess === "task-artifacts") {
+    return "Read, Grep, Glob, Edit, MultiEdit";
+  }
+  return "Read, Grep, Glob, Edit, MultiEdit, Bash";
+}
+
+function roleAgentName(role: AgentRoleName): string {
+  return `cw-${role}`;
 }
 
 async function writeGenerated(

@@ -1,6 +1,7 @@
 import path from "node:path";
 import { AdapterResult, generateAdapter, HarnessName } from "./adapters.js";
 import { ensureDir, writeFileIfMissing } from "./fs.js";
+import { defaultOrchestrationConfig } from "./orchestration.js";
 import { getCwPaths } from "./paths.js";
 import { PROJECT_BASELINE_TEMPLATES, TASK_ARTIFACT_TEMPLATES } from "./templates.js";
 import { CW_SCHEMA_VERSION, EnhancementChoice, EnhancementConfigRecord, VersionRecord } from "./types.js";
@@ -64,6 +65,12 @@ export async function initProject(root: string, options: InitOptions | Date = {}
     created.push(relative(root, paths.enhancements));
   } else {
     existing.push(relative(root, paths.enhancements));
+  }
+
+  if (await writeJsonIfMissing(paths.orchestration, defaultOrchestrationConfig(normalized.now))) {
+    created.push(relative(root, paths.orchestration));
+  } else {
+    existing.push(relative(root, paths.orchestration));
   }
 
   for (const [fileName, content] of Object.entries(PROJECT_BASELINE_TEMPLATES)) {

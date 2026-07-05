@@ -10,6 +10,8 @@ import {
   detectCodebaseMemoryMcp,
   EnhancementProviderId,
   providerChoicesFor,
+  runLocalCommand,
+  SetupCommand,
   validateProviderSelection
 } from "./enhancements.js";
 import { initProject } from "./init.js";
@@ -28,7 +30,15 @@ import {
 } from "./tasks.js";
 import { resolveTaskReference } from "./task-storage.js";
 import { doctorProject, validateProject } from "./validate.js";
-import { DirtyWorktreeDecision, EnhancementCategory, EnhancementChoice, EnhancementProviderRecord, TaskLifecycle, TraceEvent } from "./types.js";
+import {
+  DirtyWorktreeDecision,
+  EnhancementCategory,
+  EnhancementChoice,
+  EnhancementProviderRecord,
+  EnhancementSetupStatus,
+  TaskLifecycle,
+  TraceEvent
+} from "./types.js";
 import { HarnessName } from "./adapters.js";
 import { BaselineDecision, ensureBaselineDelta, syncBaselineDelta } from "./baseline.js";
 import { updateProject } from "./update.js";
@@ -55,12 +65,30 @@ type InitEnhancementSelection = {
 type ProviderPromptValue =
   | EnhancementProviderId
   | "codebase-memory-mcp:existing";
+type PiSubagentsSelection = "install" | "skipped";
+type PiSubagentsSetupRecord = {
+  category: "agent_orchestration";
+  provider_id: "pi-subagents";
+  status: EnhancementSetupStatus;
+  commands: string[];
+  commands_run: string[];
+  touched_files: string[];
+  message: string;
+  verification: {
+    command: string;
+    ok: boolean;
+    exit_code: number | null;
+  } | null;
+  updated_at: string;
+};
+type InitSetupRecord = EnhancementProviderRecord | PiSubagentsSetupRecord;
 
 const HARNESS_CHOICES = [
   { value: "codex", label: "Codex", detail: "Generate repo-local agent skills." },
   { value: "claude", label: "Claude", detail: "Generate repo-local Claude skills." },
   { value: "opencode", label: "OpenCode", detail: "Generate repo-local agent skills." },
-  { value: "pi", label: "Pi", detail: "Generate repo-local agent skills." }
+  { value: "pi", label: "Pi", detail: "Generate repo-local agent skills." },
+  { value: "cursor", label: "Cursor", detail: "Generate repo-local agent skills and Cursor agents." }
 ] as const satisfies readonly Choice<HarnessName>[];
 
 async function main(argv: string[]): Promise<number> {
@@ -94,12 +122,13 @@ async function main(argv: string[]): Promise<number> {
             "context_memory",
             harness
           );
+          const piSubagents = initPiSubagents(publicFlags, harness);
           const result = await initProject(root, {
             harnesses: [harness],
             codeIntelligence: codeIndex.legacyChoice,
             externalContext: contextMemory.legacyChoice
           });
-          const setup = await runInitSetup(root, harness, [codeIndex, contextMemory], prompts);
+          const setup = await runInitSetup(root, harness, [codeIndex, contextMemory], prompts, piSubagents);
           printJson({ ...result, setup });
           return 0;
         } finally {
@@ -338,9 +367,13 @@ async function runInitSetup(
   root: string,
   harness: HarnessName,
   selections: InitEnhancementSelection[],
-  prompts: PromptSession | null
-): Promise<EnhancementProviderRecord[]> {
-  const results: EnhancementProviderRecord[] = [];
+  prompts: PromptSession | null,
+  piSubagents: PiSubagentsSelection
+): Promise<InitSetupRecord[]> {
+  const results: InitSetupRecord[] = [];
+  if (harness === "pi") {
+    results.push(await setupPiSubagents(root, piSubagents, prompts));
+  }
   for (const selection of selections) {
     if (selection.legacyOnly) {
       results.push({
@@ -369,6 +402,94 @@ async function runInitSetup(
     results.push(await applyEnhancementSetup(root, plan, { confirmed }));
   }
   return results;
+}
+
+async function setupPiSubagents(
+  root: string,
+  selection: PiSubagentsSelection,
+  prompts: PromptSession | null
+): Promise<PiSubagentsSetupRecord> {
+  const command: SetupCommand = { command: "pi", args: ["install", "npm:pi-subagents"], cwd: root };
+  const commandText = commandToString(command);
+  const now = new Date().toISOString();
+  const touchedFiles = [".pi/agents/", "Pi package registry"];
+
+  if (selection === "skipped") {
+    return {
+      category: "agent_orchestration",
+      provider_id: "pi-subagents",
+      status: "skipped",
+      commands: [commandText],
+      commands_run: [],
+      touched_files: touchedFiles,
+      message: "Pi subagents setup skipped.",
+      verification: null,
+      updated_at: now
+    };
+  }
+
+  if (prompts !== null) {
+    process.stdout.write("\nPi subagents setup preview\n");
+    process.stdout.write("Category: agent_orchestration\n");
+    process.stdout.write("Intrusion: low\n");
+    process.stdout.write("Commands:\n");
+    process.stdout.write(`  - ${commandText}\n`);
+    const confirmed = await prompts.confirm("Install pi-subagents now?", true);
+    if (!confirmed) {
+      return {
+        category: "agent_orchestration",
+        provider_id: "pi-subagents",
+        status: "skipped",
+        commands: [commandText],
+        commands_run: [],
+        touched_files: touchedFiles,
+        message: "Pi subagents setup skipped by user.",
+        verification: null,
+        updated_at: now
+      };
+    }
+  }
+
+  try {
+    const result = await runLocalCommand(command);
+    return {
+      category: "agent_orchestration",
+      provider_id: "pi-subagents",
+      status: result.ok ? "configured" : "failed",
+      commands: [commandText],
+      commands_run: [commandText],
+      touched_files: touchedFiles,
+      message: result.ok
+        ? "pi-subagents installed."
+        : trimSetupMessage(result.stderr) || trimSetupMessage(result.stdout) || "pi-subagents install command failed.",
+      verification: {
+        command: commandText,
+        ok: result.ok,
+        exit_code: result.exitCode
+      },
+      updated_at: now
+    };
+  } catch (error) {
+    return {
+      category: "agent_orchestration",
+      provider_id: "pi-subagents",
+      status: "failed",
+      commands: [commandText],
+      commands_run: [commandText],
+      touched_files: touchedFiles,
+      message: error instanceof Error ? error.message : String(error),
+      verification: {
+        command: commandText,
+        ok: false,
+        exit_code: null
+      },
+      updated_at: now
+    };
+  }
+}
+
+function trimSetupMessage(value: string): string {
+  return value.trim().split(/\r?\n/).filter((line) => line.trim().length > 0).slice(-1)[0]?.trim() ?? "";
 }
 
 async function confirmSetupPlan(
@@ -535,10 +656,24 @@ function optionalHarness(flags: Flags, key: string): HarnessName | undefined {
   if (value === undefined) {
     return undefined;
   }
-  if (value === "codex" || value === "claude" || value === "opencode" || value === "pi") {
+  if (value === "codex" || value === "claude" || value === "opencode" || value === "pi" || value === "cursor") {
     return value;
   }
-  throw new Error(`--${key} must be codex, claude, opencode, or pi`);
+  throw new Error(`--${key} must be codex, claude, opencode, pi, or cursor`);
+}
+
+function initPiSubagents(flags: Flags, harness: HarnessName): PiSubagentsSelection {
+  const value = optionalString(flags, "pi-subagents");
+  if (value === undefined) {
+    return harness === "pi" ? "install" : "skipped";
+  }
+  if (harness !== "pi") {
+    throw new Error("--pi-subagents is only available with --harness pi");
+  }
+  if (value === "install" || value === "skipped") {
+    return value;
+  }
+  throw new Error("--pi-subagents must be install or skipped");
 }
 
 function requiredWorkflowAction(flags: Flags, key: string): WorkflowAction {
@@ -755,10 +890,10 @@ function printJson(value: unknown): void {
 
 function printUsage(): void {
   console.log(`Usage:
-  cw init [path] [--root <path>] [--harness codex|claude|opencode|pi] [--code-index skipped|codebase-memory-mcp|aft|codegraph|graphify] [--context-memory skipped|codex-native-memories|claude-mem|magic-context] [--yes]
+  cw init [path] [--root <path>] [--harness codex|claude|opencode|pi|cursor] [--code-index skipped|codebase-memory-mcp|aft|codegraph|graphify] [--context-memory skipped|codex-native-memories|claude-mem|magic-context] [--pi-subagents install|skipped] [--yes]
   cw validate [--root <path>]
   cw doctor [--root <path>]
-  cw update [--root <path>] [--harness codex|claude|opencode|pi]
+  cw update [--root <path>] [--harness codex|claude|opencode|pi|cursor]
   cw tasks [--root <path>] [--archived|--all]
   cw preflight --action <action> [--task <id>] [--root <path>]
   cw internal <helper> [flags]`);

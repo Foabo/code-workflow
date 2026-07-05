@@ -29,6 +29,7 @@ describe("cw kernel", () => {
     assert.ok(result.created.includes(".cw/version.json"));
     assert.ok(result.created.includes(".cw/project/overview.md"));
     assert.ok(result.created.includes(".cw/enhancements.json"));
+    assert.ok(result.created.includes(".cw/orchestration.json"));
     assert.ok(result.created.includes(".cw/templates/spec.md"));
     assert.deepEqual(result.adapters, []);
     await assert.rejects(access(path.join(root, ".cw/agent-commands")));
@@ -47,10 +48,58 @@ describe("cw kernel", () => {
 
     assert.ok(rerun.existing.includes(".cw/project/overview.md"));
     assert.ok(rerun.existing.includes(".cw/enhancements.json"));
+    assert.ok(rerun.existing.includes(".cw/orchestration.json"));
     assert.equal(await readFile(path.join(root, ".cw/project/overview.md"), "utf8"), "# Custom overview\n");
     const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
     assert.equal(enhancements.code_intelligence, "configured");
+    const orchestration = JSON.parse(await readFile(path.join(root, ".cw/orchestration.json"), "utf8")) as Record<string, unknown>;
+    assert.equal((orchestration.advisor as Record<string, unknown>).mode, "always-on");
+    assert.equal((orchestration.advisor as Record<string, unknown>).enabled_by_default, true);
+    assert.equal(((orchestration.roles as Record<string, Record<string, unknown>>).advisor).capability_tier, "high-reasoning");
+    assert.equal(((orchestration.roles as Record<string, Record<string, unknown>>).advisor).temperature, 0.1);
+    assert.equal(((orchestration.roles as Record<string, Record<string, unknown>>).checker).temperature, 0.2);
     assert.equal((await doctorProject(root)).ok, true);
+  });
+
+  it("validates expanded orchestration reasoning effort values and rejects minimal", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    const orchestrationPath = path.join(root, ".cw/orchestration.json");
+    const orchestration = JSON.parse(await readFile(orchestrationPath, "utf8")) as Record<string, unknown>;
+    const roles = orchestration.roles as Record<string, Record<string, unknown>>;
+    const harnessOverrides = orchestration.harness_overrides as Record<string, Record<string, Record<string, unknown>>>;
+
+    roles.advisor.reasoning_effort = "xhigh";
+    roles.planner.reasoning_effort = "auto";
+    roles.planner.temperature = 0.2;
+    roles["baseline-writer"].reasoning_effort = "none";
+    harnessOverrides.codex = {
+      advisor: { model: "gpt-5.5", reasoning_effort: "xhigh" },
+      reviewer: { reasoning_effort: null }
+    };
+    harnessOverrides.opencode = {
+      advisor: { temperature: 0.1 }
+    };
+    await writeFile(orchestrationPath, JSON.stringify(orchestration, null, 2), "utf8");
+
+    assert.deepEqual(await validateProject(root), []);
+
+    roles.advisor.reasoning_effort = "minimal";
+    await writeFile(orchestrationPath, JSON.stringify(orchestration, null, 2), "utf8");
+    const issues = await validateProject(root);
+    assert.ok(
+      issues.some((issue) => issue.path === ".cw/orchestration.json.roles.advisor.reasoning_effort" && /xhigh/.test(issue.message))
+    );
+
+    roles.advisor.reasoning_effort = "xhigh";
+    roles.advisor.temperature = 2.1;
+    await writeFile(orchestrationPath, JSON.stringify(orchestration, null, 2), "utf8");
+    const temperatureIssues = await validateProject(root);
+    assert.ok(
+      temperatureIssues.some(
+        (issue) => issue.path === ".cw/orchestration.json.roles.advisor.temperature" && /0 to 2/.test(issue.message)
+      )
+    );
   });
 
   it("generates repo-local agent skills for the Codex harness", async () => {
@@ -60,6 +109,7 @@ describe("cw kernel", () => {
 
     assert.equal(result.adapters[0]?.harness, "codex");
     assert.ok(result.adapters[0]?.created.includes(".agents/skills/cw-work/SKILL.md"));
+    assert.ok(result.adapters[0]?.created.includes(".codex/agents/cw-advisor.toml"));
     await assert.rejects(access(path.join(root, ".cw/agent-commands")));
     await assert.rejects(access(path.join(root, ".agents/plugins/marketplace.json")));
     await assert.rejects(access(path.join(root, ".codex/skills/cw-work/SKILL.md")));
@@ -74,14 +124,28 @@ describe("cw kernel", () => {
     assert.match(skill, /Do not close tasks from `cw-work`/);
     assert.match(skill, /## Execution Strategy Guidance/);
     assert.match(skill, /Inline execution must remain complete/);
+    assert.match(skill, /\.cw\/orchestration\.json/);
+    assert.match(skill, /generated `cw-<role>` agent files/);
     assert.match(skill, /Delegation is optional and permission-bound/);
     assert.match(skill, /Delegation may help with implementation or checking only when/);
     assert.match(skill, /perform the same responsibilities inline/);
+    assert.doesNotMatch(skill, /Advisor findings are advisory evidence/);
     assert.doesNotMatch(skill, /Subagent use requires harness support/);
     assert.doesNotMatch(skill, /Hybrid execution is recommended/);
     assert.doesNotMatch(skill, /Implementer subagents may write code/);
     assert.doesNotMatch(skill, /Checker subagents must return spec drift/);
     assert.doesNotMatch(skill, /generated-by-cw/);
+    const advisorAgent = await readFile(path.join(root, ".codex/agents/cw-advisor.toml"), "utf8");
+    assert.match(advisorAgent, /name = "cw-advisor"/);
+    assert.match(advisorAgent, /model_reasoning_effort = "high"/);
+    assert.match(advisorAgent, /developer_instructions = """\n# cw-advisor/);
+    assert.doesNotMatch(advisorAgent, /developer_instructions = "# cw-advisor\\n/);
+    assert.match(advisorAgent, /Watch bounded primary-session deltas/);
+    assert.match(advisorAgent, /Do not ask the user directly/);
+    assert.match(advisorAgent, /severity: nit \| concern \| blocker/);
+    const implementerAgent = await readFile(path.join(root, ".codex/agents/cw-implementer.toml"), "utf8");
+    assert.match(implementerAgent, /Modify code and tests within the accepted task contract/);
+    assert.match(implementerAgent, /Do not decide requirement drift/);
     const clarifySkill = await readFile(path.join(root, ".agents/skills/cw-clarify/SKILL.md"), "utf8");
     assert.match(clarifySkill, /challenge pass/);
     assert.match(clarifySkill, /Smaller tasks are faster/);
@@ -100,6 +164,7 @@ describe("cw kernel", () => {
     assert.match(planSkill, /vertical slices/);
     assert.match(planSkill, /## Execution Strategy Guidance/);
     assert.match(planSkill, /Delegation is optional and permission-bound/);
+    assert.match(planSkill, /role and model contract/);
     assert.match(planSkill, /Post-plan artifact cross-review/);
     assert.match(planSkill, /independent reviewer subagent/);
     assert.match(planSkill, /user or environment permission allow delegation/);
@@ -113,6 +178,8 @@ describe("cw kernel", () => {
     assert.match(runSkill, /## Execution Strategy Guidance/);
     assert.match(runSkill, /Delegation is optional and permission-bound/);
     assert.match(runSkill, /Use delegated implementers/);
+    assert.doesNotMatch(runSkill, /Advisor findings are advisory evidence/);
+    assert.doesNotMatch(runSkill, /blocker findings must be resolved/);
     assert.match(runSkill, /permission allow delegation/);
     assert.match(runSkill, /same checklist items inline/);
     assert.match(runSkill, /must not close tasks or decide requirement drift/);
@@ -159,50 +226,122 @@ describe("cw kernel", () => {
     }
 
     await writeFile(path.join(root, ".agents/skills/cw-work/SKILL.md"), "stale", "utf8");
+    await writeFile(path.join(root, ".codex/agents/cw-advisor.toml"), "stale", "utf8");
     const staleReport = await doctorProject(root);
     assert.equal(staleReport.ok, false);
     assert.ok(staleReport.warnings.some((warning) => warning.path === ".agents/skills/cw-work/SKILL.md"));
+    assert.ok(staleReport.warnings.some((warning) => warning.path === ".codex/agents/cw-advisor.toml"));
 
     const update = await updateProject(root, ["codex"]);
     assert.equal(update.validation.ok, true);
     assert.match(await readFile(path.join(root, ".agents/skills/cw-work/SKILL.md"), "utf8"), /cw preflight --action work/);
+    assert.match(await readFile(path.join(root, ".codex/agents/cw-advisor.toml"), "utf8"), /Watch bounded primary-session deltas/);
   });
 
-  it("generates Claude, OpenCode, and Pi harness entries", async () => {
+  it("renders Codex role agents from orchestration model overrides", async () => {
+    const root = await tempRoot();
+    await initProject(root, { harnesses: ["codex"] });
+    const orchestrationPath = path.join(root, ".cw/orchestration.json");
+    const orchestration = JSON.parse(await readFile(orchestrationPath, "utf8")) as Record<string, unknown>;
+    const harnessOverrides = orchestration.harness_overrides as Record<string, Record<string, Record<string, unknown>>>;
+    harnessOverrides.codex = {
+      advisor: { model: "gpt-5.5", reasoning_effort: "xhigh" }
+    };
+    await writeFile(orchestrationPath, JSON.stringify(orchestration, null, 2), "utf8");
+
+    const doctorBeforeUpdate = await doctorProject(root);
+    assert.equal(doctorBeforeUpdate.ok, false);
+    assert.ok(doctorBeforeUpdate.warnings.some((warning) => warning.path === ".codex/agents/cw-advisor.toml"));
+
+    const update = await updateProject(root, ["codex"]);
+    assert.equal(update.validation.ok, true);
+    const advisorAgent = await readFile(path.join(root, ".codex/agents/cw-advisor.toml"), "utf8");
+    assert.match(advisorAgent, /model = "gpt-5\.5"/);
+    assert.match(advisorAgent, /model_reasoning_effort = "xhigh"/);
+    assert.match(advisorAgent, /developer_instructions = """\n# cw-advisor/);
+  });
+
+  it("renders OpenCode role agents with model, optional temperature, and explicit tools permissions", async () => {
+    const root = await tempRoot();
+    await initProject(root, { harnesses: ["opencode"] });
+    const orchestrationPath = path.join(root, ".cw/orchestration.json");
+    const orchestration = JSON.parse(await readFile(orchestrationPath, "utf8")) as Record<string, unknown>;
+    const harnessOverrides = orchestration.harness_overrides as Record<string, Record<string, Record<string, unknown>>>;
+    harnessOverrides.opencode = {
+      advisor: { model: "anthropic/claude-sonnet-4-20250514", temperature: 0.1 }
+    };
+    await writeFile(orchestrationPath, JSON.stringify(orchestration, null, 2), "utf8");
+
+    const update = await updateProject(root, ["opencode"]);
+    assert.equal(update.validation.ok, true);
+    const advisorAgent = await readFile(path.join(root, ".opencode/agents/cw-advisor.md"), "utf8");
+    assert.match(advisorAgent, /model: anthropic\/claude-sonnet-4-20250514/);
+    assert.match(advisorAgent, /temperature: 0\.1/);
+    assert.match(advisorAgent, /tools:\n  write: false\n  edit: false\n  bash: false/);
+    assert.match(advisorAgent, /Model profile: high-reasoning, high reasoning, anthropic\/claude-sonnet-4-20250514, temperature 0\.1/);
+  });
+
+  it("generates Claude, OpenCode, Pi, and Cursor harness entries", async () => {
     const claudeRoot = await tempRoot();
     const opencodeRoot = await tempRoot();
     const piRoot = await tempRoot();
+    const cursorRoot = await tempRoot();
 
     const claude = await initProject(claudeRoot, { harnesses: ["claude"] });
     const opencode = await initProject(opencodeRoot, { harnesses: ["opencode"] });
     const pi = await initProject(piRoot, { harnesses: ["pi"] });
+    const cursor = await initProject(cursorRoot, { harnesses: ["cursor"] });
 
     assert.equal(claude.adapters[0]?.harness, "claude");
     assert.ok(claude.adapters[0]?.created.includes(".claude/skills/cw-work/SKILL.md"));
+    assert.ok(claude.adapters[0]?.created.includes(".claude/agents/cw-advisor.md"));
     await assert.rejects(access(path.join(claudeRoot, ".cw/agent-commands")));
     await assert.rejects(access(path.join(claudeRoot, ".claude/commands")));
     const claudeSkill = await readFile(path.join(claudeRoot, ".claude/skills/cw-work/SKILL.md"), "utf8");
     assert.match(claudeSkill, /^---\nname: cw-work/m);
     assert.match(claudeSkill, /Claude/);
     assert.match(claudeSkill, /cw preflight --action work/);
+    const claudeAdvisor = await readFile(path.join(claudeRoot, ".claude/agents/cw-advisor.md"), "utf8");
+    assert.match(claudeAdvisor, /^---\nname: cw-advisor/m);
+    assert.match(claudeAdvisor, /tools: Read, Grep, Glob/);
 
     assert.equal(opencode.adapters[0]?.harness, "opencode");
     assert.ok(opencode.adapters[0]?.created.includes(".agents/skills/cw-work/SKILL.md"));
+    assert.ok(opencode.adapters[0]?.created.includes(".opencode/agents/cw-advisor.md"));
     await assert.rejects(access(path.join(opencodeRoot, ".cw/agent-commands")));
     await assert.rejects(access(path.join(opencodeRoot, ".opencode/commands")));
     const opencodeSkill = await readFile(path.join(opencodeRoot, ".agents/skills/cw-work/SKILL.md"), "utf8");
     assert.match(opencodeSkill, /^---\nname: cw-work/m);
     assert.match(opencodeSkill, /OpenCode/);
     assert.match(opencodeSkill, /cw preflight --action work/);
+    const opencodeAdvisor = await readFile(path.join(opencodeRoot, ".opencode/agents/cw-advisor.md"), "utf8");
+    assert.match(opencodeAdvisor, /mode: subagent/);
+    assert.match(opencodeAdvisor, /temperature: 0\.1/);
+    assert.match(opencodeAdvisor, /tools:\n  write: false\n  edit: false\n  bash: false/);
 
     assert.equal(pi.adapters[0]?.harness, "pi");
     assert.ok(pi.adapters[0]?.created.includes(".agents/skills/cw-work/SKILL.md"));
+    assert.ok(pi.adapters[0]?.created.includes(".pi/agents/cw-advisor.md"));
     await assert.rejects(access(path.join(piRoot, ".cw/agent-commands")));
     await assert.rejects(access(path.join(piRoot, ".pi/skills")));
     const piSkill = await readFile(path.join(piRoot, ".agents/skills/cw-work/SKILL.md"), "utf8");
     assert.match(piSkill, /^---\nname: cw-work/m);
     assert.match(piSkill, /Pi/);
     assert.match(piSkill, /cw preflight --action work/);
+    const piAdvisor = await readFile(path.join(piRoot, ".pi/agents/cw-advisor.md"), "utf8");
+    assert.match(piAdvisor, /Pi subagents discover project agents from \.pi\/agents/);
+
+    assert.equal(cursor.adapters[0]?.harness, "cursor");
+    assert.ok(cursor.adapters[0]?.created.includes(".agents/skills/cw-work/SKILL.md"));
+    assert.ok(cursor.adapters[0]?.created.includes(".cursor/agents/cw-advisor.md"));
+    await assert.rejects(access(path.join(cursorRoot, ".cw/agent-commands")));
+    const cursorSkill = await readFile(path.join(cursorRoot, ".agents/skills/cw-work/SKILL.md"), "utf8");
+    assert.match(cursorSkill, /^---\nname: cw-work/m);
+    assert.match(cursorSkill, /Cursor/);
+    assert.match(cursorSkill, /cw preflight --action work/);
+    const cursorAdvisor = await readFile(path.join(cursorRoot, ".cursor/agents/cw-advisor.md"), "utf8");
+    assert.match(cursorAdvisor, /^---\nname: cw-advisor/m);
+    assert.match(cursorAdvisor, /readonly: true/);
   });
 
   it("accepts a positional root for CLI init", async () => {
@@ -235,6 +374,7 @@ describe("cw kernel", () => {
     assert.match(cli.stdout, /Claude/);
     assert.match(cli.stdout, /OpenCode/);
     assert.match(cli.stdout, /Pi/);
+    assert.match(cli.stdout, /Cursor/);
     assert.doesNotMatch(cli.stdout, /Generic|Detect|Configure|Use existing/);
     assert.match(cli.stdout, /Code index tool/);
     assert.match(cli.stdout, /Context memory tool/);
@@ -346,11 +486,12 @@ describe("cw kernel", () => {
     assert.equal((enhancements.context_memory as Record<string, unknown>).status, "skipped");
   });
 
-  it("accepts explicit Claude, OpenCode, and Pi harness flags", async () => {
+  it("accepts explicit Claude, OpenCode, Pi, and Cursor harness flags", async () => {
     const cases = [
       { harness: "claude", generatedPath: ".claude/skills/cw-work/SKILL.md" },
       { harness: "opencode", generatedPath: ".agents/skills/cw-work/SKILL.md" },
-      { harness: "pi", generatedPath: ".agents/skills/cw-work/SKILL.md" }
+      { harness: "pi", generatedPath: ".agents/skills/cw-work/SKILL.md" },
+      { harness: "cursor", generatedPath: ".agents/skills/cw-work/SKILL.md" }
     ] as const;
 
     for (const testCase of cases) {
@@ -365,7 +506,8 @@ describe("cw kernel", () => {
           "--code-index",
           "skipped",
           "--context-memory",
-          "skipped"
+          "skipped",
+          ...(testCase.harness === "pi" ? ["--pi-subagents", "skipped"] : [])
         ],
         { env: { CW_FORCE_INTERACTIVE: "1" } }
       );
@@ -444,13 +586,34 @@ describe("cw kernel", () => {
     for (const testCase of cases) {
       const root = await tempRoot();
       const home = await tempRoot();
+      const fakeBin = await tempRoot();
+      if (testCase.harness === "pi") {
+        const fakePi = path.join(fakeBin, "pi");
+        await writeFile(fakePi, "#!/bin/sh\necho installed pi-subagents\n", "utf8");
+        await chmod(fakePi, 0o755);
+      }
       const cli = await runCli(
         ["init", "--root", root, "--harness", testCase.harness, "--yes"],
-        { env: { CW_FORCE_INTERACTIVE: "1", HOME: home } }
+        {
+          env: {
+            CW_FORCE_INTERACTIVE: "1",
+            HOME: home,
+            ...(testCase.harness === "pi" ? { PATH: fakeBin } : {})
+          }
+        }
       );
 
       assert.equal(cli.code, 0, cli.stderr);
       assert.doesNotMatch(cli.stdout, /Select coding harness|Code index tool|Context memory tool|Apply .* setup now/);
+      const result = parseCliJson(cli.stdout);
+      const setup = result.setup as Array<Record<string, unknown>>;
+      if (testCase.harness === "pi") {
+        const piSetup = setup.find((record) => record.provider_id === "pi-subagents");
+        assert.equal(piSetup?.status, "configured");
+        assert.deepEqual(piSetup?.commands_run, ["pi install npm:pi-subagents"]);
+      } else {
+        assert.equal(setup.some((record) => record.provider_id === "pi-subagents"), false);
+      }
       const enhancements = JSON.parse(await readFile(path.join(root, ".cw/enhancements.json"), "utf8")) as Record<string, unknown>;
       const codeIndex = enhancements.code_index as Record<string, unknown>;
       const contextMemory = enhancements.context_memory as Record<string, unknown>;

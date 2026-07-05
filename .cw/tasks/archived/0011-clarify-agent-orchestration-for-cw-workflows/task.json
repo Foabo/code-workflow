@@ -1,0 +1,22 @@
+{
+  "id": "0011-clarify-agent-orchestration-for-cw-workflows",
+  "title": "Clarify agent orchestration for CW workflows",
+  "lifecycle": "closed",
+  "phase": "finish",
+  "next_action": "Task is closed",
+  "health_flags": [],
+  "artifacts": {
+    "spec": "spec.md",
+    "plan": "plan.md",
+    "task": "task.md",
+    "baseline_delta": null,
+    "resume": null
+  },
+  "invalidated_artifacts": [],
+  "blocked_reason": null,
+  "parked_reason": null,
+  "resume_condition": null,
+  "created_at": "2026-07-05T07:39:29.591Z",
+  "updated_at": "2026-07-05T14:17:00.715Z",
+  "schema_version": 1
+}
