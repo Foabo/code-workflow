@@ -32,7 +32,8 @@ Apply the spec quality gate, then turn accepted spec.md into plan.md and task.md
 ## Execution Strategy Guidance
 
 - Inline execution is fully supported and must remain complete.
-- Hybrid execution is recommended when the harness supports delegation: keep coordination in the main session while delegating implementation or checking.
+- Subagent use requires harness support, available tools, and user or environment permission. If delegation is unavailable or unauthorized, continue inline with the same responsibilities.
+- Hybrid execution is recommended when delegation is supported and allowed: keep coordination in the main session while delegating implementation or checking.
 - Subagents receive task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
 - Implementer subagents may write code and update checklist progress, but must not close tasks.
 - Checker subagents must return spec drift or product behavior changes to the main session for user confirmation.
@@ -54,7 +55,9 @@ Apply the spec quality gate, then turn accepted spec.md into plan.md and task.md
 - Do not modify spec.md during planning. If the gate fails, block the task in clarify phase and provide one concrete next question in the blocked reason or next action.
 - Plan from the accepted contract. Implementation choices may be recorded in plan.md only when they stay inside the confirmed spec.
 - Break task.md implementation items into small, verifiable vertical slices. Keep file-level edits as implementation details, not primary checklist items.
-- Post-plan artifact cross-review checks spec.md, plan.md, and task.md for contradiction, missing coverage, overbuilding, unclear interfaces, and placeholder work. Prefer an independent reviewer subagent for nontrivial tasks when supported; otherwise run the same check inline.
+- Post-plan artifact cross-review checks spec.md, plan.md, and task.md for contradiction, missing coverage, overbuilding, unclear interfaces, and placeholder work. Prefer an independent reviewer subagent only when the harness, tools, and user or environment permission allow delegation; otherwise run the same check inline.
+- For generated workflow guidance changes, include behavior-review checks in task.md. Look for skipped challenge, skipped grill, unclear delegation permission, premature phase movement, and acceptance criteria without evidence.
+- Keep deterministic tests separate from behavior review. Tests should verify generated output, while check-stage review evaluates likely agent behavior.
 
 
 ## Helper Commands

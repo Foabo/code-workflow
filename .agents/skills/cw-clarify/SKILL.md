@@ -32,7 +32,8 @@ Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md
 ## Execution Strategy Guidance
 
 - Inline execution is fully supported and must remain complete.
-- Hybrid execution is recommended when the harness supports delegation: keep coordination in the main session while delegating implementation or checking.
+- Subagent use requires harness support, available tools, and user or environment permission. If delegation is unavailable or unauthorized, continue inline with the same responsibilities.
+- Hybrid execution is recommended when delegation is supported and allowed: keep coordination in the main session while delegating implementation or checking.
 - Subagents receive task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
 - Implementer subagents may write code and update checklist progress, but must not close tasks.
 - Checker subagents must return spec drift or product behavior changes to the main session for user confirmation.
@@ -50,14 +51,15 @@ Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md
 
 ## Phase Guidance
 
-- The clarify quality gate checks that the goal is concrete, scope is bounded, acceptance criteria are checkable, and risk is low enough to write a Proposed Spec without high-risk assumptions.
-- Use the fast path only when all quality gate facts are already observable. The fast path still presents a Proposed Spec before editing spec.md.
-- Use expand-then-grill when any gate fact is missing or the request affects workflow semantics, CLI/API behavior, task lifecycle, state machines, cross-module behavior, irreversible work, or baseline promotion.
-- Expand around user-visible results, offer at most three candidate directions, and recommend one.
-- Grill after a candidate direction exists. Ask one important question at a time, include your recommended answer, and name the trade-off when it matters. This guidance is self-contained; an external grill skill is optional.
-- Clarification is complete only when the goal, boundary, acceptance criteria, and key risks are clear enough to write spec.md without high-risk assumptions.
+- Clarify uses one process for all tasks. Smaller tasks are faster because fewer important uncertainties survive the challenge pass, not because challenge is skipped.
+- Start with a challenge pass before writing Proposed Spec: restate the original problem and motivation, test assumptions, check scope boundaries, make acceptance criteria observable, name material risks, and ask whether there is a shorter path.
+- If the challenge pass leaves important uncertainty, grill one question at a time. Include your recommended answer and the trade-off so the user can make a concrete decision.
+- Use expand-then-grill when the request is broad, ambiguous, high risk, or affects workflow semantics, CLI/API behavior, task lifecycle, state machines, cross-module behavior, irreversible work, or baseline promotion.
+- Expand around user-visible results, offer at most three candidate directions, and recommend one before grilling the chosen direction.
+- Clarification is complete only when the goal, boundary, acceptance criteria, key risks, and important trade-offs are clear enough to write spec.md without high-risk assumptions.
 - Before writing spec.md, present a Proposed Spec using the existing sections: Goal, Scope, Non-goals, Constraints, Decisions, and Acceptance Criteria. Continue asking if any high-risk assumption remains.
 - Clarify terminology lightly. Task-local terms belong in spec.md; stable reusable project concepts may become baseline-delta.md candidates.
+- For generated workflow guidance changes, challenge likely agent behavior directly: would this wording let an agent skip challenge, skip grill, move to plan/run too early, misuse subagents, or accept vague evidence?
 
 
 ## Helper Commands

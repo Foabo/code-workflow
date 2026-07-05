@@ -32,7 +32,8 @@ Default task progress action. Create or select a task, advance the next responsi
 ## Execution Strategy Guidance
 
 - Inline execution is fully supported and must remain complete.
-- Hybrid execution is recommended when the harness supports delegation: keep coordination in the main session while delegating implementation or checking.
+- Subagent use requires harness support, available tools, and user or environment permission. If delegation is unavailable or unauthorized, continue inline with the same responsibilities.
+- Hybrid execution is recommended when delegation is supported and allowed: keep coordination in the main session while delegating implementation or checking.
 - Subagents receive task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
 - Implementer subagents may write code and update checklist progress, but must not close tasks.
 - Checker subagents must return spec drift or product behavior changes to the main session for user confirmation.
@@ -43,11 +44,19 @@ Default task progress action. Create or select a task, advance the next responsi
 2. If no task exists, create one with `cw internal create-task --title <title>` after deriving a clear title from the user request.
 3. Select the task with `cw internal select-task` or `cw internal select-task --task <task-id>`.
 4. Read spec.md, plan.md, task.md, and relevant project baseline files.
-5. If the task needs clarification, follow cw-clarify behavior.
-6. If planning is missing or stale, follow cw-plan behavior.
-7. If executable checklist items exist, follow cw-run behavior.
-8. Run cw-check behavior when implementation appears complete.
-9. When check passes, stop and ask whether to run cw-finish.
+5. Route by current task phase and artifact state: clarify, plan, run, check, or finish readiness.
+6. Apply the matching command behavior in this same agent session when the next step is clear.
+7. Stop for user judgment when the matching phase requires confirmation, new requirements, or product behavior decisions.
+8. When check passes, report finish readiness and ask whether to run cw-finish.
+
+## Phase Guidance
+
+- `cw-work` is the routine progress command. Repeated `/cw-work` calls should be enough to advance ordinary work through clarify, plan, run, and check.
+- The executable `work` helper creates or selects the task and returns actionable status. The generated skill performs the judgment-heavy orchestration: questioning, planning, code edits, verification, and review.
+- Use task truth to choose the next responsibility: clarify means challenge and accept the task contract, plan means create or repair plan.md and task.md, run means execute unchecked implementation items, check means verify and review evidence, and finish means stop before closure.
+- Do not close tasks from `cw-work`. When the task is ready for finish, summarize the closure readiness and ask whether to run `cw-finish`.
+- If the phase, artifacts, or user request conflict, stop and resolve the conflict through the matching phase guidance before making code changes.
+
 
 ## Helper Commands
 

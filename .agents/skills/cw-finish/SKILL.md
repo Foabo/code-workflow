@@ -32,7 +32,8 @@ Run the closure gate, handle dirty worktree state, sync accepted baseline delta,
 ## Execution Strategy Guidance
 
 - Inline execution is fully supported and must remain complete.
-- Hybrid execution is recommended when the harness supports delegation: keep coordination in the main session while delegating implementation or checking.
+- Subagent use requires harness support, available tools, and user or environment permission. If delegation is unavailable or unauthorized, continue inline with the same responsibilities.
+- Hybrid execution is recommended when delegation is supported and allowed: keep coordination in the main session while delegating implementation or checking.
 - Subagents receive task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
 - Implementer subagents may write code and update checklist progress, but must not close tasks.
 - Checker subagents must return spec drift or product behavior changes to the main session for user confirmation.

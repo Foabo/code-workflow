@@ -68,15 +68,24 @@ describe("cw kernel", () => {
     assert.match(skill, /^---\nname: cw-work/m);
     assert.match(skill, /Treat `\.cw` as Repo Truth/);
     assert.match(skill, /cw preflight --action work/);
+    assert.match(skill, /routine progress command/);
+    assert.match(skill, /Repeated `\/cw-work` calls/);
+    assert.match(skill, /Use task truth to choose the next responsibility/);
+    assert.match(skill, /Do not close tasks from `cw-work`/);
+    assert.match(skill, /user or environment permission/);
+    assert.match(skill, /continue inline with the same responsibilities/);
     assert.match(skill, /Implementer subagents may write code/);
     assert.match(skill, /Checker subagents must return spec drift/);
     assert.doesNotMatch(skill, /generated-by-cw/);
     const clarifySkill = await readFile(path.join(root, ".agents/skills/cw-clarify/SKILL.md"), "utf8");
-    assert.match(clarifySkill, /clarify quality gate/);
-    assert.match(clarifySkill, /fast path/);
+    assert.match(clarifySkill, /challenge pass/);
+    assert.match(clarifySkill, /Smaller tasks are faster/);
+    assert.match(clarifySkill, /shorter path/);
     assert.match(clarifySkill, /expand-then-grill/);
-    assert.match(clarifySkill, /external grill skill is optional/);
+    assert.match(clarifySkill, /one question at a time/);
+    assert.match(clarifySkill, /would this wording let an agent skip challenge/);
     assert.match(clarifySkill, /Proposed Spec/);
+    assert.doesNotMatch(clarifySkill, /fast path/);
     const planSkill = await readFile(path.join(root, ".agents/skills/cw-plan/SKILL.md"), "utf8");
     assert.match(planSkill, /spec quality gate/);
     assert.match(planSkill, /Do not modify spec\.md during planning/);
@@ -84,6 +93,10 @@ describe("cw kernel", () => {
     assert.match(planSkill, /vertical slices/);
     assert.match(planSkill, /Post-plan artifact cross-review/);
     assert.match(planSkill, /independent reviewer subagent/);
+    assert.match(planSkill, /user or environment permission allow delegation/);
+    assert.match(planSkill, /run the same check inline/);
+    assert.match(planSkill, /behavior-review checks/);
+    assert.match(planSkill, /deterministic tests separate from behavior review/);
     const runSkill = await readFile(path.join(root, ".agents/skills/cw-run/SKILL.md"), "utf8");
     assert.match(runSkill, /accepted task contract/);
     assert.match(runSkill, /requirement drift/);
@@ -769,6 +782,24 @@ describe("cw kernel", () => {
 
     assert.equal(report.ok, true);
     assert.equal(report.task?.id, "0001-preflight-test");
+  });
+
+  it("returns actionable status when work selects an existing task", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await createTaskViaCli(root, { id: "0001-existing-work", title: "Existing work" });
+    await setTaskStateViaCli(root, "0001-existing-work", {
+      phase: "check",
+      nextAction: "Run verification and review"
+    });
+
+    const result = await runWorkflowAction(root, "work", { taskId: "0001-existing-work" });
+
+    assert.equal(result.task?.id, "0001-existing-work");
+    assert.match(result.message, /phase check/);
+    assert.equal(result.details?.phase, "check");
+    assert.equal(result.details?.nextAction, "Run verification and review");
+    assert.match(String(result.details?.recommendedAction), /apply cw-check behavior next/);
   });
 
   it("resolves numeric task references in internal CLI commands", async () => {

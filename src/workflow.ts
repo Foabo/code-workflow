@@ -90,22 +90,51 @@ export async function runWorkflowAction(
 async function runWork(root: string, options: WorkflowOptions): Promise<WorkflowResult> {
   const report = await preflight(root, { action: "work", taskId: options.taskId });
   if (report.task !== null) {
+    const status = workStatus(report.task);
     return {
       action: "work",
       task: report.task,
-      message: `Selected task ${report.task.id}; next action: ${report.task.next_action}`,
-      details: { preflight: report }
+      message: `Selected task ${report.task.id}; phase ${report.task.phase}; ${status.recommendedAction}`,
+      details: { preflight: report, ...status }
     };
   }
 
   const title = required(options.title, "--title is required when cw-work creates a task");
   const task = await createTask(root, { id: options.taskId, title });
+  const status = workStatus(task);
   return {
     action: "work",
     task,
-    message: `Created task ${task.id}; next action: ${task.next_action}`,
-    details: { preflight: report }
+    message: `Created task ${task.id}; phase ${task.phase}; ${status.recommendedAction}`,
+    details: { preflight: report, ...status }
   };
+}
+
+function workStatus(task: TaskStateRecord): { phase: string; nextAction: string; recommendedAction: string } {
+  return {
+    phase: task.phase,
+    nextAction: task.next_action,
+    recommendedAction: recommendedWorkAction(task)
+  };
+}
+
+function recommendedWorkAction(task: TaskStateRecord): string {
+  if (task.phase === "clarify") {
+    return `apply cw-clarify behavior next: ${task.next_action}`;
+  }
+  if (task.phase === "plan") {
+    return `apply cw-plan behavior next: ${task.next_action}`;
+  }
+  if (task.phase === "run") {
+    return `apply cw-run behavior next: ${task.next_action}`;
+  }
+  if (task.phase === "check") {
+    return `apply cw-check behavior next: ${task.next_action}`;
+  }
+  if (task.phase === "finish") {
+    return `task is ready for cw-finish after explicit user confirmation: ${task.next_action}`;
+  }
+  return `inspect task artifacts before continuing: ${task.next_action}`;
 }
 
 async function runClarify(root: string, options: WorkflowOptions): Promise<WorkflowResult> {
