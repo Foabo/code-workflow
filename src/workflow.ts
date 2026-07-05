@@ -2,7 +2,7 @@ import path from "node:path";
 import { exec } from "node:child_process";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
-import { BaselineFile, ensureBaselineDelta, previewBaselineDelta, syncBaselineDelta } from "./baseline.js";
+import { BaselineFile, ensureBaselineDelta, previewBaselineMerge, syncBaselineDelta } from "./baseline.js";
 import { doctorProject } from "./validate.js";
 import {
   appendTrace,
@@ -38,6 +38,7 @@ export type WorkflowOptions = {
   content?: string;
   commands?: string[];
   manualVerification?: string;
+  baselineOutcome?: string;
   drift?: boolean;
   decision?: BaselineDecision | "none";
   selectedBaselineFiles?: BaselineFile[];
@@ -275,23 +276,50 @@ async function runCheck(root: string, options: WorkflowOptions): Promise<Workflo
       details: commandResults.length > 0 ? { commands: commandResults, drift: true } : { drift: true }
     };
   }
-  await writeFile(taskPath, checkSection(checkSection(content, "Verification"), "Check"), "utf8");
+  let checkedContent = checkSection(content, "Verification");
+  checkedContent = checkSection(checkedContent, "Check", { skipBaselineOutcome: true });
+  const baselineOutcome = options.baselineOutcome ??
+    (task.artifacts.baseline_delta !== null ? "baseline-delta.md is recorded for finish decision." : undefined);
+  if (baselineOutcome === undefined || baselineOutcome.trim().length === 0) {
+    await writeFile(taskPath, checkedContent, "utf8");
+    const updated = await updateTaskState(root, task.id, {
+      phase: "check",
+      nextAction: "Record Baseline Outcome before finish"
+    });
+    await appendTrace(root, task.id, {
+      ts: updated.updated_at,
+      type: "check.failed",
+      summary: "Check needs a recorded Baseline Outcome before finish.",
+      data: { baseline_outcome: "missing" }
+    });
+    const resumed = await consumeResumeAfterProgress(root, updated);
+    return {
+      action: "check",
+      task: resumed,
+      message: `Check blocked finish for ${task.id}; Baseline Outcome needs recording.`,
+      details: { baseline_outcome: "missing" }
+    };
+  }
+  checkedContent = recordBaselineOutcome(checkedContent, baselineOutcome);
+  await writeFile(taskPath, checkedContent, "utf8");
+  const finishNextAction = task.artifacts.baseline_delta !== null
+    ? "Run cw-finish to merge baseline-delta.md by default; use selected, edited, or skipped only when needed"
+    : "Run cw-finish after user confirmation";
   const updated = await updateTaskState(root, task.id, {
     healthFlags: task.health_flags.filter((flag) => flag !== "drift_suspected"),
     invalidatedArtifacts: [],
     phase: "finish",
-    nextAction: "Run cw-finish after user confirmation"
+    nextAction: finishNextAction
   });
   await appendTrace(root, task.id, {
     ts: updated.updated_at,
     type: "check.passed",
     summary: options.summary ?? "Verification and review passed.",
-    data: commandResults.length > 0 || options.manualVerification !== undefined
-      ? {
-          commands: commandResults.map((result) => result.command),
-          manual_verification: options.manualVerification
-        }
-      : undefined
+    data: {
+        commands: commandResults.map((result) => result.command),
+        manual_verification: options.manualVerification,
+        baseline_outcome: baselineOutcome
+      }
   });
   const resumed = await consumeResumeAfterProgress(root, updated);
   return {
@@ -306,9 +334,12 @@ async function runFinish(root: string, options: WorkflowOptions): Promise<Workfl
   const task = await selected(root, options);
   await preflight(root, { action: "finish", taskId: task.id });
   const baselinePreview = task.artifacts.baseline_delta !== null
-    ? await previewBaselineDelta(root, task.id, options.editedBaselineDelta)
+    ? await previewBaselineMerge(root, task.id, {
+      selectedFiles: options.selectedBaselineFiles,
+      editedMarkdown: options.editedBaselineDelta
+    })
     : { sections: {}, highImpact: false };
-  const baselineDecision = options.decision ?? (task.artifacts.baseline_delta === null ? "none" : undefined);
+  const baselineDecision = options.decision ?? (task.artifacts.baseline_delta === null ? "none" : "accepted");
   if (
     baselinePreview.highImpact &&
     baselineDecision !== undefined &&
@@ -580,12 +611,13 @@ function renderTask(): string {
 - [ ] Acceptance criteria in spec.md are covered.
 - [ ] No unresolved drift between implementation and spec.
 - [ ] Dirty worktree handling is clear.
+- [ ] Baseline Outcome is recorded.
 
 ## Notes
 `;
 }
 
-function checkSection(markdown: string, section: string): string {
+function checkSection(markdown: string, section: string, options: { skipBaselineOutcome?: boolean } = {}): string {
   const lines = markdown.split(/\r?\n/);
   let inside = false;
   return lines
@@ -594,12 +626,27 @@ function checkSection(markdown: string, section: string): string {
         inside = line.trim() === `## ${section}`;
         return line;
       }
+      if (inside && options.skipBaselineOutcome === true && /Baseline Outcome is recorded/.test(line)) {
+        return line;
+      }
       if (inside && line.startsWith("- [ ]")) {
         return line.replace("- [ ]", "- [x]");
       }
       return line;
     })
     .join("\n");
+}
+
+function recordBaselineOutcome(markdown: string, outcome: string): string {
+  const checked = markdown.replace(
+    /^- \[ \] Baseline Outcome is recorded\.?$/m,
+    "- [x] Baseline Outcome is recorded."
+  );
+  const note = `Baseline Outcome: ${outcome.trim()}`;
+  if (/^## Notes\s*$/m.test(checked)) {
+    return checked.replace(/^## Notes\s*$/m, `## Notes\n${note}`);
+  }
+  return `${checked.trimEnd()}\n\n## Notes\n${note}\n`;
 }
 
 function extractSection(markdown: string, section: string): string | null {

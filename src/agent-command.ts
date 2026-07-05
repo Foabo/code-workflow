@@ -60,6 +60,7 @@ function optionsFromFlags(flags: Flags): WorkflowOptions {
     content: stringFlag(flags, "content"),
     commands: arrayFlag(flags, "command"),
     manualVerification: stringFlag(flags, "manual-verification"),
+    baselineOutcome: stringFlag(flags, "baseline-outcome"),
     drift: flags.drift === true || flags.drift === "true",
     decision: decisionFlag(flags, "baseline") ?? decisionFlag(flags, "decision"),
     selectedBaselineFiles: baselineFilesFlag(flags, "selected-baseline"),

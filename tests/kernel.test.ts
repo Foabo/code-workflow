@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { access, chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import assert from "node:assert/strict";
@@ -31,6 +31,10 @@ describe("cw kernel", () => {
     assert.ok(result.created.includes(".cw/enhancements.json"));
     assert.ok(result.created.includes(".cw/orchestration.json"));
     assert.ok(result.created.includes(".cw/templates/spec.md"));
+    assert.match(
+      await readFile(path.join(root, ".cw/templates/task.md"), "utf8"),
+      /Baseline Outcome is recorded/
+    );
     assert.deepEqual(result.adapters, []);
     await assert.rejects(access(path.join(root, ".cw/agent-commands")));
     assert.deepEqual(await validateProject(root), []);
@@ -146,6 +150,11 @@ describe("cw kernel", () => {
     const implementerAgent = await readFile(path.join(root, ".codex/agents/cw-implementer.toml"), "utf8");
     assert.match(implementerAgent, /Modify code and tests within the accepted task contract/);
     assert.match(implementerAgent, /Do not decide requirement drift/);
+    for (const skillName of await readdir(path.join(root, ".agents/skills"))) {
+      const skill = await readFile(path.join(root, ".agents/skills", skillName, "SKILL.md"), "utf8");
+      assert.match(skill, new RegExp(`Use this skill for the \`${skillName}\` CW workflow action`));
+      assert.doesNotMatch(skill, /asks Codex to run/);
+    }
     const clarifySkill = await readFile(path.join(root, ".agents/skills/cw-clarify/SKILL.md"), "utf8");
     assert.match(clarifySkill, /challenge pass/);
     assert.match(clarifySkill, /Smaller tasks are faster/);
@@ -154,6 +163,8 @@ describe("cw kernel", () => {
     assert.match(clarifySkill, /one question at a time/);
     assert.match(clarifySkill, /would this wording let an agent skip challenge/);
     assert.match(clarifySkill, /Proposed Spec/);
+    assert.match(clarifySkill, /confirmed long-term project facts/);
+    assert.match(clarifySkill, /do not update Project Baseline files during clarify/);
     assert.match(clarifySkill, /Inline execution must remain complete/);
     assert.doesNotMatch(clarifySkill, /## Execution Strategy Guidance/);
     assert.doesNotMatch(clarifySkill, /fast path/);
@@ -171,6 +182,7 @@ describe("cw kernel", () => {
     assert.match(planSkill, /run the same check inline/);
     assert.match(planSkill, /behavior-review checks/);
     assert.match(planSkill, /deterministic tests separate from behavior review/);
+    assert.match(planSkill, /stable design, workflow, command, or rule candidates/);
     const runSkill = await readFile(path.join(root, ".agents/skills/cw-run/SKILL.md"), "utf8");
     assert.match(runSkill, /accepted task contract/);
     assert.match(runSkill, /requirement drift/);
@@ -188,6 +200,7 @@ describe("cw kernel", () => {
     const checkSkill = await readFile(path.join(root, ".agents/skills/cw-check/SKILL.md"), "utf8");
     assert.match(checkSkill, /Artifact alignment review/);
     assert.match(checkSkill, /Implementation evidence review/);
+    assert.match(checkSkill, /--baseline-outcome <text>/);
     assert.match(checkSkill, /environment, action, and result/);
     assert.match(checkSkill, /## Execution Strategy Guidance/);
     assert.match(checkSkill, /Delegation is optional and permission-bound/);
@@ -195,10 +208,15 @@ describe("cw kernel", () => {
     assert.match(checkSkill, /permission allow delegation/);
     assert.match(checkSkill, /same artifact and evidence review inline/);
     assert.match(checkSkill, /final broad review/);
+    assert.match(checkSkill, /Record one Baseline Outcome before finish/);
+    assert.match(checkSkill, /no reusable project facts/);
     const finishSkill = await readFile(path.join(root, ".agents/skills/cw-finish/SKILL.md"), "utf8");
     assert.match(finishSkill, /closure packet/);
     assert.match(finishSkill, /does not create commits/);
     assert.match(finishSkill, /current-state descriptions/);
+    assert.match(finishSkill, /merge it by default/);
+    assert.match(finishSkill, /default baseline decision is accepted/);
+    assert.match(finishSkill, /--selected-files <overview\.md,architecture\.md,rules\.md,commands\.md>/);
     assert.match(finishSkill, /CLI core must not call an LLM/);
     const resumeSkill = await readFile(path.join(root, ".agents/skills/cw-resume/SKILL.md"), "utf8");
     assert.match(resumeSkill, /user-triggered continuation/);
@@ -299,7 +317,13 @@ describe("cw kernel", () => {
     await assert.rejects(access(path.join(claudeRoot, ".claude/commands")));
     const claudeSkill = await readFile(path.join(claudeRoot, ".claude/skills/cw-work/SKILL.md"), "utf8");
     assert.match(claudeSkill, /^---\nname: cw-work/m);
-    assert.match(claudeSkill, /Claude/);
+    assert.match(claudeSkill, /Use this skill for the `cw-work` CW workflow action/);
+    assert.doesNotMatch(claudeSkill, /asks Claude to run/);
+    for (const skillName of await readdir(path.join(claudeRoot, ".claude/skills"))) {
+      const skill = await readFile(path.join(claudeRoot, ".claude/skills", skillName, "SKILL.md"), "utf8");
+      assert.match(skill, new RegExp(`Use this skill for the \`${skillName}\` CW workflow action`));
+      assert.doesNotMatch(skill, /asks Claude to run/);
+    }
     assert.match(claudeSkill, /cw preflight --action work/);
     const claudeAdvisor = await readFile(path.join(claudeRoot, ".claude/agents/cw-advisor.md"), "utf8");
     assert.match(claudeAdvisor, /^---\nname: cw-advisor/m);
@@ -312,7 +336,8 @@ describe("cw kernel", () => {
     await assert.rejects(access(path.join(opencodeRoot, ".opencode/commands")));
     const opencodeSkill = await readFile(path.join(opencodeRoot, ".agents/skills/cw-work/SKILL.md"), "utf8");
     assert.match(opencodeSkill, /^---\nname: cw-work/m);
-    assert.match(opencodeSkill, /OpenCode/);
+    assert.match(opencodeSkill, /Use this skill for the `cw-work` CW workflow action/);
+    assert.doesNotMatch(opencodeSkill, /asks OpenCode to run/);
     assert.match(opencodeSkill, /cw preflight --action work/);
     const opencodeAdvisor = await readFile(path.join(opencodeRoot, ".opencode/agents/cw-advisor.md"), "utf8");
     assert.match(opencodeAdvisor, /mode: subagent/);
@@ -326,7 +351,8 @@ describe("cw kernel", () => {
     await assert.rejects(access(path.join(piRoot, ".pi/skills")));
     const piSkill = await readFile(path.join(piRoot, ".agents/skills/cw-work/SKILL.md"), "utf8");
     assert.match(piSkill, /^---\nname: cw-work/m);
-    assert.match(piSkill, /Pi/);
+    assert.match(piSkill, /Use this skill for the `cw-work` CW workflow action/);
+    assert.doesNotMatch(piSkill, /asks Pi to run/);
     assert.match(piSkill, /cw preflight --action work/);
     const piAdvisor = await readFile(path.join(piRoot, ".pi/agents/cw-advisor.md"), "utf8");
     assert.match(piAdvisor, /Pi subagents discover project agents from \.pi\/agents/);
@@ -337,7 +363,8 @@ describe("cw kernel", () => {
     await assert.rejects(access(path.join(cursorRoot, ".cw/agent-commands")));
     const cursorSkill = await readFile(path.join(cursorRoot, ".agents/skills/cw-work/SKILL.md"), "utf8");
     assert.match(cursorSkill, /^---\nname: cw-work/m);
-    assert.match(cursorSkill, /Cursor/);
+    assert.match(cursorSkill, /Use this skill for the `cw-work` CW workflow action/);
+    assert.doesNotMatch(cursorSkill, /asks Cursor to run/);
     assert.match(cursorSkill, /cw preflight --action work/);
     const cursorAdvisor = await readFile(path.join(cursorRoot, ".cursor/agents/cw-advisor.md"), "utf8");
     assert.match(cursorAdvisor, /^---\nname: cw-advisor/m);
@@ -978,6 +1005,15 @@ describe("cw kernel", () => {
 
     assert.equal(report.ok, true);
     assert.equal(report.task?.id, "0001-preflight-test");
+
+    await ensureBaselineDeltaViaCli(root, "0001-preflight-test");
+    const finishReport = await runPreflightViaCli(root, { action: "finish", taskId: "0001-preflight-test" });
+    assert.ok(
+      finishReport.warnings.some((warning) =>
+        warning.path.endsWith("/baseline-delta.md") &&
+        /merge it by default/.test(warning.message)
+      )
+    );
   });
 
   it("returns actionable status when work selects an existing task", async () => {
@@ -1127,24 +1163,17 @@ describe("cw kernel", () => {
     assert.equal(withDelta.artifacts.baseline_delta, "baseline-delta.md");
     await writeFile(
       path.join(root, ".cw/tasks/0001-baseline-test/baseline-delta.md"),
-      "# Baseline Delta\n\n## commands.md\n\nRun `npm test` before finish.\n",
+      "# Baseline Delta\n\n## commands.md\n\n# Commands\n\n## Test\n\nRun `npm test` before finish.\n",
       "utf8"
     );
 
-    await assert.rejects(
-      syncBaselineDeltaViaCli(root, "0001-baseline-test", "accepted"),
-      /confirmed current-state content/
-    );
-
-    const result = await syncBaselineDeltaViaCli(root, "0001-baseline-test", "accepted", {
-      editedMarkdown: "# Baseline Delta\n\n## commands.md\n\n# Commands\n\n## Test\n\nRun `npm test` before finish.\n"
-    });
+    const result = await syncBaselineDeltaViaCli(root, "0001-baseline-test", "accepted");
     assert.deepEqual(result.updated, [".cw/project/commands.md"]);
-    assert.equal(
-      await readFile(path.join(root, ".cw/project/commands.md"), "utf8"),
-      "# Commands\n\n## Test\n\nRun `npm test` before finish.\n"
-    );
-    assert.doesNotMatch(await readFile(path.join(root, ".cw/project/commands.md"), "utf8"), /## From/);
+    const commands = await readFile(path.join(root, ".cw/project/commands.md"), "utf8");
+    assert.match(commands, /^# Commands/);
+    assert.match(commands, /## Test/);
+    assert.match(commands, /Run `npm test` before finish\./);
+    assert.match(commands, /Run `npm test` before finish\.\n\n## Lint/);
   });
 
   it("syncs selected, edited, and skipped baseline delta decisions", async () => {
@@ -1160,18 +1189,18 @@ describe("cw kernel", () => {
       "utf8"
     );
     const selected = await syncBaselineDeltaViaCli(root, "0001-selected-baseline", "selected", {
-      selectedFiles: ["commands.md"],
-      editedMarkdown: "# Baseline Delta\n\n## commands.md\n\n# Commands\n\n## Test\n\nUse `npm test`.\n\n## rules.md\n\n# Rules\n\n## Review\n\nReview checklist before finish.\n"
+      selectedFiles: ["commands.md"]
     });
     assert.deepEqual(selected.updated, [".cw/project/commands.md"]);
-    assert.equal(
-      await readFile(path.join(root, ".cw/project/commands.md"), "utf8"),
-      "# Commands\n\n## Test\n\nUse `npm test`.\n"
-    );
+    assert.match(await readFile(path.join(root, ".cw/project/commands.md"), "utf8"), /Use `npm test`\./);
     assert.equal(await readFile(path.join(root, ".cw/project/rules.md"), "utf8"), originalRules);
 
     await createTaskViaCli(root, { id: "0002-edited-baseline", title: "Edited baseline" });
     await ensureBaselineDeltaViaCli(root, "0002-edited-baseline");
+    await assert.rejects(
+      syncBaselineDeltaViaCli(root, "0002-edited-baseline", "edited"),
+      /edited baseline sync requires confirmed current-state content/
+    );
     const edited = await syncBaselineDeltaViaCli(root, "0002-edited-baseline", "edited", {
       editedMarkdown: "# Baseline Delta\n\n## rules.md\n\n# Rules\n\n## Review\n\nEdited baseline rule.\n"
     });
@@ -1185,6 +1214,40 @@ describe("cw kernel", () => {
     await ensureBaselineDeltaViaCli(root, "0003-skipped-baseline");
     const skipped = await syncBaselineDeltaViaCli(root, "0003-skipped-baseline", "skipped");
     assert.deepEqual(skipped.updated, []);
+  });
+
+  it("requires a recorded baseline outcome before finish when no baseline delta exists", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await createTaskViaCli(root, { id: "0001-baseline-outcome", title: "Baseline outcome" });
+    await writeFile(
+      path.join(root, ".cw/tasks/0001-baseline-outcome/spec.md"),
+      "# Spec\n\n## Acceptance Criteria\n- [x] Works\n",
+      "utf8"
+    );
+    await writeFile(
+      path.join(root, ".cw/tasks/0001-baseline-outcome/task.md"),
+      "# Task\n\n## Implementation\n- [x] Implemented\n\n## Verification\n- [x] Tested\n\n## Check\n- [x] Acceptance criteria in spec.md are covered.\n- [x] No unresolved drift between implementation and spec.\n- [x] Dirty worktree handling is clear.\n",
+      "utf8"
+    );
+    await setTaskStateViaCli(root, "0001-baseline-outcome", {
+      phase: "finish",
+      nextAction: "Run cw-finish after user confirmation"
+    });
+
+    await assert.rejects(
+      finishTaskViaCli(root, "0001-baseline-outcome", { summary: "Done" }),
+      /Baseline Outcome/
+    );
+
+    await writeFile(
+      path.join(root, ".cw/tasks/0001-baseline-outcome/task.md"),
+      "# Task\n\n## Implementation\n- [x] Implemented\n\n## Verification\n- [x] Tested\n\n## Check\n- [x] Acceptance criteria in spec.md are covered.\n- [x] No unresolved drift between implementation and spec.\n- [x] Dirty worktree handling is clear.\n- [x] Baseline Outcome is recorded.\n\n## Notes\nBaseline Outcome: no reusable project facts.\n",
+      "utf8"
+    );
+
+    const finished = await finishTaskViaCli(root, "0001-baseline-outcome", { summary: "Done" });
+    assert.equal(finished.lifecycle, "closed");
   });
 
   it("finishes a task only through the closure gate", async () => {
@@ -1208,7 +1271,7 @@ describe("cw kernel", () => {
     );
     await writeFile(
       path.join(root, ".cw/tasks/0001-finish-test/task.md"),
-      "# Task\n\n## Implementation\n- [x] Implemented\n\n## Verification\n- [x] Tested\n\n## Check\n- [x] Acceptance criteria in spec.md are covered.\n",
+      "# Task\n\n## Implementation\n- [x] Implemented\n\n## Verification\n- [x] Tested\n\n## Check\n- [x] Acceptance criteria in spec.md are covered.\n- [x] Baseline Outcome is recorded.\n",
       "utf8"
     );
     await setTaskStateViaCli(root, "0001-finish-test", {
@@ -1261,6 +1324,40 @@ describe("cw kernel", () => {
     );
   });
 
+  it("merges baseline delta by default when finish has a delta without a decision", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await runWorkflowAction(root, "work", { taskId: "0001-finish-prompt", title: "Finish prompt" });
+    await runWorkflowAction(root, "clarify", {
+      taskId: "0001-finish-prompt",
+      goal: "Record a reusable command.",
+      acceptance: ["Reusable command is ready for baseline review"]
+    });
+    await runWorkflowAction(root, "plan", { taskId: "0001-finish-prompt" });
+    await runWorkflowAction(root, "run", { taskId: "0001-finish-prompt", summary: "Command note prepared." });
+    await ensureBaselineDeltaViaCli(root, "0001-finish-prompt");
+    await writeFile(
+      path.join(root, ".cw/tasks/0001-finish-prompt/baseline-delta.md"),
+      "# Baseline Delta\n\n## architecture.md\n\n## commands.md\n\nUse `npm test` before finish.\n",
+      "utf8"
+    );
+    const check = await runWorkflowAction(root, "check", {
+      taskId: "0001-finish-prompt",
+      summary: "Manual review passed."
+    });
+    assert.match(check.task?.next_action ?? "", /merge baseline-delta\.md by default/);
+
+    const finished = await runWorkflowAction(root, "finish", {
+      taskId: "0001-finish-prompt",
+      summary: "Done"
+    });
+
+    assert.equal(finished.task?.lifecycle, "closed");
+    const baselineSync = finished.details?.baseline_sync as { decision: string } | undefined;
+    assert.equal(baselineSync?.decision, "accepted");
+    assert.match(await readFile(path.join(root, ".cw/project/commands.md"), "utf8"), /Use `npm test` before finish\./);
+  });
+
   it("requires explicit confirmation before syncing high-impact baseline deltas during finish", async () => {
     const root = await tempRoot();
     await initProject(root);
@@ -1272,17 +1369,17 @@ describe("cw kernel", () => {
     });
     await runWorkflowAction(root, "plan", { taskId: "0001-high-impact-baseline" });
     await runWorkflowAction(root, "run", { taskId: "0001-high-impact-baseline", summary: "Architecture note prepared." });
-    await runWorkflowAction(root, "check", {
-      taskId: "0001-high-impact-baseline",
-      summary: "Manual review passed.",
-      manualVerification: "Reviewed architecture wording."
-    });
     await ensureBaselineDeltaViaCli(root, "0001-high-impact-baseline");
     await writeFile(
       path.join(root, ".cw/tasks/0001-high-impact-baseline/baseline-delta.md"),
       "# Baseline Delta\n\n## architecture.md\n\nArchitecture now documents the workflow kernel boundary.\n",
       "utf8"
     );
+    await runWorkflowAction(root, "check", {
+      taskId: "0001-high-impact-baseline",
+      summary: "Manual review passed.",
+      manualVerification: "Reviewed architecture wording."
+    });
 
     await assert.rejects(
       runWorkflowAction(root, "finish", {
@@ -1303,6 +1400,41 @@ describe("cw kernel", () => {
     });
     assert.equal(finished.task?.lifecycle, "closed");
     assert.match(await readFile(path.join(root, ".cw/project/architecture.md"), "utf8"), /workflow kernel boundary/);
+  });
+
+  it("keeps check open until Baseline Outcome is recorded", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await runWorkflowAction(root, "work", { taskId: "0001-check-baseline-outcome", title: "Check baseline outcome" });
+    await runWorkflowAction(root, "clarify", {
+      taskId: "0001-check-baseline-outcome",
+      goal: "Verify baseline outcome handling.",
+      acceptance: ["Check does not pass without Baseline Outcome"]
+    });
+    await runWorkflowAction(root, "plan", { taskId: "0001-check-baseline-outcome" });
+    await runWorkflowAction(root, "run", {
+      taskId: "0001-check-baseline-outcome",
+      summary: "Implementation finished."
+    });
+
+    const missing = await runWorkflowAction(root, "check", {
+      taskId: "0001-check-baseline-outcome",
+      summary: "Verification passed."
+    });
+
+    assert.equal(missing.task?.phase, "check");
+    assert.match(missing.message, /Baseline Outcome/);
+
+    const recorded = await runWorkflowAction(root, "check", {
+      taskId: "0001-check-baseline-outcome",
+      summary: "Verification passed.",
+      baselineOutcome: "No reusable project facts."
+    });
+    assert.equal(recorded.task?.phase, "finish");
+    assert.match(
+      await readFile(path.join(root, ".cw/tasks/0001-check-baseline-outcome/task.md"), "utf8"),
+      /Baseline Outcome: No reusable project facts\./
+    );
   });
 
   it("discards a task only with explicit confirmation", async () => {
@@ -1423,6 +1555,10 @@ describe("cw kernel", () => {
       await readFile(path.join(root, ".cw/tasks/0001-create-readme/task.md"), "utf8"),
       /small, verifiable vertical slices/
     );
+    assert.match(
+      await readFile(path.join(root, ".cw/tasks/0001-create-readme/task.md"), "utf8"),
+      /Baseline Outcome is recorded/
+    );
 
     const run = await runWorkflowAction(root, "run", {
       taskId: "0001-create-readme",
@@ -1436,7 +1572,8 @@ describe("cw kernel", () => {
     const check = await runWorkflowAction(root, "check", {
       taskId: "0001-create-readme",
       summary: "README.md reviewed against spec.",
-      commands: ["test -f README.md"]
+      commands: ["test -f README.md"],
+      baselineOutcome: "baseline-delta.md will promote the fixture test command."
     });
     assert.equal(check.task?.phase, "finish");
     assert.deepEqual((check.details?.commands as Array<{ command: string }>).map((result) => result.command), ["test -f README.md"]);

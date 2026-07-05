@@ -3,7 +3,7 @@ name: cw-finish
 description: Run the closure gate, handle dirty worktree state, sync accepted baseline delta, consume resume notes, and close the task.
 ---
 
-Use this skill when the user asks Claude to run `cw-finish` or the matching CW workflow action in this repository.
+Use this skill for the `cw-finish` CW workflow action in this repository. Trigger it for `/cw-finish`, `$cw-finish`, `cw finish`, or natural-language requests for the same workflow action.
 
 Before acting, read the repository's `.cw` files relevant to the current task. Treat `.cw` as Repo Truth, generated skills as invocation surfaces, and Git as the source of truth for code changes.
 
@@ -34,8 +34,8 @@ Run the closure gate, handle dirty worktree state, sync accepted baseline delta,
 1. Run `cw preflight --action finish --task <task-id>`.
 2. Confirm dirty worktree handling when needed.
 3. Review check evidence, unresolved drift flags, dirty worktree handling, baseline decision, and final summary as the closure packet.
-4. If baseline-delta.md exists, prepare a current-state candidate diff for .cw/project files and ask whether to accept, select, edit, or skip it.
-5. After confirmation, run `cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped --edited-content <confirmed-current-state-sections>` when applicable.
+4. If baseline-delta.md exists, prepare a current-state candidate diff for .cw/project files and merge it by default; stop only when the user chooses selected, edited, or skipped, or when the merge is high-impact or ambiguous.
+5. Run `cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped` when applicable; pass `--selected-files` or `--edited-content` only for selected or edited handling.
 6. Run `cw internal finish-task --task <task-id> --summary <summary> --dirty-worktree <covered|unrelated|clean> --baseline <accepted|selected|edited|skipped|none>`.
 7. Report the closed task id and any project baseline files updated.
 
@@ -45,7 +45,8 @@ Run the closure gate, handle dirty worktree state, sync accepted baseline delta,
 - The closure packet covers check evidence, unresolved drift, dirty worktree handling, baseline decision, and final summary.
 - Project Baseline files are current-state descriptions. If baseline-delta.md exists, the finish-stage agent prepares a candidate diff that integrates the delta into existing .cw/project files.
 - A fast inexpensive model may help draft the candidate baseline diff when available, but the generated skill must support inline preparation. The CLI core must not call an LLM.
-- Apply baseline changes only after user confirmation. Helpers apply accepted current-state markdown sections or record skipped/selected decisions.
+- The default baseline decision is accepted: finish applies all merged baseline sections. If the user chooses selected, apply only named baseline files. If the user chooses edited, apply the user's replacement current-state sections. If the user chooses skipped, record no Project Baseline change.
+- Apply the default merge without asking for a baseline decision again when the delta is ordinary and unambiguous; ask before high-impact, ambiguous, selected, edited, or skipped handling.
 
 
 ## Helper Commands
@@ -58,9 +59,9 @@ Run the closure gate, handle dirty worktree state, sync accepted baseline delta,
 - cw internal select-task [--task <task-id>]
 - cw internal append-trace --task <task-id> --type <event-type> --summary <summary>
 - cw internal set-state --task <task-id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
-- cw internal finish-task --task <task-id> --summary <summary>
+- cw internal finish-task --task <task-id> --summary <summary> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none] [--edited-content <confirmed-current-state-sections>]
 - cw internal discard-task --task <task-id> --confirm --worktree <handling>
 - cw internal create-resume --task <task-id> --content <markdown>
 - cw internal ensure-baseline-delta --task <task-id>
-- cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped
+- cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped [--selected-files <overview.md,architecture.md,rules.md,commands.md>] [--edited-content <confirmed-current-state-sections>]
 - cw internal consume-resume --task <task-id>

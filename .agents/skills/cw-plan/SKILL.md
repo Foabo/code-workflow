@@ -3,7 +3,7 @@ name: cw-plan
 description: Apply the spec quality gate, then turn accepted spec.md into plan.md and task.md without changing the spec.
 ---
 
-Use this skill when the user asks Cursor to run `cw-plan` or the matching CW workflow action in this repository.
+Use this skill for the `cw-plan` CW workflow action in this repository. Trigger it for `/cw-plan`, `$cw-plan`, `cw plan`, or natural-language requests for the same workflow action.
 
 Before acting, read the repository's `.cw` files relevant to the current task. Treat `.cw` as Repo Truth, generated skills as invocation surfaces, and Git as the source of truth for code changes.
 
@@ -45,14 +45,16 @@ Apply the spec quality gate, then turn accepted spec.md into plan.md and task.md
 4. If the spec quality gate fails, return to cw-clarify behavior with one concrete next question.
 5. Edit plan.md with the implementation approach, key decisions, risks, and validation strategy.
 6. Edit task.md with executable implementation, verification, and check items.
-7. Run a post-plan artifact cross-review of spec.md, plan.md, and task.md before moving to run.
-8. Run `cw internal set-state --task <task-id> --phase run --next-action <text>`.
+7. Capture stable design, workflow, command, or rule candidates in task-local artifacts when planning discovers reusable project facts.
+8. Run a post-plan artifact cross-review of spec.md, plan.md, and task.md before moving to run.
+9. Run `cw internal set-state --task <task-id> --phase run --next-action <text>`.
 
 ## Phase Guidance
 
 - The spec quality gate checks that Goal is concrete, Scope bounds the work, Acceptance Criteria are checkable, and Decisions cover product trade-offs that affect implementation.
 - Do not modify spec.md during planning. If the gate fails, block the task in clarify phase and provide one concrete next question in the blocked reason or next action.
 - Plan from the accepted contract. Implementation choices may be recorded in plan.md only when they stay inside the confirmed spec.
+- Capture stable design, workflow, command, or rule candidates when they are reusable project facts; keep one-off implementation steps out of baseline candidates.
 - Break task.md implementation items into small, verifiable vertical slices. Keep file-level edits as implementation details, not primary checklist items.
 - Post-plan artifact cross-review checks spec.md, plan.md, and task.md for contradiction, missing coverage, overbuilding, unclear interfaces, and placeholder work. Prefer an independent reviewer subagent only when the harness, tools, and user or environment permission allow delegation; otherwise run the same check inline.
 - For generated workflow guidance changes, include behavior-review checks in task.md. Look for skipped challenge, skipped grill, unclear delegation permission, premature phase movement, and acceptance criteria without evidence.
@@ -69,9 +71,9 @@ Apply the spec quality gate, then turn accepted spec.md into plan.md and task.md
 - cw internal select-task [--task <task-id>]
 - cw internal append-trace --task <task-id> --type <event-type> --summary <summary>
 - cw internal set-state --task <task-id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
-- cw internal finish-task --task <task-id> --summary <summary>
+- cw internal finish-task --task <task-id> --summary <summary> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none] [--edited-content <confirmed-current-state-sections>]
 - cw internal discard-task --task <task-id> --confirm --worktree <handling>
 - cw internal create-resume --task <task-id> --content <markdown>
 - cw internal ensure-baseline-delta --task <task-id>
-- cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped
+- cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped [--selected-files <overview.md,architecture.md,rules.md,commands.md>] [--edited-content <confirmed-current-state-sections>]
 - cw internal consume-resume --task <task-id>

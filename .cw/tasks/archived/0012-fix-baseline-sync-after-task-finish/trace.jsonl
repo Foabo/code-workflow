@@ -1,0 +1,29 @@
+{"ts":"2026-07-05T14:24:23.777Z","type":"task.created","summary":"Task created: Fix baseline sync after task finish"}
+{"ts":"2026-07-05T14:26:29.515Z","type":"task.state.updated","summary":"phase clarify -> run; next action updated"}
+{"ts":"2026-07-05T14:31:18.876Z","type":"baseline_delta.created","summary":"Baseline delta created."}
+{"ts":"2026-07-05T14:32:08.813Z","type":"check.passed","summary":"Typecheck, tests, build, validate, and doctor passed."}
+{"ts":"2026-07-05T14:32:08.841Z","type":"task.state.updated","summary":"phase run -> finish; next action updated"}
+{"ts":"2026-07-05T14:46:36.731Z","type":"spec.accepted","summary":"Accepted narrowed Baseline Outcome spec."}
+{"ts":"2026-07-05T14:46:36.761Z","type":"task.state.updated","summary":"Task state refreshed."}
+{"ts":"2026-07-05T14:48:53.277Z","type":"plan.updated","summary":"Plan and checklist created for Baseline Outcome enforcement."}
+{"ts":"2026-07-05T14:48:53.305Z","type":"task.state.updated","summary":"phase plan -> run; next action updated"}
+{"ts":"2026-07-05T14:55:06.952Z","type":"baseline_delta.created","summary":"Baseline delta created."}
+{"ts":"2026-07-05T14:55:31.715Z","type":"run.updated","summary":"Implemented Baseline Outcome enforcement, generated guidance, tests, and baseline delta candidate."}
+{"ts":"2026-07-05T14:55:31.746Z","type":"task.state.updated","summary":"phase run -> check; next action updated"}
+{"ts":"2026-07-05T14:59:09.819Z","type":"check.passed","summary":"Verification passed; Baseline Outcome candidate recorded."}
+{"ts":"2026-07-05T14:59:13.101Z","type":"task.state.updated","summary":"phase check -> finish; next action updated"}
+{"ts":"2026-07-05T15:04:52.146Z","type":"task.state.updated","summary":"phase finish -> run; next action updated"}
+{"ts":"2026-07-05T15:07:39.705Z","type":"run.updated","summary":"Fixed host-bound generated workflow skill trigger wording across harnesses."}
+{"ts":"2026-07-05T15:07:39.740Z","type":"task.state.updated","summary":"phase run -> check; next action updated"}
+{"ts":"2026-07-05T15:07:39.775Z","type":"check.passed","summary":"Verification passed after harness-neutral generated skill trigger wording fix."}
+{"ts":"2026-07-05T15:07:39.811Z","type":"task.state.updated","summary":"phase check -> finish; next action updated"}
+{"ts":"2026-07-05T15:13:53.847Z","type":"run.updated","summary":"Added explicit finish baseline decision reminders and no-decision prompt behavior."}
+{"ts":"2026-07-05T15:13:53.884Z","type":"check.passed","summary":"Verification passed after finish baseline decision reminder fix."}
+{"ts":"2026-07-05T15:14:09.950Z","type":"task.state.updated","summary":"next action updated"}
+{"ts":"2026-07-05T15:19:33.036Z","type":"run.updated","summary":"Changed finish to actively merge ordinary baseline deltas by default."}
+{"ts":"2026-07-05T15:19:33.073Z","type":"check.passed","summary":"Verification passed after default baseline-delta merge behavior."}
+{"ts":"2026-07-05T15:19:33.108Z","type":"task.state.updated","summary":"next action updated"}
+{"ts":"2026-07-05T15:22:38.445Z","type":"run.updated","summary":"Fixed baseline high-impact detection to ignore empty template section headers."}
+{"ts":"2026-07-05T15:22:38.480Z","type":"check.passed","summary":"Verification passed after high-impact detection fix."}
+{"ts":"2026-07-05T15:22:49.207Z","type":"baseline_delta.synced","summary":"Baseline delta synced to .cw/project/rules.md.","data":{"decision":"accepted","updated":[".cw/project/rules.md"],"selected":null,"highImpact":false}}
+{"ts":"2026-07-05T15:22:49.228Z","type":"task.finished","summary":"Implemented reliable Baseline Outcome recording, default finish-time baseline delta merge, harness-neutral workflow skill triggers, and regression coverage for finish baseline edge cases.","data":{"baseline_decision":"accepted","dirty_worktree_handling":"covered"}}

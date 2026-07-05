@@ -3,7 +3,7 @@ name: cw-clarify
 description: Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md with the accepted task contract.
 ---
 
-Use this skill when the user asks Claude to run `cw-clarify` or the matching CW workflow action in this repository.
+Use this skill for the `cw-clarify` CW workflow action in this repository. Trigger it for `/cw-clarify`, `$cw-clarify`, `cw clarify`, or natural-language requests for the same workflow action.
 
 Before acting, read the repository's `.cw` files relevant to the current task. Treat `.cw` as Repo Truth, generated skills as invocation surfaces, and Git as the source of truth for code changes.
 
@@ -37,8 +37,9 @@ Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md
 4. Ask only the questions needed to settle goal, scope, non-goals, constraints, decisions, and acceptance criteria.
 5. Present a short Proposed Spec and wait for user confirmation before editing spec.md.
 6. Edit spec.md only with the accepted task contract.
-7. Run `cw internal set-state --task <task-id> --phase plan --next-action <text>` when the spec is accepted.
-8. If required information is missing, run `cw internal set-state --task <task-id> --lifecycle blocked --phase clarify --blocked-reason <reason> --next-action <text>`.
+7. Capture confirmed long-term project facts as task-local baseline candidates; do not update Project Baseline files during clarify.
+8. Run `cw internal set-state --task <task-id> --phase plan --next-action <text>` when the spec is accepted.
+9. If required information is missing, run `cw internal set-state --task <task-id> --lifecycle blocked --phase clarify --blocked-reason <reason> --next-action <text>`.
 
 ## Phase Guidance
 
@@ -50,6 +51,7 @@ Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md
 - Clarification is complete only when the goal, boundary, acceptance criteria, key risks, and important trade-offs are clear enough to write spec.md without high-risk assumptions.
 - Before writing spec.md, present a Proposed Spec using the existing sections: Goal, Scope, Non-goals, Constraints, Decisions, and Acceptance Criteria. Continue asking if any high-risk assumption remains.
 - Clarify terminology lightly. Task-local terms belong in spec.md; stable reusable project concepts may become baseline-delta.md candidates.
+- Project Baseline files are not updated during clarify. Confirmed long-term facts should be captured as task-local candidates for later Baseline Outcome handling.
 - For generated workflow guidance changes, challenge likely agent behavior directly: would this wording let an agent skip challenge, skip grill, move to plan/run too early, misuse subagents, or accept vague evidence?
 
 
@@ -63,9 +65,9 @@ Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md
 - cw internal select-task [--task <task-id>]
 - cw internal append-trace --task <task-id> --type <event-type> --summary <summary>
 - cw internal set-state --task <task-id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
-- cw internal finish-task --task <task-id> --summary <summary>
+- cw internal finish-task --task <task-id> --summary <summary> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none] [--edited-content <confirmed-current-state-sections>]
 - cw internal discard-task --task <task-id> --confirm --worktree <handling>
 - cw internal create-resume --task <task-id> --content <markdown>
 - cw internal ensure-baseline-delta --task <task-id>
-- cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped
+- cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped [--selected-files <overview.md,architecture.md,rules.md,commands.md>] [--edited-content <confirmed-current-state-sections>]
 - cw internal consume-resume --task <task-id>

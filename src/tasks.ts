@@ -308,6 +308,9 @@ async function closureGateIssues(
   if (hasUncheckedCheckbox(task)) {
     issues.push("task.md has unchecked implementation, verification, or check items");
   }
+  if (state.artifacts.baseline_delta === null && !hasRecordedBaselineOutcome(task)) {
+    issues.push("task.md must record Baseline Outcome or provide baseline-delta.md");
+  }
 
   if (state.artifacts.baseline_delta !== null && input.baselineDecision === undefined) {
     issues.push("baseline delta requires an accepted, selected, edited, or skipped decision");
@@ -339,6 +342,10 @@ function validateTaskLifecycleHygiene(state: TaskStateRecord): void {
       throw new Error("parked task requires resume condition");
     }
   }
+}
+
+function hasRecordedBaselineOutcome(markdown: string): boolean {
+  return /^-\s+\[[xX]\]\s+Baseline Outcome is recorded\.?\s*$/m.test(markdown);
 }
 
 function hasUncheckedCheckbox(markdown: string): boolean {

@@ -79,6 +79,12 @@ async function taskWarnings(root: string, task: TaskStateRecord, action: Workflo
   if (task.artifacts.resume !== null && action !== "resume" && action !== "finish" && action !== "discard") {
     warnings.push({ path: `.cw/tasks/${task.id}/${task.artifacts.resume}`, message: "resume note exists but action is not resume" });
   }
+  if (action === "finish" && task.artifacts.baseline_delta !== null) {
+    warnings.push({
+      path: `.cw/tasks/${task.id}/${task.artifacts.baseline_delta}`,
+      message: "baseline delta exists; finish will merge it by default unless the user chooses selected, edited, or skipped"
+    });
+  }
 
   for (const artifact of Object.values(task.artifacts)) {
     if (artifact !== null && !(await exists(path.join(taskDir(root, task.id), artifact)))) {

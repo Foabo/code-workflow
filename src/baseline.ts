@@ -71,14 +71,17 @@ export async function syncBaselineDelta(
     return { decision, updated: [], preview: preview.sections, highImpact: preview.highImpact };
   }
 
-  if (normalized.editedMarkdown === undefined || normalized.editedMarkdown.trim().length === 0) {
-    throw new Error("baseline sync requires confirmed current-state content");
+  if (decision === "edited" && (normalized.editedMarkdown === undefined || normalized.editedMarkdown.trim().length === 0)) {
+    throw new Error("edited baseline sync requires confirmed current-state content");
   }
   if (decision === "selected" && (normalized.selectedFiles === undefined || normalized.selectedFiles.length === 0)) {
     throw new Error("selected baseline sync requires at least one selected baseline file");
   }
 
-  const confirmed = await previewBaselineDelta(root, taskId, normalized.editedMarkdown);
+  const confirmed = await previewBaselineMerge(root, taskId, {
+    selectedFiles: normalized.selectedFiles,
+    editedMarkdown: normalized.editedMarkdown
+  });
   const selected = decision === "selected" ? new Set(normalized.selectedFiles ?? []) : null;
   const updated: string[] = [];
 
@@ -114,6 +117,35 @@ export async function syncBaselineDelta(
   return { decision, updated, preview: confirmed.sections, highImpact: confirmed.highImpact };
 }
 
+export async function previewBaselineMerge(
+  root: string,
+  taskId: string,
+  options: Pick<BaselineSyncOptions, "selectedFiles" | "editedMarkdown"> = {}
+): Promise<{ sections: Partial<Record<BaselineFile, string>>; highImpact: boolean }> {
+  if (options.editedMarkdown !== undefined) {
+    return previewBaselineDelta(root, taskId, options.editedMarkdown);
+  }
+
+  const preview = await previewBaselineDelta(root, taskId);
+  const selected = options.selectedFiles === undefined ? null : new Set(options.selectedFiles);
+  const merged: Partial<Record<BaselineFile, string>> = {};
+
+  for (const fileName of baselineFiles) {
+    if (selected !== null && !selected.has(fileName)) {
+      continue;
+    }
+    const delta = preview.sections[fileName]?.trim();
+    if (delta === undefined || delta.length === 0) {
+      continue;
+    }
+    const currentPath = path.join(getCwPaths(root).project, fileName);
+    const current = await readFile(currentPath, "utf8");
+    merged[fileName] = mergeBaselineMarkdown(current, delta);
+  }
+
+  return { sections: merged, highImpact: preview.highImpact };
+}
+
 export async function previewBaselineDelta(
   root: string,
   taskId: string,
@@ -125,9 +157,10 @@ export async function previewBaselineDelta(
   }
   const deltaPath = path.join(taskDir(root, taskId), state.artifacts.baseline_delta);
   const delta = editedMarkdown ?? await readFile(deltaPath, "utf8");
+  const sections = parseBaselineDelta(delta);
   return {
-    sections: parseBaselineDelta(delta),
-    highImpact: isHighImpactDelta(delta)
+    sections,
+    highImpact: isHighImpactDelta(sections)
   };
 }
 
@@ -167,6 +200,120 @@ function normalizeSyncOptions(options: BaselineSyncOptions | Date): Required<Pic
   return { ...options, now: options.now ?? new Date() };
 }
 
-function isHighImpactDelta(markdown: string): boolean {
-  return /\b(architecture|capability|delete|remove|conflict|breaking|low confidence)\b/i.test(markdown);
+function mergeBaselineMarkdown(currentMarkdown: string, deltaMarkdown: string): string {
+  const current = currentMarkdown.trim();
+  const delta = stripLeadingTitle(deltaMarkdown.trim());
+  if (delta.length === 0) {
+    return current;
+  }
+
+  const sections = splitH2Sections(delta);
+  if (sections.length === 0) {
+    return appendBlock(current, delta);
+  }
+
+  let merged = current;
+  for (const section of sections) {
+    merged = mergeH2Section(merged, section.heading, section.body);
+  }
+  return merged.trim();
+}
+
+function stripLeadingTitle(markdown: string): string {
+  const lines = markdown.split(/\r?\n/);
+  const firstContent = lines.findIndex((line) => line.trim().length > 0);
+  if (firstContent === -1 || !/^#\s+/.test(lines[firstContent])) {
+    return markdown;
+  }
+  lines.splice(firstContent, 1);
+  while (lines[firstContent]?.trim() === "") {
+    lines.splice(firstContent, 1);
+  }
+  return lines.join("\n").trim();
+}
+
+function splitH2Sections(markdown: string): Array<{ heading: string; body: string }> {
+  const lines = markdown.split(/\r?\n/);
+  const sections: Array<{ heading: string; body: string }> = [];
+  let heading: string | null = null;
+  let body: string[] = [];
+
+  function flush(): void {
+    if (heading !== null) {
+      sections.push({ heading, body: body.join("\n").trim() });
+    }
+    body = [];
+  }
+
+  for (const line of lines) {
+    if (/^##\s+/.test(line)) {
+      flush();
+      heading = line.trim();
+      continue;
+    }
+    if (heading !== null) {
+      body.push(line);
+    }
+  }
+  flush();
+
+  return sections;
+}
+
+function mergeH2Section(currentMarkdown: string, heading: string, body: string): string {
+  const bodyToInsert = body.trim();
+  if (bodyToInsert.length === 0) {
+    return currentMarkdown.trim();
+  }
+
+  const lines = currentMarkdown.trim().split(/\r?\n/);
+  const headingIndex = lines.findIndex((line) => line.trim() === heading);
+  if (headingIndex === -1) {
+    return appendBlock(currentMarkdown, `${heading}\n\n${bodyToInsert}`);
+  }
+
+  let nextHeadingIndex = lines.length;
+  for (let index = headingIndex + 1; index < lines.length; index += 1) {
+    if (/^##\s+/.test(lines[index])) {
+      nextHeadingIndex = index;
+      break;
+    }
+  }
+
+  const existingBody = lines.slice(headingIndex + 1, nextHeadingIndex).join("\n");
+  const addition = uniqueContentLines(existingBody, bodyToInsert);
+  if (addition.length === 0) {
+    return currentMarkdown.trim();
+  }
+
+  const before = lines.slice(0, nextHeadingIndex);
+  const after = lines.slice(nextHeadingIndex);
+  const spacer = existingBody.trim().length === 0 ? [""] : ["", ""];
+  const afterSpacer = after.length > 0 ? [""] : [];
+  return [...before, ...spacer, addition, ...afterSpacer, ...after].join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function uniqueContentLines(existing: string, incoming: string): string {
+  const existingLines = new Set(existing.split(/\r?\n/).map((line) => line.trim()).filter(Boolean));
+  return incoming
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim().length > 0 && !existingLines.has(line.trim()))
+    .join("\n")
+    .trim();
+}
+
+function appendBlock(currentMarkdown: string, block: string): string {
+  const current = currentMarkdown.trim();
+  const addition = block.trim();
+  if (current.length === 0 || current.includes(addition)) {
+    return current.length === 0 ? addition : current;
+  }
+  return `${current}\n\n${addition}`.trim();
+}
+
+function isHighImpactDelta(sections: Partial<Record<BaselineFile, string>>): boolean {
+  return Object.values(sections).some((content) =>
+    /\b(architecture|capability|delete|remove|conflict|breaking|low confidence)\b/i.test(content ?? "")
+  );
 }
