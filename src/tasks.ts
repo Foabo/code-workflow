@@ -180,6 +180,13 @@ export async function finishTask(root: string, taskId: string, input: FinishTask
   };
 
   await writeJsonFile(taskJsonPath(root, taskId), next);
+  if (state.artifacts.resume !== null) {
+    await appendTrace(root, taskId, {
+      ts: now,
+      type: "resume.consumed",
+      summary: "Resume note consumed and removed."
+    });
+  }
   await appendTrace(root, taskId, {
     ts: now,
     type: "task.finished",

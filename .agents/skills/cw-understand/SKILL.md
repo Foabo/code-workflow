@@ -45,6 +45,15 @@ Draft project baseline updates for an existing repository, then ask the user wha
 4. Ask the user what to merge before editing project baseline files.
 5. After accepted edits, run `cw internal append-trace --task <task-id> --type baseline.updated --summary <summary>` only if this is tied to a task.
 
+## Phase Guidance
+
+- Understand is draft-first repository observation. Write candidates to .cw/understand-draft/ and never overwrite .cw/project/* automatically.
+- Separate observed facts from inferences. Observed facts include files, package scripts, config, docs, dependencies, and existing .cw/project content; uncertain inferences should say Review required.
+- Read the current Project Baseline before proposing a merge, and preserve user-authored current-state content unless the user accepts a replacement.
+- Ask which drafted sections to merge. Merge only accepted content, and record a baseline.updated trace event only when the understand work is tied to a task.
+- Do not promote task-local plans, aspirations, or one-off implementation details into Project Baseline.
+
+
 ## Helper Commands
 
 - cw validate

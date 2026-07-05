@@ -42,7 +42,16 @@ Use a task-local resume.md only when the user explicitly asks to resume from it,
 1. Run `cw preflight --action resume --task <task-id>`.
 2. Read resume.md together with task.json, trace.jsonl, spec.md, plan.md, and task.md.
 3. Continue from the task artifacts, using resume.md only as a pointer.
-4. After recording progress, run `cw internal consume-resume --task <task-id>`.
+4. Let the workflow kernel consume resume.md automatically after a later workflow action records progress.
+
+## Phase Guidance
+
+- Resume is user-triggered continuation. Read resume.md after task.json, trace.jsonl, spec.md, plan.md, and task.md; task artifacts remain the task truth and resume.md is only a pointer.
+- If the task is parked, resume may return it to open lifecycle for continuation while preserving the current phase and next action.
+- Do not consume resume.md while loading resume context. The workflow kernel consumes it automatically after a later workflow action records material progress.
+- If resume.md conflicts with task artifacts, trust the task artifacts and stop for user confirmation before changing spec.md, plan.md, or task.md.
+- Report the loaded resume path, whether it was consumed, and the next action the agent should take.
+
 
 ## Helper Commands
 

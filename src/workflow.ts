@@ -147,7 +147,8 @@ async function runClarify(root: string, options: WorkflowOptions): Promise<Workf
     type: "spec.accepted",
     summary: "Task spec accepted."
   });
-  return { action: "clarify", task: updated, message: `Accepted spec for ${task.id}.` };
+  const resumed = await consumeResumeAfterProgress(root, updated);
+  return { action: "clarify", task: resumed, message: `Accepted spec for ${task.id}.` };
 }
 
 async function runPlan(root: string, options: WorkflowOptions): Promise<WorkflowResult> {
@@ -181,7 +182,8 @@ async function runPlan(root: string, options: WorkflowOptions): Promise<Workflow
     type: "plan.updated",
     summary: "Plan and executable checklist created."
   });
-  return { action: "plan", task: updated, message: `Planned task ${task.id}.` };
+  const resumed = await consumeResumeAfterProgress(root, updated);
+  return { action: "plan", task: resumed, message: `Planned task ${task.id}.` };
 }
 
 async function runRun(root: string, options: WorkflowOptions): Promise<WorkflowResult> {
@@ -204,9 +206,10 @@ async function runRun(root: string, options: WorkflowOptions): Promise<WorkflowR
     type: "run.updated",
     summary: options.summary ?? "Implementation checklist items marked complete."
   });
+  const resumed = await consumeResumeAfterProgress(root, updated);
   return {
     action: "run",
-    task: updated,
+    task: resumed,
     message: `Updated run progress for ${task.id}.`,
     details: options.writeFile !== undefined ? { wrote: options.writeFile } : undefined
   };
@@ -235,9 +238,10 @@ async function runCheck(root: string, options: WorkflowOptions): Promise<Workflo
       summary: options.summary ?? "Check found unresolved drift.",
       data: { drift: true }
     });
+    const resumed = await consumeResumeAfterProgress(root, updated);
     return {
       action: "check",
-      task: updated,
+      task: resumed,
       message: `Check blocked finish for ${task.id}; drift needs resolution.`,
       details: commandResults.length > 0 ? { commands: commandResults, drift: true } : { drift: true }
     };
@@ -260,9 +264,10 @@ async function runCheck(root: string, options: WorkflowOptions): Promise<Workflo
         }
       : undefined
   });
+  const resumed = await consumeResumeAfterProgress(root, updated);
   return {
     action: "check",
-    task: updated,
+    task: resumed,
     message: `Check passed for ${task.id}.`,
     details: commandResults.length > 0 ? { commands: commandResults } : undefined
   };
@@ -326,8 +331,30 @@ async function runFinish(root: string, options: WorkflowOptions): Promise<Workfl
 async function runResume(root: string, options: WorkflowOptions): Promise<WorkflowResult> {
   const task = await selected(root, options);
   await preflight(root, { action: "resume", taskId: task.id });
-  const updated = await consumeResumeNote(root, task.id);
-  return { action: "resume", task: updated, message: `Consumed resume note for ${task.id}.` };
+  const resumePath = task.artifacts.resume;
+  const resumeContent = resumePath === null ? null : await readFile(path.join(taskDir(root, task.id), resumePath), "utf8");
+  const updated = task.lifecycle === "parked" && resumePath !== null
+    ? await updateTaskState(root, task.id, {
+        lifecycle: "open",
+        parkedReason: null,
+        nextAction: task.next_action.trim().length > 0
+          ? task.next_action
+          : `Continue ${task.phase} phase from task artifacts and resume note`
+      })
+    : task;
+
+  return {
+    action: "resume",
+    task: updated,
+    message: resumePath === null
+      ? `No resume note found for ${task.id}; continue from task artifacts.`
+      : `Loaded resume note for ${task.id}; consume it after progress is recorded.`,
+    details: {
+      resume_path: resumePath,
+      resume_content: resumeContent,
+      consumed: false
+    }
+  };
 }
 
 async function runDiscard(root: string, options: WorkflowOptions): Promise<WorkflowResult> {
@@ -343,6 +370,13 @@ async function runDiscard(root: string, options: WorkflowOptions): Promise<Workf
 async function runDoctor(root: string): Promise<WorkflowResult> {
   const report = await doctorProject(root);
   return { action: "doctor", task: null, message: report.ok ? "Workflow health is ok." : "Workflow health has issues.", details: { report } };
+}
+
+async function consumeResumeAfterProgress(root: string, task: TaskStateRecord): Promise<TaskStateRecord> {
+  if (task.artifacts.resume === null) {
+    return task;
+  }
+  return consumeResumeNote(root, task.id);
 }
 
 async function runUnderstand(root: string, options: WorkflowOptions): Promise<WorkflowResult> {

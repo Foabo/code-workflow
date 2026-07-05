@@ -1,0 +1,22 @@
+{
+  "id": "0008-improve-support-command-skills",
+  "title": "Improve support command skills",
+  "lifecycle": "closed",
+  "phase": "finish",
+  "next_action": "Task is closed",
+  "health_flags": [],
+  "artifacts": {
+    "spec": "spec.md",
+    "plan": "plan.md",
+    "task": "task.md",
+    "baseline_delta": null,
+    "resume": null
+  },
+  "invalidated_artifacts": [],
+  "blocked_reason": null,
+  "parked_reason": null,
+  "resume_condition": null,
+  "created_at": "2026-07-05T06:04:47.220Z",
+  "updated_at": "2026-07-05T06:24:44.835Z",
+  "schema_version": 1
+}

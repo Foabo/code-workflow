@@ -99,6 +99,18 @@ describe("cw kernel", () => {
     assert.match(finishSkill, /does not create commits/);
     assert.match(finishSkill, /current-state descriptions/);
     assert.match(finishSkill, /CLI core must not call an LLM/);
+    const resumeSkill = await readFile(path.join(root, ".agents/skills/cw-resume/SKILL.md"), "utf8");
+    assert.match(resumeSkill, /user-triggered continuation/);
+    assert.match(resumeSkill, /task artifacts remain the task truth/);
+    assert.match(resumeSkill, /kernel consumes it automatically after a later workflow action records material progress/);
+    const doctorSkill = await readFile(path.join(root, ".agents/skills/cw-doctor/SKILL.md"), "utf8");
+    assert.match(doctorSkill, /repository-level diagnosis/);
+    assert.match(doctorSkill, /issues before warnings/);
+    assert.match(doctorSkill, /read-only by default/);
+    const understandSkill = await readFile(path.join(root, ".agents/skills/cw-understand/SKILL.md"), "utf8");
+    assert.match(understandSkill, /draft-first repository observation/);
+    assert.match(understandSkill, /Separate observed facts from inferences/);
+    assert.match(understandSkill, /never overwrite \.cw\/project\/\*/);
 
     await writeFile(path.join(root, ".agents/skills/cw-work/SKILL.md"), "stale", "utf8");
     const staleReport = await doctorProject(root);
@@ -851,6 +863,34 @@ describe("cw kernel", () => {
     assert.equal(stored.resume_condition, null);
   });
 
+  it("loads resume context without consuming the resume note", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await createTaskViaCli(root, { id: "0001-resume-flow", title: "Resume flow", phase: "run", nextAction: "Continue run" });
+    await createResumeNoteViaCli(root, "0001-resume-flow", "# Resume\n\nContinue from run.\n", "User resumes work");
+    await setTaskStateViaCli(root, "0001-resume-flow", {
+      lifecycle: "parked",
+      parkedReason: "Paused by user",
+      resumeCondition: "User resumes work"
+    });
+
+    const result = await runWorkflowAction(root, "resume", { taskId: "0001-resume-flow" });
+
+    assert.equal(result.task?.lifecycle, "open");
+    assert.equal(result.task?.artifacts.resume, "resume.md");
+    assert.equal(result.task?.resume_condition, "User resumes work");
+    assert.equal(result.details?.resume_path, "resume.md");
+    assert.equal(result.details?.consumed, false);
+    assert.match(String(result.details?.resume_content), /Continue from run/);
+    assert.match(await readFile(path.join(root, ".cw/tasks/0001-resume-flow/resume.md"), "utf8"), /Continue from run/);
+
+    const run = await runWorkflowAction(root, "run", { taskId: "0001-resume-flow" });
+
+    assert.equal(run.task?.artifacts.resume, null);
+    await assert.rejects(access(path.join(root, ".cw/tasks/0001-resume-flow/resume.md")));
+    assert.match(await readFile(path.join(root, ".cw/tasks/0001-resume-flow/trace.jsonl"), "utf8"), /resume.consumed/);
+  });
+
   it("creates and syncs a baseline delta", async () => {
     const root = await tempRoot();
     await initProject(root);
@@ -948,14 +988,18 @@ describe("cw kernel", () => {
       phase: "finish",
       nextAction: "Run cw-finish after user confirmation"
     });
+    await createResumeNoteViaCli(root, "0001-finish-test", "# Resume\n\nClose from finish.\n");
 
     const finished = await finishTaskViaCli(root, "0001-finish-test", { summary: "Task finished" });
     assert.equal(finished.lifecycle, "closed");
     assert.equal(finished.phase, "finish");
     assert.equal(finished.next_action, "Task is closed");
+    assert.equal(finished.artifacts.resume, null);
     await assert.rejects(access(path.join(root, ".cw/tasks/0001-finish-test")));
     assert.match(await readFile(path.join(root, ".cw/tasks/archived/0001-finish-test/task.json"), "utf8"), /"lifecycle": "closed"/);
-    assert.match(await readFile(path.join(root, ".cw/tasks/archived/0001-finish-test/trace.jsonl"), "utf8"), /task.finished/);
+    const archivedTrace = await readFile(path.join(root, ".cw/tasks/archived/0001-finish-test/trace.jsonl"), "utf8");
+    assert.match(archivedTrace, /resume.consumed/);
+    assert.match(archivedTrace, /task.finished/);
     assert.deepEqual(await listTasksViaCli(root), []);
     assert.deepEqual((await listTasksViaCli(root, { scope: "archived" })).map((task) => task.id), ["0001-finish-test"]);
     assert.deepEqual(await validateProject(root), []);
@@ -1189,7 +1233,10 @@ describe("cw kernel", () => {
     await createTaskViaCli(root, { id: "0002-resume-flow", title: "Resume flow" });
     await createResumeNoteViaCli(root, "0002-resume-flow", "# Resume\n\nContinue.\n");
     const resume = await runWorkflowAction(root, "resume", { taskId: "0002-resume-flow" });
-    assert.equal(resume.task?.artifacts.resume, null);
+    assert.equal(resume.task?.artifacts.resume, "resume.md");
+    assert.equal(resume.details?.consumed, false);
+    const resumedRun = await runWorkflowAction(root, "run", { taskId: "0002-resume-flow" });
+    assert.equal(resumedRun.task?.artifacts.resume, null);
 
     await createTaskViaCli(root, { id: "0003-discard-flow", title: "Discard flow" });
     const discard = await runWorkflowAction(root, "discard", {

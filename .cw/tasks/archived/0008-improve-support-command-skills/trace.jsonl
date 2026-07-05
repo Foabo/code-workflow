@@ -1,0 +1,12 @@
+{"ts":"2026-07-05T06:04:47.220Z","type":"task.created","summary":"Task created: Improve support command skills"}
+{"ts":"2026-07-05T06:05:46.942Z","type":"spec.accepted","summary":"Support command skill optimization scope accepted."}
+{"ts":"2026-07-05T06:05:46.942Z","type":"plan.updated","summary":"Implementation plan created for support command guidance and resume behavior."}
+{"ts":"2026-07-05T06:05:47.080Z","type":"task.state.updated","summary":"phase clarify -> run; next action updated"}
+{"ts":"2026-07-05T06:08:03.787Z","type":"run.updated","summary":"Implemented support command guidance and resume behavior changes."}
+{"ts":"2026-07-05T06:08:03.787Z","type":"check.passed","summary":"Verification passed: typecheck, test, build, and cw validate."}
+{"ts":"2026-07-05T06:08:03.787Z","type":"task.state.updated","summary":"phase run -> finish; next action updated"}
+{"ts":"2026-07-05T06:09:09.578Z","type":"check.passed","summary":"Final verification passed after resume boundary adjustment."}
+{"ts":"2026-07-05T06:10:42.435Z","type":"clarify.confirmed","summary":"User confirmed cw-resume should load resume context and consume the note only after later progress is recorded."}
+{"ts":"2026-07-05T06:14:41.864Z","type":"run.updated","summary":"Implemented automatic resume consumption after later task progress."}
+{"ts":"2026-07-05T06:14:52.386Z","type":"check.passed","summary":"Final verification passed after automatic resume consumption change."}
+{"ts":"2026-07-05T06:24:44.835Z","type":"task.finished","summary":"Improved support command skills and resume continuation semantics.","data":{"baseline_decision":"none","dirty_worktree_handling":"covered"}}

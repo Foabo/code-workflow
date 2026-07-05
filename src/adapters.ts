@@ -97,7 +97,7 @@ const commandSteps: Record<(typeof AGENT_COMMANDS)[number], string[]> = {
     "Run `cw preflight --action resume --task <task-id>`.",
     "Read resume.md together with task.json, trace.jsonl, spec.md, plan.md, and task.md.",
     "Continue from the task artifacts, using resume.md only as a pointer.",
-    "After recording progress, run `cw internal consume-resume --task <task-id>`."
+    "Let the workflow kernel consume resume.md automatically after a later workflow action records progress."
   ],
   "cw-discard": [
     "Run `cw preflight --action discard --task <task-id>`.",
@@ -158,6 +158,27 @@ const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>
     "Project Baseline files are current-state descriptions. If baseline-delta.md exists, the finish-stage agent prepares a candidate diff that integrates the delta into existing .cw/project files.",
     "A fast inexpensive model may help draft the candidate baseline diff when available, but the generated skill must support inline preparation. The CLI core must not call an LLM.",
     "Apply baseline changes only after user confirmation. Helpers apply accepted current-state markdown sections or record skipped/selected decisions."
+  ],
+  "cw-resume": [
+    "Resume is user-triggered continuation. Read resume.md after task.json, trace.jsonl, spec.md, plan.md, and task.md; task artifacts remain the task truth and resume.md is only a pointer.",
+    "If the task is parked, resume may return it to open lifecycle for continuation while preserving the current phase and next action.",
+    "Do not consume resume.md while loading resume context. The workflow kernel consumes it automatically after a later workflow action records material progress.",
+    "If resume.md conflicts with task artifacts, trust the task artifacts and stop for user confirmation before changing spec.md, plan.md, or task.md.",
+    "Report the loaded resume path, whether it was consumed, and the next action the agent should take."
+  ],
+  "cw-doctor": [
+    "Doctor is repository-level diagnosis. It reports validation issues, hygiene warnings, generated adapter drift, and enhancement status.",
+    "Report issues before warnings. For each item, include the file path or state field, the observed problem, and the smallest repair.",
+    "Treat issues as invalid repository state and warnings as workflow hygiene risk; do not blur the two categories.",
+    "Doctor is read-only by default. If the user asks for repair, make the smallest scoped change and use normal confirmation rules for task artifacts or Project Baseline files.",
+    "Do not use doctor as the action-local gate; preflight owns action-local checks."
+  ],
+  "cw-understand": [
+    "Understand is draft-first repository observation. Write candidates to .cw/understand-draft/ and never overwrite .cw/project/* automatically.",
+    "Separate observed facts from inferences. Observed facts include files, package scripts, config, docs, dependencies, and existing .cw/project content; uncertain inferences should say Review required.",
+    "Read the current Project Baseline before proposing a merge, and preserve user-authored current-state content unless the user accepts a replacement.",
+    "Ask which drafted sections to merge. Merge only accepted content, and record a baseline.updated trace event only when the understand work is tied to a task.",
+    "Do not promote task-local plans, aspirations, or one-off implementation details into Project Baseline."
   ]
 };
 
