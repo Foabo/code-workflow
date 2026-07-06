@@ -1,7 +1,7 @@
 ---
 description: Turn an accepted spec.md into plan.md and executable task.md without changing the spec.
 mode: subagent
-model: inherit
+model: gateway/qwen3.7-max
 temperature: 0.1
 tools:
   write: true

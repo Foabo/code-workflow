@@ -1,7 +1,7 @@
 ---
 description: Draft current-state Project Baseline updates from an accepted baseline-delta.md.
 mode: subagent
-model: inherit
+model: gateway/deepseek-v4-flash
 temperature: 0.1
 tools:
   write: true

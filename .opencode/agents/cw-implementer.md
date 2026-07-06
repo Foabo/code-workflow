@@ -1,7 +1,7 @@
 ---
 description: Execute task.md implementation checklist items against the accepted spec and plan.
 mode: subagent
-model: inherit
+model: gateway/glm-5.2
 temperature: 0.2
 tools:
   write: true

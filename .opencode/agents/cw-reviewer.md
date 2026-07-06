@@ -1,7 +1,7 @@
 ---
 description: Independent review for artifact alignment, implementation evidence, regressions, and missing tests.
 mode: subagent
-model: inherit
+model: gateway/qwen3.7-max
 temperature: 0.1
 tools:
   write: false

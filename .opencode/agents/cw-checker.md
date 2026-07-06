@@ -1,7 +1,7 @@
 ---
 description: Run verification, repair small in-scope defects, and prepare check evidence for the primary session.
 mode: subagent
-model: inherit
+model: gateway/qwen3.7-plus
 temperature: 0.2
 tools:
   write: true

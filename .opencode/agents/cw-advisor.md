@@ -1,7 +1,7 @@
 ---
 description: Read-only skeptical reviewer for CW workflow turns, specs, plans, diffs, and closure packets.
 mode: subagent
-model: inherit
+model: gateway/deepseek-v4-pro
 temperature: 0.1
 tools:
   write: false
