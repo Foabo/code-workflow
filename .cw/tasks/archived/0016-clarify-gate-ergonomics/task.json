@@ -1,0 +1,22 @@
+{
+  "id": "0016-clarify-gate-ergonomics",
+  "title": "Improve cw-clarify gate ergonomics: field-naming error, propose/accept helpers, skill docs",
+  "lifecycle": "closed",
+  "phase": "finish",
+  "next_action": "Task is closed",
+  "health_flags": [],
+  "artifacts": {
+    "spec": "spec.md",
+    "plan": "plan.md",
+    "task": "task.md",
+    "baseline_delta": "baseline-delta.md",
+    "resume": null
+  },
+  "invalidated_artifacts": [],
+  "blocked_reason": null,
+  "parked_reason": null,
+  "resume_condition": null,
+  "created_at": "2026-07-06T04:59:41.642Z",
+  "updated_at": "2026-07-06T07:41:04.003Z",
+  "schema_version": 1
+}

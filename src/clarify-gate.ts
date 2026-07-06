@@ -42,6 +42,11 @@ export function proposalIdFromHash(hash: string): string {
   return `p-${hash.slice(0, 12)}`;
 }
 
+export function latestProposalIdentity(events: TraceEvent[]): ClarifyGateIdentity | null {
+  const proposed = findProposalEvent(events, {});
+  return proposed === null ? null : identityFromEvent(proposed);
+}
+
 export async function readTraceEvents(root: string, taskId: string): Promise<TraceEvent[]> {
   const text = await readFile(tracePath(root, taskId), "utf8");
   return text
@@ -128,23 +133,28 @@ function result(
   return { ok: issues.length === 0, stage, identity, issues, warnings };
 }
 
-function findProposalEvent(events: TraceEvent[], input: ClarifyGateInput): IndexedTraceEvent | null {
+type ProposalFilter = Pick<ClarifyGateInput, "attemptId" | "proposalId" | "proposalHash">;
+
+function findProposalEvent(events: TraceEvent[], filter: ProposalFilter): IndexedTraceEvent | null {
+  const hasIdentityFilter = filter.attemptId !== undefined || filter.proposalId !== undefined || filter.proposalHash !== undefined;
   const candidates = indexed(events).filter((entry) => {
     if (entry.event.type !== "spec.proposed") {
       return false;
     }
-    const identity = identityFromEvent(entry);
-    if (identity === null) {
-      return false;
-    }
-    if (input.attemptId !== undefined && identity.attemptId !== input.attemptId) {
-      return false;
-    }
-    if (input.proposalId !== undefined && identity.proposalId !== input.proposalId) {
-      return false;
-    }
-    if (input.proposalHash !== undefined && identity.proposalHash !== input.proposalHash) {
-      return false;
+    if (hasIdentityFilter) {
+      const identity = identityFromEvent(entry);
+      if (identity === null) {
+        return false;
+      }
+      if (filter.attemptId !== undefined && identity.attemptId !== filter.attemptId) {
+        return false;
+      }
+      if (filter.proposalId !== undefined && identity.proposalId !== filter.proposalId) {
+        return false;
+      }
+      if (filter.proposalHash !== undefined && identity.proposalHash !== filter.proposalHash) {
+        return false;
+      }
     }
     return true;
   });

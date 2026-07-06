@@ -27,3 +27,5 @@
 - Clarify proposals must keep stable proposal identity in trace events so advisor review and explicit accept cannot be reused across different Proposed Specs.
 
 - Role agents do not own task closure, baseline promotion decisions, requirement drift, or destructive worktree handling. Those decisions stay in the main session and use CW helpers.
+
+- Use `cw internal propose-spec --spec-file <path>` and `cw internal accept-spec` to record clarify gate proposal identity and advisor/accept outcomes. Do not hand-compute `proposal_hash`/`proposal_id` or hand-thread the identity triple (`attempt_id`/`proposal_id`/`proposal_hash`) in trace events — the helpers own hashing and identity binding.

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { createInterface } from "node:readline/promises";
+import { readFile } from "node:fs/promises";
 import {
   applyEnhancementSetup,
   buildEnhancementSetupPlan,
@@ -14,7 +15,7 @@ import {
   SetupCommand,
   validateProviderSelection
 } from "./enhancements.js";
-import { ClarifyGateStage, readTraceEvents, validateClarifyGate } from "./clarify-gate.js";
+import { ClarifyGateStage, latestProposalIdentity, proposalHash, proposalIdFromHash, readTraceEvents, validateClarifyGate } from "./clarify-gate.js";
 import { initProject } from "./init.js";
 import { preflight, WorkflowAction } from "./preflight.js";
 import { listTasks, selectTask } from "./task-store.js";
@@ -317,6 +318,74 @@ async function runInternal(subcommand: string | undefined, args: string[], root:
     case "migrate-task-ids": {
       const result = await migrateTasks(root);
       printJson(result);
+      return 0;
+    }
+    case "propose-spec": {
+      const taskId = await requiredActiveTaskId(root, flags);
+      const specFile = requiredString(flags, "spec-file");
+      const content = await readFile(specFile, "utf8");
+      const hash = proposalHash(content);
+      const proposalId = proposalIdFromHash(hash);
+      const attemptId = `a-${Date.now().toString(36)}-${hash.slice(0, 8)}`;
+      const identityData = { attempt_id: attemptId, proposal_id: proposalId, proposal_hash: hash };
+      const summary = `Proposed spec recorded from ${specFile}.`;
+      await appendTrace(root, taskId, { ts: new Date().toISOString(), type: "brainstorm.done", summary: "Brainstorm Pass complete; propose-spec recorded proposal identity.", data: identityData });
+      await appendTrace(root, taskId, { ts: new Date().toISOString(), type: "spec.proposed", summary, data: identityData });
+      printJson({ ok: true, identity: { attemptId, proposalId, proposalHash: hash } });
+      return 0;
+    }
+    case "accept-spec": {
+      const taskId = await requiredActiveTaskId(root, flags);
+      const advisorUnavailable = flagEnabled(flags, "advisor-unavailable");
+      const verdict = optionalString(flags, "verdict");
+      if (advisorUnavailable && verdict !== undefined) {
+        throw new Error("accept-spec: --advisor-unavailable and --verdict are mutually exclusive");
+      }
+      if (!advisorUnavailable && verdict === undefined) {
+        throw new Error("accept-spec: --verdict is required (or pass --advisor-unavailable for the fallback path)");
+      }
+      if (verdict !== undefined && verdict !== "pass" && verdict !== "concern" && verdict !== "blocker") {
+        throw new Error(`accept-spec: --verdict must be pass, concern, or blocker (got ${verdict})`);
+      }
+      const events = await readTraceEvents(root, taskId);
+      const identity = latestProposalIdentity(events);
+      if (identity === null) {
+        throw new Error("accept-spec: no current spec.proposed event with valid identity in the trace; run propose-spec first");
+      }
+      const identityData = { attempt_id: identity.attemptId, proposal_id: identity.proposalId, proposal_hash: identity.proposalHash };
+      if (advisorUnavailable) {
+        const harness = requiredString(flags, "harness");
+        const failureReason = requiredString(flags, "failure-reason");
+        const fallbackChecklistResult = requiredString(flags, "fallback-checklist-result");
+        await appendTrace(root, taskId, { ts: new Date().toISOString(), type: "advisor.unavailable", summary: "Advisor unavailable; degraded checklist recorded.", data: { ...identityData, attempted: true, harness, failure_reason: failureReason, fallback_checklist_result: fallbackChecklistResult } });
+      } else {
+        const advisorData: Record<string, unknown> = { ...identityData, verdict };
+        if (flagEnabled(flags, "concerns-resolved")) {
+          advisorData.concerns_resolved = true;
+        }
+        const deferredReason = optionalString(flags, "deferred-reason");
+        if (deferredReason !== undefined) {
+          advisorData.deferred_reason = deferredReason;
+        }
+        if (flagEnabled(flags, "user-risk-acceptance")) {
+          advisorData.user_risk_acceptance = true;
+        }
+        if (flagEnabled(flags, "blockers-resolved")) {
+          advisorData.blockers_resolved = true;
+        }
+        if (flagEnabled(flags, "user-override")) {
+          advisorData.user_override = true;
+        }
+        if (verdict === "concern" && !advisorData.concerns_resolved && advisorData.deferred_reason === undefined && !advisorData.user_risk_acceptance) {
+          throw new Error("accept-spec: --verdict concern requires --concerns-resolved, --deferred-reason, or --user-risk-acceptance");
+        }
+        if (verdict === "blocker" && !advisorData.blockers_resolved && !advisorData.user_override) {
+          throw new Error("accept-spec: --verdict blocker requires --blockers-resolved or --user-override");
+        }
+        await appendTrace(root, taskId, { ts: new Date().toISOString(), type: "advisor.reviewed", summary: `Advisor review recorded (verdict ${verdict}).`, data: advisorData });
+      }
+      await appendTrace(root, taskId, { ts: new Date().toISOString(), type: "spec.accepted", summary: "Spec explicitly accepted via accept-spec.", data: { ...identityData, explicit: true } });
+      printJson({ ok: true, identity: { attemptId: identity.attemptId, proposalId: identity.proposalId, proposalHash: identity.proposalHash } });
       return 0;
     }
     default:
@@ -954,6 +1023,8 @@ function printInternalUsage(): void {
   cw internal create-task --title <title> [--id <id>] [--phase <phase>] [--next-action <text>]
   cw internal select-task [--task <id>]
   cw internal append-trace --task <id> --type <type> --summary <text>
+  cw internal propose-spec --task <id> --spec-file <path>
+  cw internal accept-spec --task <id> --verdict pass|concern|blocker [...] | --advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>
   cw internal set-state --task <id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
   cw internal finish-task --task <id> --summary <text> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none] [--edited-content <confirmed-current-state-sections>]
   cw internal discard-task --task <id> --confirm [--worktree keep|stash|revert|delete-worktree|none]

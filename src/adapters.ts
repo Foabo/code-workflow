@@ -54,13 +54,13 @@ const commandSteps: Record<(typeof AGENT_COMMANDS)[number], string[]> = {
     "Read the current spec.md and relevant project baseline files.",
     "Run the Brainstorm Pass described below before drafting Proposed Spec.",
     "Run the Grill Loop described below until Open Decisions and high-risk assumptions are resolved or explicitly accepted.",
-    "Present a Proposed Spec and record `spec.proposed` with current proposal identity.",
+    "Present a Proposed Spec, write its content to spec.md, then record it with `cw internal propose-spec --task <task-id> --spec-file <path>` (hashes the file, appends `brainstorm.done` + `spec.proposed` with identity, returns the identity). The `proposal_hash` binds the spec.md content.",
     "Call the `cw-advisor` role when available to review the current Proposed Spec before asking the user to accept it.",
     "If advisor is unavailable, record `advisor.unavailable` with attempted invocation, harness, failure reason, timestamp, and fallback checklist result, then perform the same checklist inline as degraded execution.",
     "Resolve, defer with rationale, or get explicit user risk acceptance for each concern. Fix blockers and re-review, or record explicit user override.",
-    "Wait for explicit user accept before editing spec.md.",
-    "Run `cw internal validate-clarify --task <task-id> --stage advance` before writing spec.md or moving to plan.",
-    "Edit spec.md only with the accepted task contract after the clarify gate passes.",
+    "Wait for explicit user accept before recording `spec.accepted`.",
+    "After accept, run `cw internal accept-spec --task <task-id> --verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override]` (or the `--advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>` fallback); it auto-binds the latest proposal identity and appends `advisor.reviewed`|`advisor.unavailable` + `spec.accepted(explicit:true)`. Then run `cw internal validate-clarify --task <task-id> --stage advance` before moving to plan.",
+    "spec.md is written at propose time and bound by `proposal_hash`; do not edit it between propose and accept. The clarify gate validates trace events, not the spec.md file directly.",
     "Capture confirmed long-term project facts as task-local baseline candidates; do not update Project Baseline files during clarify.",
     "Run `cw internal set-state --task <task-id> --phase plan --next-action <text>` when the spec is accepted.",
     "If required information is missing, run `cw internal set-state --task <task-id> --lifecycle blocked --phase clarify --blocked-reason <reason> --next-action <text>`."
@@ -148,7 +148,7 @@ const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>
     "If the phase, artifacts, or user request conflict, stop and resolve the conflict through the matching phase guidance before making code changes."
   ],
   "cw-clarify": [
-    "Clarify uses one fixed sequence for all tasks: Brainstorm Pass -> Grill Loop -> Proposed Spec -> advisor review of the current Proposed Spec -> concern/blocker handling -> explicit accept -> write spec.md.",
+    "Clarify uses one fixed sequence for all tasks: Brainstorm Pass -> Grill Loop -> Proposed Spec (write spec.md + `propose-spec`) -> advisor review of the current Proposed Spec -> concern/blocker handling -> explicit accept (`accept-spec`) -> `validate-clarify --stage advance` -> move to plan. The required trace events (`brainstorm.done`, `spec.proposed`, `advisor.reviewed`|`advisor.unavailable`, `spec.accepted`) share one identity triple (`attempt_id`, `proposal_id`, `proposal_hash` where `proposal_hash = sha256(spec content)`); `propose-spec` and `accept-spec` compute and thread this identity so the agent never hand-hashes or hand-threads field names.",
     "Brainstorm Pass must restate the goal and motivation, offer at most three directions, recommend the smallest path, list assumptions, risks, acceptance evidence, and produce Open Decisions.",
     "Grill Loop asks one concrete question at a time for Open Decisions and high-risk assumptions. Include your recommended answer and the trade-off so the user can make a concrete decision.",
     "Use the full Grill Loop when the request is broad, ambiguous, high risk, or affects workflow semantics, CLI/API behavior, task lifecycle, state machines, cross-module behavior, irreversible work, or baseline promotion.",
@@ -782,6 +782,8 @@ ${commandSteps[command].map((step, index) => `${index + 1}. ${step}`).join("\n")
 - cw internal select-task [--task <task-id>]
 - cw internal append-trace --task <task-id> --type <event-type> --summary <summary>
 - cw internal append-trace --task <task-id> --type <event-type> --summary <summary> --data-json <json-object>
+- cw internal propose-spec --task <task-id> --spec-file <path>
+- cw internal accept-spec --task <task-id> --verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override] | [--advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>]
 - cw internal validate-clarify --task <task-id> --stage proposal|accept|advance
 - cw internal set-state --task <task-id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
 - cw internal finish-task --task <task-id> --summary <summary> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none] [--edited-content <confirmed-current-state-sections>]

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { access, chmod, mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -188,6 +189,9 @@ describe("cw kernel", () => {
     assert.match(clarifySkill, /proposal identity/);
     assert.match(clarifySkill, /degraded execution/);
     assert.match(clarifySkill, /validate-clarify/);
+    assert.match(clarifySkill, /propose-spec/);
+    assert.match(clarifySkill, /accept-spec/);
+    assert.match(clarifySkill, /proposal_hash = sha256/);
     assert.match(clarifySkill, /Do not create clarify\.md/);
     assert.match(clarifySkill, /one concrete question at a time/);
     assert.match(clarifySkill, /would this wording let an agent skip challenge/);
@@ -205,7 +209,7 @@ describe("cw kernel", () => {
       "advisor review of the current Proposed Spec",
       "concern/blocker handling",
       "explicit accept",
-      "write spec.md"
+      "validate-clarify --stage advance"
     ]);
     const skillNames = await readdir(path.join(root, ".agents/skills"));
     assert.ok(!skillNames.includes("cw-brainstorm"));
@@ -1338,6 +1342,109 @@ describe("cw kernel", () => {
     const outOfOrder = await runValidateClarifyViaCli(root, "0003-clarify-order", "proposal");
     assert.equal(outOfOrder.code, 1);
     assert.match(outOfOrder.stdout, /before spec.proposed/);
+  });
+
+  it("names missing identity fields when spec.proposed lacks the identity triple", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await createTaskViaCli(root, { id: "0001-malformed-identity", title: "Malformed identity" });
+    await appendTraceViaCli(root, "0001-malformed-identity", {
+      type: "brainstorm.done",
+      summary: "Brainstorm done.",
+      data: { identity: "stale" }
+    });
+    await appendTraceViaCli(root, "0001-malformed-identity", {
+      type: "spec.proposed",
+      summary: "Spec proposed with wrong identity key.",
+      data: { identity: "stale" }
+    });
+    const result = await runValidateClarifyViaCli(root, "0001-malformed-identity", "advance");
+    assert.equal(result.code, 1);
+    assert.match(result.stdout, /attempt_id/);
+    assert.match(result.stdout, /proposal_id/);
+    assert.match(result.stdout, /proposal_hash/);
+  });
+
+  it("propose-spec and accept-spec produce a passing clarify gate from a spec file", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await createTaskViaCli(root, { id: "0001-propose-accept", title: "Propose accept" });
+    const specPath = path.join(root, "spec-draft.md");
+    const specContent = "# Spec\n\n## Goal\n\nMake toast.\n\n## Acceptance Criteria\n\n- [ ] Toast is made.\n";
+    await writeFile(specPath, specContent, "utf8");
+
+    const proposed = await cliJson<{ ok: boolean; identity: { attemptId: string; proposalId: string; proposalHash: string } }>([
+      "internal", "propose-spec", "--root", root, "--task", "0001-propose-accept", "--spec-file", specPath
+    ]);
+    assert.equal(proposed.ok, true);
+    assert.ok(proposed.identity.proposalHash.length > 0);
+    assert.equal(proposed.identity.proposalHash, createHash("sha256").update(specContent).digest("hex"));
+
+    const specMdPath = path.join(root, ".cw/tasks/0001-propose-accept/spec.md");
+    const specMdContent = await readFile(specMdPath, "utf8");
+    assert.doesNotMatch(specMdContent, /Make toast/);
+
+    const proposalStage = await runValidateClarifyViaCli(root, "0001-propose-accept", "proposal");
+    assert.equal(proposalStage.code, 0);
+
+    const accepted = await cliJson<{ ok: boolean; identity: { attemptId: string } }>([
+      "internal", "accept-spec", "--root", root, "--task", "0001-propose-accept", "--verdict", "pass"
+    ]);
+    assert.equal(accepted.ok, true);
+    assert.equal(accepted.identity.attemptId, proposed.identity.attemptId);
+
+    const advance = await runValidateClarifyViaCli(root, "0001-propose-accept", "advance");
+    assert.equal(advance.code, 0);
+  });
+
+  it("accept-spec fails cleanly with no prior proposal or contradictory flags", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await createTaskViaCli(root, { id: "0001-accept-errors", title: "Accept errors" });
+
+    const noProposal = await runCli(["internal", "accept-spec", "--root", root, "--task", "0001-accept-errors", "--verdict", "pass"]);
+    assert.notEqual(noProposal.code, 0);
+
+    await appendTraceViaCli(root, "0001-accept-errors", {
+      type: "spec.proposed",
+      summary: "Proposal with identity.",
+      data: { attempt_id: "a1", proposal_id: "p1", proposal_hash: "h1" }
+    });
+    const contradictory = await runCli([
+      "internal", "accept-spec", "--root", root, "--task", "0001-accept-errors", "--verdict", "pass", "--advisor-unavailable"
+    ]);
+    assert.notEqual(contradictory.code, 0);
+    assert.match((contradictory.stderr || contradictory.stdout), /mutually exclusive/);
+
+    const unavailable = await cliJson<{ ok: boolean }>([
+      "internal", "accept-spec", "--root", root, "--task", "0001-accept-errors",
+      "--advisor-unavailable", "--harness", "opencode", "--failure-reason", "advisor model not found",
+      "--fallback-checklist-result", "inline review pass"
+    ]);
+    assert.equal(unavailable.ok, true);
+    const trace = await readTrace(root, "0001-accept-errors");
+    assert.ok(trace.some((event) => event.type === "advisor.unavailable"));
+    assert.ok(trace.some((event) => event.type === "spec.accepted" && (event.data as Record<string, unknown>).explicit === true));
+
+    const concernWithoutResolution = await runCli([
+      "internal", "accept-spec", "--root", root, "--task", "0001-accept-errors", "--verdict", "concern"
+    ]);
+    assert.notEqual(concernWithoutResolution.code, 0);
+    assert.match((concernWithoutResolution.stderr || concernWithoutResolution.stdout), /concern requires/);
+
+    await createTaskViaCli(root, { id: "0002-malformed-latest", title: "Malformed latest" });
+    await appendTraceViaCli(root, "0002-malformed-latest", {
+      type: "spec.proposed",
+      summary: "Earlier valid proposal.",
+      data: { attempt_id: "a-early", proposal_id: "p-early", proposal_hash: "h-early" }
+    });
+    await appendTraceViaCli(root, "0002-malformed-latest", {
+      type: "spec.proposed",
+      summary: "Latest malformed proposal.",
+      data: { identity: "stale" }
+    });
+    const misbind = await runCli(["internal", "accept-spec", "--root", root, "--task", "0002-malformed-latest", "--verdict", "pass"]);
+    assert.notEqual(misbind.code, 0);
   });
 
   it("creates and consumes a task-local resume note", async () => {
