@@ -4,11 +4,11 @@ Label: `ready-for-agent`
 
 ## Parent
 
-`docs/prd/cw-version-1-workflow-kernel.md`
+`docs/prd/ff-version-1-workflow-kernel.md`
 
 ## What to build
 
-Implement finish-time Project Baseline promotion. A task may carry a baseline delta with candidate reusable project facts. During finish, CW should preview the delta, require user confirmation, support accepted/selected/edited/skipped outcomes, let the agent semantically edit baseline files, and use helpers to validate and record the sync.
+Implement finish-time Project Baseline promotion. A task may carry a baseline delta with candidate reusable project facts. During finish, Flowflow should preview the delta, require user confirmation, support accepted/selected/edited/skipped outcomes, let the agent semantically edit baseline files, and use helpers to validate and record the sync.
 
 ## Acceptance criteria
 

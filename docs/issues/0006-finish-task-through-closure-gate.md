@@ -4,11 +4,11 @@ Label: `ready-for-agent`
 
 ## Parent
 
-`docs/prd/cw-version-1-workflow-kernel.md`
+`docs/prd/ff-version-1-workflow-kernel.md`
 
 ## What to build
 
-Implement task completion through `cw-finish`. Finish should be the only normal path to closing a task. It should run the Closure Gate, verify checklist completeness, handle dirty worktree state, delete consumed resume notes, append trace evidence, and set the task lifecycle to closed only when the task can be responsibly finished.
+Implement task completion through `ff-finish`. Finish should be the only normal path to closing a task. It should run the Closure Gate, verify checklist completeness, handle dirty worktree state, delete consumed resume notes, append trace evidence, and set the task lifecycle to closed only when the task can be responsibly finished.
 
 ## Acceptance criteria
 

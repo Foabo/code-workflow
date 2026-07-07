@@ -1,4 +1,4 @@
-import { CW_SCHEMA_VERSION, OrchestrationConfigRecord, RoleModelProfile } from "./types.js";
+import { FLOWFLOW_SCHEMA_VERSION, OrchestrationConfigRecord, RoleModelProfile } from "./types.js";
 
 export const AGENT_ROLE_NAMES = [
   "advisor",
@@ -64,7 +64,7 @@ export const DEFAULT_ROLE_MODEL_PROFILES: Record<(typeof AGENT_ROLE_NAMES)[numbe
 
 export function defaultOrchestrationConfig(now: Date): OrchestrationConfigRecord {
   return {
-    schema_version: CW_SCHEMA_VERSION,
+    schema_version: FLOWFLOW_SCHEMA_VERSION,
     advisor: {
       enabled_by_default: true,
       mode: "always-on",

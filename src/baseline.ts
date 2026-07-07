@@ -1,7 +1,7 @@
 import path from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 import { appendTrace, readTaskState } from "./tasks.js";
-import { getCwPaths, taskDir, taskJsonPath } from "./paths.js";
+import { getFlowflowPaths, taskDir, taskJsonPath } from "./paths.js";
 import { TASK_ARTIFACT_TEMPLATES } from "./templates.js";
 import { writeJsonFile } from "./json.js";
 import { BaselineDecision, TaskStateRecord } from "./types.js";
@@ -93,9 +93,9 @@ export async function syncBaselineDelta(
     if (content === undefined || content.length === 0) {
       continue;
     }
-    const projectFile = path.join(getCwPaths(root).project, fileName);
+    const projectFile = path.join(getFlowflowPaths(root).project, fileName);
     await writeFile(projectFile, `${content}\n`, "utf8");
-    updated.push(`.cw/project/${fileName}`);
+    updated.push(`.ff/project/${fileName}`);
   }
 
   if (updated.length === 0) {
@@ -138,7 +138,7 @@ export async function previewBaselineMerge(
     if (delta === undefined || delta.length === 0) {
       continue;
     }
-    const currentPath = path.join(getCwPaths(root).project, fileName);
+    const currentPath = path.join(getFlowflowPaths(root).project, fileName);
     const current = await readFile(currentPath, "utf8");
     merged[fileName] = mergeBaselineMarkdown(current, delta);
   }

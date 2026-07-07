@@ -4,7 +4,7 @@ Label: `ready-for-agent`
 
 ## Parent
 
-`docs/prd/cw-version-1-workflow-kernel.md`
+`docs/prd/ff-version-1-workflow-kernel.md`
 
 ## What to build
 
@@ -12,9 +12,9 @@ Implement the planning path that turns an accepted task spec into an implementat
 
 ## Acceptance criteria
 
-- [ ] `cw-plan` requires a usable task spec before planning.
-- [ ] `cw-plan` updates the implementation approach.
-- [ ] `cw-plan` updates the executable checklist with implementation, verification, and check sections.
+- [ ] `ff-plan` requires a usable task spec before planning.
+- [ ] `ff-plan` updates the implementation approach.
+- [ ] `ff-plan` updates the executable checklist with implementation, verification, and check sections.
 - [ ] Planning advances the task phase toward run when successful.
 - [ ] Planning returns to clarification or blocks the task when the spec is insufficient.
 - [ ] Tests verify plan/checklist output, phase transition, and trace event behavior.

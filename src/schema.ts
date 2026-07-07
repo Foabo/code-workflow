@@ -1,5 +1,5 @@
 import {
-  CW_SCHEMA_VERSION,
+  FLOWFLOW_SCHEMA_VERSION,
   AgentRoleName,
   AdvisorMode,
   AdvisorSeverity,
@@ -35,16 +35,16 @@ const modelCapabilityTiers = new Set<ModelCapabilityTier>(MODEL_CAPABILITY_TIERS
 const modelReasoningEfforts = new Set<ModelReasoningEffort>(MODEL_REASONING_EFFORTS);
 const orchestrationHarnesses = new Set<string>(ORCHESTRATION_HARNESSES);
 
-export function validateVersionRecord(value: unknown, pathName = ".cw/version.json"): ValidationIssue[] {
+export function validateVersionRecord(value: unknown, pathName = ".ff/version.json"): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (!isRecord(value)) {
     return [{ path: pathName, message: "must be a JSON object" }];
   }
   requireNumber(value, "schema_version", pathName, issues);
-  requireString(value, "cw_version", pathName, issues);
+  requireString(value, "flowflow_version", pathName, issues);
   requireString(value, "created_at", pathName, issues);
-  if (value.schema_version !== CW_SCHEMA_VERSION) {
-    issues.push({ path: `${pathName}.schema_version`, message: `must be ${CW_SCHEMA_VERSION}` });
+  if (value.schema_version !== FLOWFLOW_SCHEMA_VERSION) {
+    issues.push({ path: `${pathName}.schema_version`, message: `must be ${FLOWFLOW_SCHEMA_VERSION}` });
   }
   return issues;
 }
@@ -60,8 +60,8 @@ export function validateTaskStateRecord(value: unknown, pathName = "task.json"):
   }
 
   requireNumber(value, "schema_version", pathName, issues);
-  if (value.schema_version !== CW_SCHEMA_VERSION) {
-    issues.push({ path: `${pathName}.schema_version`, message: `must be ${CW_SCHEMA_VERSION}` });
+  if (value.schema_version !== FLOWFLOW_SCHEMA_VERSION) {
+    issues.push({ path: `${pathName}.schema_version`, message: `must be ${FLOWFLOW_SCHEMA_VERSION}` });
   }
 
   if (typeof value.lifecycle !== "string" || !lifecycles.has(value.lifecycle as TaskLifecycle)) {
@@ -92,15 +92,15 @@ export function validateTaskStateRecord(value: unknown, pathName = "task.json"):
 
 export function validateEnhancementConfigRecord(
   value: unknown,
-  pathName = ".cw/enhancements.json"
+  pathName = ".ff/enhancements.json"
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (!isRecord(value)) {
     return [{ path: pathName, message: "must be a JSON object" }];
   }
   requireNumber(value, "schema_version", pathName, issues);
-  if (value.schema_version !== CW_SCHEMA_VERSION) {
-    issues.push({ path: `${pathName}.schema_version`, message: `must be ${CW_SCHEMA_VERSION}` });
+  if (value.schema_version !== FLOWFLOW_SCHEMA_VERSION) {
+    issues.push({ path: `${pathName}.schema_version`, message: `must be ${FLOWFLOW_SCHEMA_VERSION}` });
   }
   requireEnhancementChoice(value, "code_intelligence", pathName, issues);
   requireEnhancementChoice(value, "external_context", pathName, issues);
@@ -116,15 +116,15 @@ export function validateEnhancementConfigRecord(
 
 export function validateOrchestrationConfigRecord(
   value: unknown,
-  pathName = ".cw/orchestration.json"
+  pathName = ".ff/orchestration.json"
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (!isRecord(value)) {
     return [{ path: pathName, message: "must be a JSON object" }];
   }
   requireNumber(value, "schema_version", pathName, issues);
-  if (value.schema_version !== CW_SCHEMA_VERSION) {
-    issues.push({ path: `${pathName}.schema_version`, message: `must be ${CW_SCHEMA_VERSION}` });
+  if (value.schema_version !== FLOWFLOW_SCHEMA_VERSION) {
+    issues.push({ path: `${pathName}.schema_version`, message: `must be ${FLOWFLOW_SCHEMA_VERSION}` });
   }
   requireString(value, "updated_at", pathName, issues);
   validateAdvisorConfig(value.advisor, `${pathName}.advisor`, issues);

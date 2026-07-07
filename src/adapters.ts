@@ -3,7 +3,7 @@ import { writeFile } from "node:fs/promises";
 import { ensureDir, writeFileIfMissing } from "./fs.js";
 import { AGENT_ROLE_NAMES, DEFAULT_ROLE_MODEL_PROFILES } from "./orchestration.js";
 import { readJsonFile } from "./json.js";
-import { getCwPaths } from "./paths.js";
+import { getFlowflowPaths } from "./paths.js";
 import { AGENT_COMMANDS } from "./templates.js";
 import {
   AgentRoleName,
@@ -26,128 +26,128 @@ export type AdapterOptions = {
 };
 
 const commandPurposes: Record<(typeof AGENT_COMMANDS)[number], string> = {
-  "cw-work": "Default task progress action. Create or select a task, advance the next responsible phase, run check when appropriate, then stop before finish.",
-  "cw-clarify": "Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md with the accepted task contract.",
-  "cw-plan": "Apply the spec quality gate, then turn accepted spec.md into plan.md and task.md without changing the spec.",
-  "cw-run": "Execute the next checklist items from task.md, modify repository code, update progress, and append trace events through helpers.",
-  "cw-check": "Run verification and review, reconcile drift, and update task.md before finish is allowed.",
-  "cw-finish": "Run the closure gate, handle dirty worktree state, sync accepted baseline delta, consume resume notes, and close the task.",
-  "cw-resume": "Use a task-local resume.md only when the user explicitly asks to resume from it, then consume it after progress is recorded.",
-  "cw-discard": "Abandon a task after user-confirmed worktree handling, then remove the task record.",
-  "cw-doctor": "Inspect repository workflow health with cw doctor and report issues or warnings.",
-  "cw-understand": "Draft project baseline updates for an existing repository, then ask the user what to merge."
+  "ff-work": "Default task progress action. Create or select a task, advance the next responsible phase, run check when appropriate, then stop before finish.",
+  "ff-clarify": "Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md with the accepted task contract.",
+  "ff-plan": "Apply the spec quality gate, then turn accepted spec.md into plan.md and task.md without changing the spec.",
+  "ff-run": "Execute the next checklist items from task.md, modify repository code, update progress, and append trace events through helpers.",
+  "ff-check": "Run verification and review, reconcile drift, and update task.md before finish is allowed.",
+  "ff-finish": "Run the closure gate, handle dirty worktree state, sync accepted baseline delta, consume resume notes, and close the task.",
+  "ff-resume": "Use a task-local resume.md only when the user explicitly asks to resume from it, then consume it after progress is recorded.",
+  "ff-discard": "Abandon a task after user-confirmed worktree handling, then remove the task record.",
+  "ff-doctor": "Inspect repository workflow health with ff doctor and report issues or warnings.",
+  "ff-understand": "Draft project baseline updates for an existing repository, then ask the user what to merge."
 };
 
 const commandSteps: Record<(typeof AGENT_COMMANDS)[number], string[]> = {
-  "cw-work": [
-    "Run `cw preflight --action work`.",
-    "If no task exists, create one with `cw internal create-task --title <title>` after deriving a clear title from the user request.",
-    "Select the task with `cw internal select-task` or `cw internal select-task --task <task-id>`.",
+  "ff-work": [
+    "Run `ff preflight --action work`.",
+    "If no task exists, create one with `ff internal create-task --title <title>` after deriving a clear title from the user request.",
+    "Select the task with `ff internal select-task` or `ff internal select-task --task <task-id>`.",
     "Read spec.md, plan.md, task.md, and relevant project baseline files.",
     "Route by current task phase and artifact state: clarify, plan, run, check, or finish readiness.",
     "Apply the matching command behavior in this same agent session when the next step is clear.",
     "Stop for user judgment when the matching phase requires confirmation, new requirements, or product behavior decisions.",
-    "When check passes, report finish readiness and ask whether to run cw-finish."
+    "When check passes, report finish readiness and ask whether to run ff-finish."
   ],
-  "cw-clarify": [
-    "Run `cw preflight --action clarify --task <task-id>` when a task id is known.",
+  "ff-clarify": [
+    "Run `ff preflight --action clarify --task <task-id>` when a task id is known.",
     "Read the current spec.md and relevant project baseline files.",
     "Run the Brainstorm Pass described below before drafting Proposed Spec.",
     "Run the Grill Loop described below until Open Decisions and high-risk assumptions are resolved or explicitly accepted.",
-    "Present a Proposed Spec, write its content to spec.md, then record it with `cw internal propose-spec --task <task-id> --spec-file <path>` (hashes the file, appends `brainstorm.done` + `spec.proposed` with identity, returns the identity). The `proposal_hash` binds the spec.md content.",
-    "Call the `cw-advisor` role when available to review the current Proposed Spec before asking the user to accept it.",
+    "Present a Proposed Spec, write its content to spec.md, then record it with `ff internal propose-spec --task <task-id> --spec-file <path>` (hashes the file, appends `brainstorm.done` + `spec.proposed` with identity, returns the identity). The `proposal_hash` binds the spec.md content.",
+    "Call the `ff-advisor` role when available to review the current Proposed Spec before asking the user to accept it.",
     "If advisor is unavailable, record `advisor.unavailable` with attempted invocation, harness, failure reason, timestamp, and fallback checklist result, then perform the same checklist inline as degraded execution.",
     "Resolve, defer with rationale, or get explicit user risk acceptance for each concern. Fix blockers and re-review, or record explicit user override.",
     "Wait for explicit user accept before recording `spec.accepted`.",
-    "After accept, run `cw internal accept-spec --task <task-id> --verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override]` (or the `--advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>` fallback); it auto-binds the latest proposal identity and appends `advisor.reviewed`|`advisor.unavailable` + `spec.accepted(explicit:true)`. Then run `cw internal validate-clarify --task <task-id> --stage advance` before moving to plan.",
+    "After accept, run `ff internal accept-spec --task <task-id> --verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override]` (or the `--advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>` fallback); it auto-binds the latest proposal identity and appends `advisor.reviewed`|`advisor.unavailable` + `spec.accepted(explicit:true)`. Then run `ff internal validate-clarify --task <task-id> --stage advance` before moving to plan.",
     "spec.md is written at propose time and bound by `proposal_hash`; do not edit it between propose and accept. The clarify gate validates trace events, not the spec.md file directly.",
     "Capture confirmed long-term project facts as task-local baseline candidates; do not update Project Baseline files during clarify.",
-    "Run `cw internal set-state --task <task-id> --phase plan --next-action <text>` when the spec is accepted.",
-    "If required information is missing, run `cw internal set-state --task <task-id> --lifecycle blocked --phase clarify --blocked-reason <reason> --next-action <text>`."
+    "Run `ff internal set-state --task <task-id> --phase plan --next-action <text>` when the spec is accepted.",
+    "If required information is missing, run `ff internal set-state --task <task-id> --lifecycle blocked --phase clarify --blocked-reason <reason> --next-action <text>`."
   ],
-  "cw-plan": [
-    "Run `cw preflight --action plan --task <task-id>`.",
+  "ff-plan": [
+    "Run `ff preflight --action plan --task <task-id>`.",
     "Read spec.md and relevant project baseline files.",
     "Apply the spec quality gate described below.",
-    "If the spec quality gate fails, return to cw-clarify behavior with one concrete next question.",
+    "If the spec quality gate fails, return to ff-clarify behavior with one concrete next question.",
     "Edit plan.md with the implementation approach, key decisions, risks, and validation strategy.",
     "Edit task.md with executable implementation, verification, and check items.",
     "Capture stable design, workflow, command, or rule candidates in task-local artifacts when planning discovers reusable project facts.",
     "Run a post-plan artifact cross-review of spec.md, plan.md, and task.md before moving to run.",
-    "Run `cw internal set-state --task <task-id> --phase run --next-action <text>`."
+    "Run `ff internal set-state --task <task-id> --phase run --next-action <text>`."
   ],
-  "cw-run": [
-    "Run `cw preflight --action run --task <task-id>`.",
+  "ff-run": [
+    "Run `ff preflight --action run --task <task-id>`.",
     "Read spec.md, plan.md, task.md, and relevant code.",
     "Implement the next unchecked task.md items against the accepted spec.md and plan.md contract.",
     "Stop for user confirmation when work reveals requirement drift, plan contradiction, or product behavior outside scope.",
     "Add or update tests by default for behavior, workflow semantics, CLI/API behavior, state transitions, parsing, validation, and error handling.",
-    "For simple file creation or replacement tasks, the executable shim may be called with `cw-run --task <task-id> --write-file <path> --content <text>`.",
+    "For simple file creation or replacement tasks, the executable shim may be called with `ff-run --task <task-id> --write-file <path> --content <text>`.",
     "Update task.md checklist progress.",
-    "Record material progress with `cw internal append-trace --task <task-id> --type run.updated --summary <summary>`.",
-    "Run `cw internal ensure-baseline-delta --task <task-id>` when stable reusable project facts are discovered.",
-    "Run `cw internal set-state --task <task-id> --phase check --next-action <text>` when implementation items are complete enough to verify."
+    "Record material progress with `ff internal append-trace --task <task-id> --type run.updated --summary <summary>`.",
+    "Run `ff internal ensure-baseline-delta --task <task-id>` when stable reusable project facts are discovered.",
+    "Run `ff internal set-state --task <task-id> --phase check --next-action <text>` when implementation items are complete enough to verify."
   ],
-  "cw-check": [
-    "Run `cw preflight --action check --task <task-id>`.",
-    "Run the relevant commands from .cw/project/commands.md.",
-    "For deterministic verification commands, the executable shim may be called with repeated `cw-check --task <task-id> --command <cmd>` flags and `--baseline-outcome <text>`.",
+  "ff-check": [
+    "Run `ff preflight --action check --task <task-id>`.",
+    "Run the relevant commands from .ff/project/commands.md.",
+    "For deterministic verification commands, the executable shim may be called with repeated `ff-check --task <task-id> --command <cmd>` flags and `--baseline-outcome <text>`.",
     "Run artifact alignment review against spec.md, plan.md, and task.md.",
     "Run implementation evidence review against every acceptance criterion.",
     "Fix small local defects when the task contract is unchanged.",
     "If spec drift appears, stop for user confirmation and update spec.md only after confirmation.",
     "Record one Baseline Outcome before finish: baseline-delta.md created or updated, no reusable project facts, or candidate not stable yet.",
     "Update task.md verification and check items.",
-    "Append a check trace event with `cw internal append-trace --task <task-id> --type check.passed --summary <summary>` or `check.failed`.",
-    "When check passes, run `cw internal set-state --task <task-id> --phase finish --next-action <text>`."
+    "Append a check trace event with `ff internal append-trace --task <task-id> --type check.passed --summary <summary>` or `check.failed`.",
+    "When check passes, run `ff internal set-state --task <task-id> --phase finish --next-action <text>`."
   ],
-  "cw-finish": [
-    "Run `cw preflight --action finish --task <task-id>`.",
+  "ff-finish": [
+    "Run `ff preflight --action finish --task <task-id>`.",
     "Confirm dirty worktree handling when needed.",
     "Review check evidence, unresolved drift flags, dirty worktree handling, baseline decision, and final summary as the closure packet.",
-    "If baseline-delta.md exists, prepare a current-state candidate diff for .cw/project files and merge it by default; stop only when the user chooses selected, edited, or skipped, or when the merge is high-impact or ambiguous.",
-    "Run `cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped` when applicable; pass `--selected-files` or `--edited-content` only for selected or edited handling.",
-    "Run `cw internal finish-task --task <task-id> --summary <summary> --dirty-worktree <covered|unrelated|clean> --baseline <accepted|selected|edited|skipped|none>`.",
+    "If baseline-delta.md exists, prepare a current-state candidate diff for .ff/project files and merge it by default; stop only when the user chooses selected, edited, or skipped, or when the merge is high-impact or ambiguous.",
+    "Run `ff internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped` when applicable; pass `--selected-files` or `--edited-content` only for selected or edited handling.",
+    "Run `ff internal finish-task --task <task-id> --summary <summary> --dirty-worktree <covered|unrelated|clean> --baseline <accepted|selected|edited|skipped|none>`.",
     "Report the closed task id and any project baseline files updated."
   ],
-  "cw-resume": [
-    "Run `cw preflight --action resume --task <task-id>`.",
+  "ff-resume": [
+    "Run `ff preflight --action resume --task <task-id>`.",
     "Read resume.md together with task.json, trace.jsonl, spec.md, plan.md, and task.md.",
     "Continue from the task artifacts, using resume.md only as a pointer.",
     "Let the workflow kernel consume resume.md automatically after a later workflow action records progress."
   ],
-  "cw-discard": [
-    "Run `cw preflight --action discard --task <task-id>`.",
+  "ff-discard": [
+    "Run `ff preflight --action discard --task <task-id>`.",
     "Inspect Git status and explain whether changes will be kept, stashed, reverted, or an isolated worktree will be deleted.",
     "Ask for explicit confirmation.",
-    "Run `cw internal discard-task --task <task-id> --confirm --worktree <keep|stash|revert|delete-worktree|none>`."
+    "Run `ff internal discard-task --task <task-id> --confirm --worktree <keep|stash|revert|delete-worktree|none>`."
   ],
-  "cw-doctor": [
-    "Run `cw doctor`.",
+  "ff-doctor": [
+    "Run `ff doctor`.",
     "Report issues first, then warnings.",
     "For malformed or missing files, recommend the smallest repair.",
     "Do not change project baseline or task artifacts unless the user asks for repair."
   ],
-  "cw-understand": [
-    "Run `cw preflight --action understand`.",
+  "ff-understand": [
+    "Run `ff preflight --action understand`.",
     "Inspect repository structure, package files, commands, and existing docs.",
-    "Draft candidate updates for .cw/project/overview.md, architecture.md, rules.md, and commands.md.",
+    "Draft candidate updates for .ff/project/overview.md, architecture.md, rules.md, and commands.md.",
     "Ask the user what to merge before editing project baseline files.",
-    "After accepted edits, run `cw internal append-trace --task <task-id> --type baseline.updated --summary <summary>` only if this is tied to a task."
+    "After accepted edits, run `ff internal append-trace --task <task-id> --type baseline.updated --summary <summary>` only if this is tied to a task."
   ]
 };
 
 const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>> = {
-  "cw-work": [
-    "`cw-work` is the routine progress command. Repeated `/cw-work` calls should be enough to advance ordinary work through clarify, plan, run, and check.",
+  "ff-work": [
+    "`ff-work` is the routine progress command. Repeated `/ff-work` calls should be enough to advance ordinary work through clarify, plan, run, and check.",
     "The executable `work` helper creates or selects the task and returns actionable status. The generated skill performs the judgment-heavy orchestration: questioning, planning, code edits, verification, and review.",
     "Use task truth to choose the next responsibility: clarify means challenge and accept the task contract, plan means create or repair plan.md and task.md, run means execute unchecked implementation items, check means verify and review evidence, and finish means stop before closure.",
-    "When delegation is available, route bounded phase work to the matching role agent: `cw-advisor` for clarify review, `cw-planner` for planning, `cw-implementer` for independent implementation slices, `cw-checker` for verification, `cw-reviewer` for broad review, and `cw-baseline-writer` for baseline merge drafts.",
+    "When delegation is available, route bounded phase work to the matching role agent: `ff-advisor` for clarify review, `ff-planner` for planning, `ff-implementer` for independent implementation slices, `ff-checker` for verification, `ff-reviewer` for broad review, and `ff-baseline-writer` for baseline merge drafts.",
     "Delegation may help only when the harness, tools, and user or environment permission allow it; otherwise route phases and perform the same responsibilities inline.",
-    "Do not close tasks from `cw-work`. When the task is ready for finish, summarize the closure readiness and ask whether to run `cw-finish`.",
+    "Do not close tasks from `ff-work`. When the task is ready for finish, summarize the closure readiness and ask whether to run `ff-finish`.",
     "If the phase, artifacts, or user request conflict, stop and resolve the conflict through the matching phase guidance before making code changes."
   ],
-  "cw-clarify": [
+  "ff-clarify": [
     "Clarify uses one fixed sequence for all tasks: Brainstorm Pass -> Grill Loop -> Proposed Spec (write spec.md + `propose-spec`) -> advisor review of the current Proposed Spec -> concern/blocker handling -> explicit accept (`accept-spec`) -> `validate-clarify --stage advance` -> move to plan. The required trace events (`brainstorm.done`, `spec.proposed`, `advisor.reviewed`|`advisor.unavailable`, `spec.accepted`) share one identity triple (`attempt_id`, `proposal_id`, `proposal_hash` where `proposal_hash = sha256(spec content)`); `propose-spec` and `accept-spec` compute and thread this identity so the agent never hand-hashes or hand-threads field names.",
     "Brainstorm Pass must restate the goal and motivation, offer at most three directions, recommend the smallest path, list assumptions, risks, acceptance evidence, and produce Open Decisions.",
     "Grill Loop asks one concrete question at a time for Open Decisions and high-risk assumptions. Include your recommended answer and the trade-off so the user can make a concrete decision.",
@@ -162,61 +162,61 @@ const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>
     "Project Baseline files are not updated during clarify. Confirmed long-term facts should be captured as task-local candidates for later Baseline Outcome handling.",
     "For generated workflow guidance changes, challenge likely agent behavior directly: would this wording let an agent skip challenge, skip grill, move to plan/run too early, misuse subagents, or accept vague evidence?"
   ],
-  "cw-plan": [
+  "ff-plan": [
     "The spec quality gate checks that Goal is concrete, Scope bounds the work, Acceptance Criteria are checkable, and Decisions cover product trade-offs that affect implementation.",
     "Do not modify spec.md during planning. If the gate fails, block the task in clarify phase and provide one concrete next question in the blocked reason or next action.",
     "Plan from the accepted contract. Implementation choices may be recorded in plan.md only when they stay inside the confirmed spec.",
     "Capture stable design, workflow, command, or rule candidates when they are reusable project facts; keep one-off implementation steps out of baseline candidates.",
     "Break task.md implementation items into small, verifiable vertical slices. Keep file-level edits as implementation details, not primary checklist items.",
-    "When delegation is available, ask `cw-planner` to draft plan.md and task.md from the accepted spec, then ask `cw-reviewer` to run the post-plan artifact cross-review. The main session resolves drift and moves phase.",
-    "Post-plan artifact cross-review checks spec.md, plan.md, and task.md for contradiction, missing coverage, overbuilding, unclear interfaces, and placeholder work. Use `cw-reviewer` only when the harness, tools, and user or environment permission allow delegation; otherwise run the same check inline.",
+    "When delegation is available, ask `ff-planner` to draft plan.md and task.md from the accepted spec, then ask `ff-reviewer` to run the post-plan artifact cross-review. The main session resolves drift and moves phase.",
+    "Post-plan artifact cross-review checks spec.md, plan.md, and task.md for contradiction, missing coverage, overbuilding, unclear interfaces, and placeholder work. Use `ff-reviewer` only when the harness, tools, and user or environment permission allow delegation; otherwise run the same check inline.",
     "For generated workflow guidance changes, include behavior-review checks in task.md. Look for skipped challenge, skipped grill, unclear delegation permission, premature phase movement, and acceptance criteria without evidence.",
     "Keep deterministic tests separate from behavior review. Tests should verify generated output, while check-stage review evaluates likely agent behavior."
   ],
-  "cw-run": [
+  "ff-run": [
     "Run executes the accepted task contract. Do not expand product behavior or implementation scope beyond spec.md and plan.md without user confirmation.",
     "Behavior changes require test evidence by default. Use red-green TDD when a clear public seam exists; use commands, fixtures, snapshots, file checks, or manual review when those are the right evidence.",
-    "Use `cw-implementer` for independent vertical slices only when the harness, tools, and user or environment permission allow delegation; otherwise implement the same checklist items inline.",
+    "Use `ff-implementer` for independent vertical slices only when the harness, tools, and user or environment permission allow delegation; otherwise implement the same checklist items inline.",
     "Delegated implementers may write code and update checklist progress, but they must not close tasks or decide requirement drift.",
     "Domain modeling is optional. Use it only when terms or stable reusable project concepts change; otherwise record task-local terms in spec.md or task.md.",
     "External TDD, domain modeling, implement, Superpowers, or subagent skills may help when installed, but this generated guidance is sufficient to proceed without them."
   ],
-  "cw-check": [
+  "ff-check": [
     "Artifact alignment review checks spec.md, plan.md, and task.md for contradiction, missing coverage, overbuilding, unclear interfaces, and placeholder work.",
     "Implementation evidence review maps every acceptance criterion to evidence in task.md Verification or Check entries. Evidence can be tests, commands, file checks, CI/CD or test-environment notes, or manual verification.",
     "CI/CD or test-environment evidence states environment, action, and result without relying on commit identity.",
     "Small local defects may be fixed during check when the accepted spec.md contract is unchanged. Changes to spec.md or out-of-scope implementation behavior return to clarify for user confirmation.",
     "Check owns the final Baseline Outcome. Update baseline-delta.md for stable reusable facts, or record that there are no reusable project facts or that candidates are not stable yet.",
-    "Use `cw-checker` to run verification, record evidence, and repair small in-scope defects when delegation is available.",
-    "Use `cw-reviewer` for broad, behaviorally large, or workflow-semantics changes only when the harness, tools, and user or environment permission allow delegation; otherwise perform the same artifact and evidence review inline.",
+    "Use `ff-checker` to run verification, record evidence, and repair small in-scope defects when delegation is available.",
+    "Use `ff-reviewer` for broad, behaviorally large, or workflow-semantics changes only when the harness, tools, and user or environment permission allow delegation; otherwise perform the same artifact and evidence review inline.",
     "Run a final broad review when the change is cross-cutting, behaviorally large, or touches workflow semantics shared by multiple commands."
   ],
-  "cw-finish": [
-    "Finish closes the CW task. It does not create commits, require one final commit, push branches, open PRs, deploy, clean up branches, or record a commit ledger.",
+  "ff-finish": [
+    "Finish closes the Flowflow task. It does not create commits, require one final commit, push branches, open PRs, deploy, clean up branches, or record a commit ledger.",
     "The closure packet covers check evidence, unresolved drift, dirty worktree handling, baseline decision, and final summary.",
-    "Project Baseline files are current-state descriptions. If baseline-delta.md exists, the finish-stage agent prepares a candidate diff that integrates the delta into existing .cw/project files.",
-    "Use `cw-baseline-writer` to draft the candidate baseline merge when delegation is available and baseline-delta.md is ordinary enough to merge. The main session must review the draft before running sync helpers.",
+    "Project Baseline files are current-state descriptions. If baseline-delta.md exists, the finish-stage agent prepares a candidate diff that integrates the delta into existing .ff/project files.",
+    "Use `ff-baseline-writer` to draft the candidate baseline merge when delegation is available and baseline-delta.md is ordinary enough to merge. The main session must review the draft before running sync helpers.",
     "A fast inexpensive model may help draft the candidate baseline diff when available. The generated skill must support inline preparation, and the CLI core must not call an LLM.",
     "The default baseline decision is accepted: finish applies all merged baseline sections. If the user chooses selected, apply only named baseline files. If the user chooses edited, apply the user's replacement current-state sections. If the user chooses skipped, record no Project Baseline change.",
     "Apply the default merge without asking for a baseline decision again when the delta is ordinary and unambiguous; ask before high-impact, ambiguous, selected, edited, or skipped handling."
   ],
-  "cw-resume": [
+  "ff-resume": [
     "Resume is user-triggered continuation. Read resume.md after task.json, trace.jsonl, spec.md, plan.md, and task.md; task artifacts remain the task truth and resume.md is only a pointer.",
     "If the task is parked, resume may return it to open lifecycle for continuation while preserving the current phase and next action.",
     "Do not consume resume.md while loading resume context. The workflow kernel consumes it automatically after a later workflow action records material progress.",
     "If resume.md conflicts with task artifacts, trust the task artifacts and stop for user confirmation before changing spec.md, plan.md, or task.md.",
     "Report the loaded resume path, whether it was consumed, and the next action the agent should take."
   ],
-  "cw-doctor": [
+  "ff-doctor": [
     "Doctor is repository-level diagnosis. It reports validation issues, hygiene warnings, generated adapter drift, and enhancement status.",
     "Report issues before warnings. For each item, include the file path or state field, the observed problem, and the smallest repair.",
     "Treat issues as invalid repository state and warnings as workflow hygiene risk; do not blur the two categories.",
     "Doctor is read-only by default. If the user asks for repair, make the smallest scoped change and use normal confirmation rules for task artifacts or Project Baseline files.",
     "Do not use doctor as the action-local gate; preflight owns action-local checks."
   ],
-  "cw-understand": [
-    "Understand is draft-first repository observation. Write candidates to .cw/understand-draft/ and never overwrite .cw/project/* automatically.",
-    "Separate observed facts from inferences. Observed facts include files, package scripts, config, docs, dependencies, and existing .cw/project content; uncertain inferences should say Review required.",
+  "ff-understand": [
+    "Understand is draft-first repository observation. Write candidates to .ff/understand-draft/ and never overwrite .ff/project/* automatically.",
+    "Separate observed facts from inferences. Observed facts include files, package scripts, config, docs, dependencies, and existing .ff/project content; uncertain inferences should say Review required.",
     "Read the current Project Baseline before proposing a merge, and preserve user-authored current-state content unless the user accepts a replacement.",
     "Ask which drafted sections to merge. Merge only accepted content, and record a baseline.updated trace event only when the understand work is tied to a task.",
     "Do not promote task-local plans, aspirations, or one-off implementation details into Project Baseline."
@@ -229,7 +229,7 @@ type CommandProtocolSection = {
 };
 
 const commandProtocolSections: Partial<Record<(typeof AGENT_COMMANDS)[number], CommandProtocolSection[]>> = {
-  "cw-clarify": [
+  "ff-clarify": [
     {
       title: "Brainstorm Pass",
       items: [
@@ -246,18 +246,18 @@ const commandProtocolSections: Partial<Record<(typeof AGENT_COMMANDS)[number], C
         "Ask one concrete question at a time. Include your recommended answer and the trade-off so the user can choose or correct the path.",
         "Escalate to the full loop for broad, ambiguous, high-risk, irreversible, workflow-semantics, CLI/API, task-lifecycle, state-machine, cross-module, or baseline-promotion decisions.",
         "Stop only when the goal, boundary, acceptance criteria, key risks, and important trade-offs are clear enough to write spec.md without high-risk assumptions, or when the user explicitly accepts the remaining risk.",
-        "Keep Brainstorm Pass and Grill Loop inside this cw-clarify guidance; do not rely on another skill or cross-skill lookup for these protocol stages."
+        "Keep Brainstorm Pass and Grill Loop inside this ff-clarify guidance; do not rely on another skill or cross-skill lookup for these protocol stages."
       ]
     }
   ]
 };
 
 const executionStrategyCommands = new Set<(typeof AGENT_COMMANDS)[number]>([
-  "cw-work",
-  "cw-plan",
-  "cw-run",
-  "cw-check",
-  "cw-finish"
+  "ff-work",
+  "ff-plan",
+  "ff-run",
+  "ff-check",
+  "ff-finish"
 ]);
 
 type RoleAgentDefinition = {
@@ -276,18 +276,18 @@ type ResolvedRoleModelProfile = RoleModelProfile & {
 const roleAgentDefinitions: Record<AgentRoleName, RoleAgentDefinition> = {
   advisor: {
     role: "advisor",
-    purpose: "Read-only skeptical reviewer for CW workflow turns, specs, plans, diffs, and closure packets.",
+    purpose: "Read-only skeptical reviewer for Flowflow workflow turns, specs, plans, diffs, and closure packets.",
     useWhen: [
-      "Default-enabled advisor mode is active in .cw/orchestration.json and the harness can run a watcher or peer agent.",
+      "Default-enabled advisor mode is active in .ff/orchestration.json and the harness can run a watcher or peer agent.",
       "Manual or gate mode asks for an independent challenge pass before accepting specs, plans, implementation, or finish readiness.",
-      "During cw-clarify, review the current Proposed Spec before the primary session asks for acceptance or edits spec.md."
+      "During ff-clarify, review the current Proposed Spec before the primary session asks for acceptance or edits spec.md."
     ],
     responsibilities: [
       "Watch bounded primary-session deltas plus task artifacts, similar to OMP advisor behavior.",
       "Emit concise advisory feedback with severity nit, concern, or blocker.",
       "Challenge missing motivation, vague acceptance criteria, skipped verification, unsafe worktree handling, and spec drift.",
-      "For cw-clarify, bind feedback to the current attempt_id, proposal_id, or proposal hash so old review cannot approve a new proposal.",
-      "Deduplicate advice and stay within sync_backlog from .cw/orchestration.json."
+      "For ff-clarify, bind feedback to the current attempt_id, proposal_id, or proposal hash so old review cannot approve a new proposal.",
+      "Deduplicate advice and stay within sync_backlog from .ff/orchestration.json."
     ],
     boundaries: [
       "Do not ask the user directly.",
@@ -329,7 +329,7 @@ const roleAgentDefinitions: Record<AgentRoleName, RoleAgentDefinition> = {
       "Read spec.md, plan.md, task.md, relevant Project Baseline, and necessary code.",
       "Modify code and tests within the accepted task contract.",
       "Update task.md progress for completed implementation items.",
-      "Append material progress through CW helpers when delegated tooling permits it."
+      "Append material progress through Flowflow helpers when delegated tooling permits it."
     ],
     boundaries: [
       "Do not decide requirement drift.",
@@ -342,7 +342,7 @@ const roleAgentDefinitions: Record<AgentRoleName, RoleAgentDefinition> = {
   reviewer: {
     role: "reviewer",
     purpose: "Independent review for artifact alignment, implementation evidence, regressions, and missing tests.",
-    useWhen: ["A plan or implementation touches shared workflow semantics.", "cw-check needs a broad final review."],
+    useWhen: ["A plan or implementation touches shared workflow semantics.", "ff-check needs a broad final review."],
     responsibilities: [
       "Map every acceptance criterion to evidence.",
       "Inspect spec.md, plan.md, task.md, and relevant code for contradiction or overbuild.",
@@ -362,7 +362,7 @@ const roleAgentDefinitions: Record<AgentRoleName, RoleAgentDefinition> = {
     purpose: "Run verification, repair small in-scope defects, and prepare check evidence for the primary session.",
     useWhen: ["The current task phase is check.", "Verification evidence is missing or stale."],
     responsibilities: [
-      "Run relevant commands from .cw/project/commands.md.",
+      "Run relevant commands from .ff/project/commands.md.",
       "Record verification evidence in task.md.",
       "Fix small local defects when the accepted spec is unchanged.",
       "Report spec drift or behavior changes instead of resolving them silently."
@@ -378,9 +378,9 @@ const roleAgentDefinitions: Record<AgentRoleName, RoleAgentDefinition> = {
   "baseline-writer": {
     role: "baseline-writer",
     purpose: "Draft current-state Project Baseline updates from an accepted baseline-delta.md.",
-    useWhen: ["cw-finish has a baseline delta and the user has chosen accepted, selected, or edited baseline handling."],
+    useWhen: ["ff-finish has a baseline delta and the user has chosen accepted, selected, or edited baseline handling."],
     responsibilities: [
-      "Read existing .cw/project files before drafting.",
+      "Read existing .ff/project files before drafting.",
       "Integrate accepted facts as current-state documentation.",
       "Preserve user-authored baseline content unless the accepted delta supersedes it.",
       "Keep task-local details out of Project Baseline."
@@ -541,16 +541,16 @@ function watchdogArtifactPath(harness: HarnessName): string {
     return ".claude/settings.json";
   }
   if (harness === "opencode") {
-    return ".opencode/plugins/cw-clarify-watchdog.ts";
+    return ".opencode/plugins/ff-clarify-watchdog.ts";
   }
   if (harness === "cursor") {
     return ".cursor/hooks.json";
   }
-  return ".pi/extensions/cw-clarify-watchdog.ts";
+  return ".pi/extensions/ff-clarify-watchdog.ts";
 }
 
 function renderWatchdogArtifact(harness: HarnessName): string {
-  const command = "cw internal validate-clarify --watchdog";
+  const command = "ff internal validate-clarify --watchdog";
   if (harness === "codex") {
     return `${JSON.stringify({
       hooks: {
@@ -614,7 +614,7 @@ function renderWatchdogArtifact(harness: HarnessName): string {
     return;
   }
   const runner = $ as (strings: TemplateStringsArray, ...values: string[]) => Promise<unknown>;
-  await runner\`cw internal validate-clarify --watchdog\`;
+  await runner\`ff internal validate-clarify --watchdog\`;
 }
 `;
   }
@@ -623,7 +623,7 @@ function renderWatchdogArtifact(harness: HarnessName): string {
     if (pi.$ === undefined) {
       return;
     }
-    await pi.$\`cw internal validate-clarify --watchdog\`;
+    await pi.$\`ff internal validate-clarify --watchdog\`;
   });
 }
 `;
@@ -654,9 +654,9 @@ ${definition.purpose}
 ## Harness
 
 - Platform: ${harnessLabel(harness)}
-- CW role: ${definition.role}
+- Flowflow role: ${definition.role}
 - Model profile: ${formatRoleProfile(profile)}
-- Configuration: .cw/orchestration.json owns advisor mode, role model profiles, and per-harness model overrides.
+- Configuration: .ff/orchestration.json owns advisor mode, role model profiles, and per-harness model overrides.
 
 ## Use When
 
@@ -672,10 +672,10 @@ ${definition.boundaries.map((item) => `- ${item}`).join("\n")}
 
 ## Required Context
 
-- .cw/version.json
-- .cw/orchestration.json when present
-- Relevant .cw/project files
-- Current task files under .cw/tasks/<task-id>/ when a task exists
+- .ff/version.json
+- .ff/orchestration.json when present
+- Relevant .ff/project files
+- Current task files under .ff/tasks/<task-id>/ when a task exists
 - Minimal code context needed for the assigned role
 
 ## Report Format
@@ -752,18 +752,18 @@ ${commandPurposes[command]}
 
 ## Required Reading
 
-- .cw/version.json
-- .cw/project/overview.md
-- .cw/project/architecture.md
-- .cw/project/rules.md
-- .cw/project/commands.md
-- Current task files under .cw/tasks/<task-id>/ when a task exists
+- .ff/version.json
+- .ff/project/overview.md
+- .ff/project/architecture.md
+- .ff/project/rules.md
+- .ff/project/commands.md
+- Current task files under .ff/tasks/<task-id>/ when a task exists
 
 ## Rules
 
-- Treat .cw task files and project baseline files as repo truth for workflow facts.
+- Treat .ff task files and project baseline files as repo truth for workflow facts.
 - Use Git as the source of truth for code changes.
-- Use cw internal helpers for deterministic task state changes and trace events.
+- Use ff internal helpers for deterministic task state changes and trace events.
 - Keep edits scoped to the current workflow action.
 - Stop for user judgment when requirements, product behavior, destructive worktree handling, workflow overrides, or baseline promotion need confirmation.
 - Inline execution must remain complete; if optional helpers are unavailable, continue inline when responsible.
@@ -774,24 +774,24 @@ ${commandSteps[command].map((step, index) => `${index + 1}. ${step}`).join("\n")
 
 ## Helper Commands
 
-- cw validate
-- cw doctor
-- cw tasks
-- cw preflight --action <action> [--task <task-id>]
-- cw internal create-task --title <title> [--id <task-id>]
-- cw internal select-task [--task <task-id>]
-- cw internal append-trace --task <task-id> --type <event-type> --summary <summary>
-- cw internal append-trace --task <task-id> --type <event-type> --summary <summary> --data-json <json-object>
-- cw internal propose-spec --task <task-id> --spec-file <path>
-- cw internal accept-spec --task <task-id> --verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override] | [--advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>]
-- cw internal validate-clarify --task <task-id> --stage proposal|accept|advance
-- cw internal set-state --task <task-id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
-- cw internal finish-task --task <task-id> --summary <summary> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none] [--edited-content <confirmed-current-state-sections>]
-- cw internal discard-task --task <task-id> --confirm --worktree <handling>
-- cw internal create-resume --task <task-id> --content <markdown>
-- cw internal ensure-baseline-delta --task <task-id>
-- cw internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped [--selected-files <overview.md,architecture.md,rules.md,commands.md>] [--edited-content <confirmed-current-state-sections>]
-- cw internal consume-resume --task <task-id>
+- ff validate
+- ff doctor
+- ff tasks
+- ff preflight --action <action> [--task <task-id>]
+- ff internal create-task --title <title> [--id <task-id>]
+- ff internal select-task [--task <task-id>]
+- ff internal append-trace --task <task-id> --type <event-type> --summary <summary>
+- ff internal append-trace --task <task-id> --type <event-type> --summary <summary> --data-json <json-object>
+- ff internal propose-spec --task <task-id> --spec-file <path>
+- ff internal accept-spec --task <task-id> --verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override] | [--advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>]
+- ff internal validate-clarify --task <task-id> --stage proposal|accept|advance
+- ff internal set-state --task <task-id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
+- ff internal finish-task --task <task-id> --summary <summary> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none] [--edited-content <confirmed-current-state-sections>]
+- ff internal discard-task --task <task-id> --confirm --worktree <handling>
+- ff internal create-resume --task <task-id> --content <markdown>
+- ff internal ensure-baseline-delta --task <task-id>
+- ff internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped [--selected-files <overview.md,architecture.md,rules.md,commands.md>] [--edited-content <confirmed-current-state-sections>]
+- ff internal consume-resume --task <task-id>
 `;
 }
 
@@ -803,8 +803,8 @@ function renderExecutionStrategyGuidance(command: (typeof AGENT_COMMANDS)[number
   return `## Execution Strategy Guidance
 
 - Inline execution is fully supported and must remain complete.
-- Use \`.cw/orchestration.json\` and generated \`cw-<role>\` agent files as the role and model contract when delegation is available.
-- Explicitly ask the harness to spawn the named \`cw-<role>\` agent for bounded delegated work; Codex only spawns subagents after the main session asks.
+- Use \`.ff/orchestration.json\` and generated \`ff-<role>\` agent files as the role and model contract when delegation is available.
+- Explicitly ask the harness to spawn the named \`ff-<role>\` agent for bounded delegated work; Codex only spawns subagents after the main session asks.
 - Delegation is optional and permission-bound; continue inline when delegation is unavailable or unauthorized.
 - Delegated work receives task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
 - Delegated agents must not close tasks; closure decisions and unresolved drift return to the main session.
@@ -815,27 +815,27 @@ ${renderRoleRoutingGuidance(command)}
 
 function renderRoleRoutingGuidance(command: (typeof AGENT_COMMANDS)[number]): string {
   const routing: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>> = {
-    "cw-work": [
-      "Clarify phase: use `cw-advisor` for Proposed Spec review when advisor mode or risk calls for an independent challenge.",
-      "Plan phase: use `cw-planner` for plan.md/task.md drafting and `cw-reviewer` for artifact cross-review.",
-      "Run phase: use `cw-implementer` for independent task.md implementation slices.",
-      "Check phase: use `cw-checker` for verification and small in-scope repair, then `cw-reviewer` for broad final review when risk warrants it.",
-      "Finish phase: use `cw-baseline-writer` only for candidate Project Baseline merge drafts; the main session still owns closure."
+    "ff-work": [
+      "Clarify phase: use `ff-advisor` for Proposed Spec review when advisor mode or risk calls for an independent challenge.",
+      "Plan phase: use `ff-planner` for plan.md/task.md drafting and `ff-reviewer` for artifact cross-review.",
+      "Run phase: use `ff-implementer` for independent task.md implementation slices.",
+      "Check phase: use `ff-checker` for verification and small in-scope repair, then `ff-reviewer` for broad final review when risk warrants it.",
+      "Finish phase: use `ff-baseline-writer` only for candidate Project Baseline merge drafts; the main session still owns closure."
     ],
-    "cw-plan": [
-      "Use `cw-planner` to draft plan.md and task.md from the accepted spec when delegation is available.",
-      "Use `cw-reviewer` for post-plan cross-review before moving to run."
+    "ff-plan": [
+      "Use `ff-planner` to draft plan.md and task.md from the accepted spec when delegation is available.",
+      "Use `ff-reviewer` for post-plan cross-review before moving to run."
     ],
-    "cw-run": [
-      "Use `cw-implementer` only for bounded, independent implementation slices with a clear file or checklist scope.",
+    "ff-run": [
+      "Use `ff-implementer` only for bounded, independent implementation slices with a clear file or checklist scope.",
       "Keep requirement drift, scope changes, and phase movement in the main session."
     ],
-    "cw-check": [
-      "Use `cw-checker` for verification commands, evidence updates, and small in-scope repairs.",
-      "Use `cw-reviewer` for artifact alignment, acceptance-criteria coverage, regressions, and missing tests."
+    "ff-check": [
+      "Use `ff-checker` for verification commands, evidence updates, and small in-scope repairs.",
+      "Use `ff-reviewer` for artifact alignment, acceptance-criteria coverage, regressions, and missing tests."
     ],
-    "cw-finish": [
-      "Use `cw-baseline-writer` to draft current-state Project Baseline updates from accepted baseline-delta.md.",
+    "ff-finish": [
+      "Use `ff-baseline-writer` to draft current-state Project Baseline updates from accepted baseline-delta.md.",
       "Keep dirty worktree decisions, baseline promotion choices, and task closure in the main session."
     ]
   };
@@ -880,16 +880,16 @@ name: ${command}
 description: ${commandPurposes[command]}
 ---
 
-Use this skill for the \`${command}\` CW workflow action in this repository. Trigger it for \`/${command}\`, \`$${command}\`, \`${workflowCliCommand(command)}\`, or natural-language requests for the same workflow action.
+Use this skill for the \`${command}\` Flowflow workflow action in this repository. Trigger it for \`/${command}\`, \`$${command}\`, \`${workflowCliCommand(command)}\`, or natural-language requests for the same workflow action.
 
-Before acting, read the repository's \`.cw\` files relevant to the current task. Treat \`.cw\` as Repo Truth, generated skills as invocation surfaces, and Git as the source of truth for code changes.
+Before acting, read the repository's \`.ff\` files relevant to the current task. Treat \`.ff\` as Repo Truth, generated skills as invocation surfaces, and Git as the source of truth for code changes.
 
 ${renderWorkflowInstructions(command)}
 `.replace(/\n+$/, "\n");
 }
 
 function workflowCliCommand(command: (typeof AGENT_COMMANDS)[number]): string {
-  return command.replace(/^cw-/, "cw ");
+  return command.replace(/^ff-/, "ff ");
 }
 
 export function isGeneratedSkillCurrent(
@@ -907,7 +907,7 @@ function roleProfile(role: AgentRoleName): RoleModelProfile {
 
 async function readOrchestrationConfig(root: string): Promise<OrchestrationConfigRecord | null> {
   try {
-    return await readJsonFile<OrchestrationConfigRecord>(getCwPaths(root).orchestration);
+    return await readJsonFile<OrchestrationConfigRecord>(getFlowflowPaths(root).orchestration);
   } catch {
     return null;
   }
@@ -1002,7 +1002,7 @@ function claudeTools(writeAccess: RoleAgentDefinition["writeAccess"]): string {
 }
 
 function roleAgentName(role: AgentRoleName): string {
-  return `cw-${role}`;
+  return `ff-${role}`;
 }
 
 async function writeGenerated(

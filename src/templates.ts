@@ -114,14 +114,14 @@ export const TASK_ARTIFACT_TEMPLATES: Record<string, string> = {
 };
 
 export const AGENT_COMMANDS = [
-  "cw-work",
-  "cw-clarify",
-  "cw-plan",
-  "cw-run",
-  "cw-check",
-  "cw-finish",
-  "cw-resume",
-  "cw-discard",
-  "cw-doctor",
-  "cw-understand"
+  "ff-work",
+  "ff-clarify",
+  "ff-plan",
+  "ff-run",
+  "ff-check",
+  "ff-finish",
+  "ff-resume",
+  "ff-discard",
+  "ff-doctor",
+  "ff-understand"
 ] as const;

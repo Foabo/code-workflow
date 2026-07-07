@@ -2,9 +2,9 @@ import path from "node:path";
 import { AdapterResult, generateAdapter, HarnessName } from "./adapters.js";
 import { ensureDir, writeFileIfMissing } from "./fs.js";
 import { defaultOrchestrationConfig } from "./orchestration.js";
-import { getCwPaths } from "./paths.js";
+import { getFlowflowPaths } from "./paths.js";
 import { PROJECT_BASELINE_TEMPLATES, TASK_ARTIFACT_TEMPLATES } from "./templates.js";
-import { CW_SCHEMA_VERSION, EnhancementChoice, EnhancementConfigRecord, VersionRecord } from "./types.js";
+import { FLOWFLOW_SCHEMA_VERSION, EnhancementChoice, EnhancementConfigRecord, VersionRecord } from "./types.js";
 
 export type InitResult = {
   created: string[];
@@ -32,19 +32,19 @@ type NormalizedInitOptions = {
 
 export async function initProject(root: string, options: InitOptions | Date = {}): Promise<InitResult> {
   const normalized = normalizeOptions(options);
-  const paths = getCwPaths(root);
+  const paths = getFlowflowPaths(root);
   const created: string[] = [];
   const existing: string[] = [];
   const adapters: InitResult["adapters"] = [];
 
-  await ensureDir(paths.cw);
+  await ensureDir(paths.ff);
   await ensureDir(paths.project);
   await ensureDir(paths.tasks);
   await ensureDir(paths.templates);
 
   const version: VersionRecord = {
-    schema_version: CW_SCHEMA_VERSION,
-    cw_version: "0.1.0",
+    schema_version: FLOWFLOW_SCHEMA_VERSION,
+    flowflow_version: "0.1.0",
     created_at: normalized.now.toISOString()
   };
 
@@ -55,7 +55,7 @@ export async function initProject(root: string, options: InitOptions | Date = {}
   }
 
   const enhancements: EnhancementConfigRecord = {
-    schema_version: CW_SCHEMA_VERSION,
+    schema_version: FLOWFLOW_SCHEMA_VERSION,
     code_intelligence: normalized.codeIntelligence,
     external_context: normalized.externalContext,
     updated_at: normalized.now.toISOString()

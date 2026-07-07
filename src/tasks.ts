@@ -3,13 +3,13 @@ import { appendFile, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { ensureDir, writeFileIfMissing } from "./fs.js";
 import { getGitStatus } from "./git.js";
 import { readJsonFile, writeJsonFile } from "./json.js";
-import { getCwPaths, TaskLocation, taskDir, taskJsonPath, tracePath } from "./paths.js";
+import { getFlowflowPaths, TaskLocation, taskDir, taskJsonPath, tracePath } from "./paths.js";
 import { assertTaskStateRecord } from "./schema.js";
 import { allocateTaskId, isFullNumericTaskId, listTaskIds, migrateLegacyTaskIds, LegacyTaskMigrationResult } from "./task-storage.js";
 import { TASK_ARTIFACT_TEMPLATES } from "./templates.js";
 import {
   BaselineDecision,
-  CW_SCHEMA_VERSION,
+  FLOWFLOW_SCHEMA_VERSION,
   DirtyWorktreeDecision,
   TaskLifecycle,
   TaskStateRecord,
@@ -58,7 +58,7 @@ export async function createTask(root: string, input: CreateTaskInput): Promise<
   const id = input.id ?? (await allocateTaskId(root, input.title));
   validateTaskId(id);
   await ensureTaskIdAvailable(root, id);
-  const paths = getCwPaths(root);
+  const paths = getFlowflowPaths(root);
   const dir = taskDir(root, id);
   await ensureDir(paths.tasks);
   await ensureDir(dir);
@@ -84,7 +84,7 @@ export async function createTask(root: string, input: CreateTaskInput): Promise<
     resume_condition: null,
     created_at: now,
     updated_at: now,
-    schema_version: CW_SCHEMA_VERSION
+    schema_version: FLOWFLOW_SCHEMA_VERSION
   };
 
   for (const fileName of ["spec.md", "plan.md", "task.md"]) {
@@ -109,14 +109,14 @@ export async function createTask(root: string, input: CreateTaskInput): Promise<
 
 export async function readTaskState(root: string, taskId: string): Promise<TaskStateRecord> {
   const state = await readJsonFile<unknown>(taskJsonPath(root, taskId));
-  assertTaskStateRecord(state, `.cw/tasks/${taskId}/task.json`);
+  assertTaskStateRecord(state, `.ff/tasks/${taskId}/task.json`);
   return state;
 }
 
 export async function readTaskStateAt(root: string, taskId: string, input: TaskFileInput = {}): Promise<TaskStateRecord> {
   const location = input.location ?? "active";
   const state = await readJsonFile<unknown>(taskJsonPath(root, taskId, location));
-  const display = location === "archived" ? `.cw/tasks/archived/${taskId}/task.json` : `.cw/tasks/${taskId}/task.json`;
+  const display = location === "archived" ? `.ff/tasks/archived/${taskId}/task.json` : `.ff/tasks/${taskId}/task.json`;
   assertTaskStateRecord(state, display);
   return state;
 }
@@ -196,7 +196,7 @@ export async function finishTask(root: string, taskId: string, input: FinishTask
       dirty_worktree_handling: input.dirtyWorktreeHandling ?? "clean"
     }
   });
-  await ensureDir(getCwPaths(root).tasksArchive);
+  await ensureDir(getFlowflowPaths(root).tasksArchive);
   await rename(taskDir(root, taskId), taskDir(root, taskId, "archived"));
   return next;
 }

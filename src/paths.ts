@@ -1,29 +1,29 @@
 import path from "node:path";
 
-export type CwPaths = ReturnType<typeof getCwPaths>;
+export type FlowflowPaths = ReturnType<typeof getFlowflowPaths>;
 export type TaskLocation = "active" | "archived";
 
 export const TASK_ARCHIVE_DIR_NAME = "archived";
 
-export function getCwPaths(root: string) {
-  const cw = path.join(root, ".cw");
-  const tasks = path.join(cw, "tasks");
+export function getFlowflowPaths(root: string) {
+  const ff = path.join(root, ".ff");
+  const tasks = path.join(ff, "tasks");
   return {
     root,
-    cw,
-    version: path.join(cw, "version.json"),
-    enhancements: path.join(cw, "enhancements.json"),
-    orchestration: path.join(cw, "orchestration.json"),
-    understandDraft: path.join(cw, "understand-draft"),
-    project: path.join(cw, "project"),
+    ff,
+    version: path.join(ff, "version.json"),
+    enhancements: path.join(ff, "enhancements.json"),
+    orchestration: path.join(ff, "orchestration.json"),
+    understandDraft: path.join(ff, "understand-draft"),
+    project: path.join(ff, "project"),
     tasks,
     tasksArchive: path.join(tasks, TASK_ARCHIVE_DIR_NAME),
-    templates: path.join(cw, "templates")
+    templates: path.join(ff, "templates")
   };
 }
 
 export function taskDir(root: string, taskId: string, location: TaskLocation = "active"): string {
-  const paths = getCwPaths(root);
+  const paths = getFlowflowPaths(root);
   return path.join(location === "archived" ? paths.tasksArchive : paths.tasks, taskId);
 }
 

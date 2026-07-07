@@ -1,10 +1,10 @@
 # No stable TypeScript package surface for v1
 
-CW v1 is a CLI and agent-skills driven workflow tool. It does not promise a stable external TypeScript package surface.
+Flowflow v1 is a CLI and agent-skills driven workflow tool. It does not promise a stable external TypeScript package surface.
 
-The stable invocation surfaces are the `cw` CLI, the `cw-*` agent commands, and generated harness skills. TypeScript exports may exist only when they serve those product surfaces or a deliberately deep internal module interface. Callers should not treat low-level Kernel Helper functions as public product interface.
+The stable invocation surfaces are the `ff` CLI, the `ff-*` agent commands, and generated harness skills. TypeScript exports may exist only when they serve those product surfaces or a deliberately deep internal module interface. Callers should not treat low-level Kernel Helper functions as public product interface.
 
-`cw internal` remains an internal CLI adapter seam used by generated agent skills for deterministic state changes. It should expose high-level helper commands needed by the skills, not mirror low-level TypeScript helper functions one-for-one.
+`ff internal` remains an internal CLI adapter seam used by generated agent skills for deterministic state changes. It should expose high-level helper commands needed by the skills, not mirror low-level TypeScript helper functions one-for-one.
 
 This keeps the v1 module design simple: internal helpers can be renamed, collapsed, or removed while the CLI and agent skills keep the product behavior stable.
 
@@ -20,6 +20,6 @@ Consequences:
 - Low-level helper exports should not be kept for compatibility or test convenience.
 - Internal Kernel Helpers such as task state mutation, baseline sync, enhancement setup, and closure gate mechanics should move behind deeper modules directly.
 - Because this is a new repository, refactors should optimize for the target architecture rather than staged compatibility.
-- `cw internal` should stay as a CLI adapter seam for generated skills, but its command set should be shaped around deep workflow operations.
+- `ff internal` should stay as a CLI adapter seam for generated skills, but its command set should be shaped around deep workflow operations.
 - The first implementation slice should narrow the package root interface and move tests away from low-level helper imports toward product-level behavior tests.
 - If a stable programmatic package surface becomes a real requirement later, it should get a separate design decision.

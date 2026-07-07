@@ -5,9 +5,9 @@ import os from "node:os";
 import path from "node:path";
 import { HarnessName } from "./adapters.js";
 import { readJsonFile, writeJsonFile } from "./json.js";
-import { getCwPaths } from "./paths.js";
+import { getFlowflowPaths } from "./paths.js";
 import {
-  CW_SCHEMA_VERSION,
+  FLOWFLOW_SCHEMA_VERSION,
   EnhancementCategory,
   EnhancementChoice,
   EnhancementConfigRecord,
@@ -366,7 +366,7 @@ export async function applyEnhancementSetup(
     });
   }
 
-  await readEnhancementConfig(getCwPaths(root).enhancements);
+  await readEnhancementConfig(getFlowflowPaths(root).enhancements);
 
   for (const patch of plan.config_patches) {
     await mkdir(path.dirname(patch.file_path), { recursive: true });
@@ -454,7 +454,7 @@ export async function recordEnhancementSetup(
   record: EnhancementProviderRecord
 ): Promise<EnhancementProviderRecord> {
   const normalizedRecord = normalizeEnhancementProviderRecord(root, record);
-  const enhancementsPath = getCwPaths(root).enhancements;
+  const enhancementsPath = getFlowflowPaths(root).enhancements;
   const config = await readEnhancementConfig(enhancementsPath);
   const next: EnhancementConfigRecord = {
     ...config,
@@ -889,7 +889,7 @@ async function readEnhancementConfig(filePath: string): Promise<EnhancementConfi
     await access(filePath);
   } catch {
     return {
-      schema_version: CW_SCHEMA_VERSION,
+      schema_version: FLOWFLOW_SCHEMA_VERSION,
       code_intelligence: "skipped",
       external_context: "skipped",
       updated_at: new Date(0).toISOString()

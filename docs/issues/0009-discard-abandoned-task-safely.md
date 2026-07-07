@@ -4,7 +4,7 @@ Label: `ready-for-agent`
 
 ## Parent
 
-`docs/prd/cw-version-1-workflow-kernel.md`
+`docs/prd/ff-version-1-workflow-kernel.md`
 
 ## What to build
 
@@ -12,7 +12,7 @@ Implement discard as the path for abandoning work. Discard should remove the tas
 
 ## Acceptance criteria
 
-- [ ] `cw-discard` requires explicit confirmation before removing a task.
+- [ ] `ff-discard` requires explicit confirmation before removing a task.
 - [ ] Shared-worktree discard requires a selected handling mode.
 - [ ] Confirmed discard removes the task record and task artifacts.
 - [ ] Discard does not produce lifecycle `closed`.

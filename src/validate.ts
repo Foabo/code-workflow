@@ -6,7 +6,7 @@ import {
   isGeneratedSkillCurrent
 } from "./adapters.js";
 import { readJsonFile } from "./json.js";
-import { getCwPaths, TaskLocation, taskDir } from "./paths.js";
+import { getFlowflowPaths, TaskLocation, taskDir } from "./paths.js";
 import {
   validateEnhancementConfigRecord,
   validateOrchestrationConfigRecord,
@@ -19,31 +19,31 @@ import { AGENT_COMMANDS } from "./templates.js";
 import { DoctorReport, EnhancementConfigRecord, TaskStateRecord, ValidationIssue } from "./types.js";
 
 export async function validateProject(root: string): Promise<ValidationIssue[]> {
-  const paths = getCwPaths(root);
+  const paths = getFlowflowPaths(root);
   const issues: ValidationIssue[] = [];
 
   issues.push(...(await validateRequiredFile(paths.version)));
   if (issues.length === 0) {
     try {
-      issues.push(...validateVersionRecord(await readJsonFile(paths.version), ".cw/version.json"));
+      issues.push(...validateVersionRecord(await readJsonFile(paths.version), ".ff/version.json"));
     } catch (error) {
-      issues.push({ path: ".cw/version.json", message: formatError(error) });
+      issues.push({ path: ".ff/version.json", message: formatError(error) });
     }
   }
 
   if (await exists(paths.enhancements)) {
     try {
-      issues.push(...validateEnhancementConfigRecord(await readJsonFile(paths.enhancements), ".cw/enhancements.json"));
+      issues.push(...validateEnhancementConfigRecord(await readJsonFile(paths.enhancements), ".ff/enhancements.json"));
     } catch (error) {
-      issues.push({ path: ".cw/enhancements.json", message: formatError(error) });
+      issues.push({ path: ".ff/enhancements.json", message: formatError(error) });
     }
   }
 
   if (await exists(paths.orchestration)) {
     try {
-      issues.push(...validateOrchestrationConfigRecord(await readJsonFile(paths.orchestration), ".cw/orchestration.json"));
+      issues.push(...validateOrchestrationConfigRecord(await readJsonFile(paths.orchestration), ".ff/orchestration.json"));
     } catch (error) {
-      issues.push({ path: ".cw/orchestration.json", message: formatError(error) });
+      issues.push({ path: ".ff/orchestration.json", message: formatError(error) });
     }
   }
 
@@ -65,13 +65,13 @@ export async function validateProject(root: string): Promise<ValidationIssue[]> 
     if (await exists(taskJson)) {
       try {
         const state = await readJsonFile<TaskStateRecord>(taskJson);
-        issues.push(...validateTaskStateRecord(state, `.cw/tasks/${taskId}/task.json`));
+        issues.push(...validateTaskStateRecord(state, `.ff/tasks/${taskId}/task.json`));
         if (state.id !== taskId) {
-          issues.push({ path: `.cw/tasks/${taskId}/task.json.id`, message: "task id must match its directory name" });
+          issues.push({ path: `.ff/tasks/${taskId}/task.json.id`, message: "task id must match its directory name" });
         }
         issues.push(...(await validateTaskArtifacts(root, taskId, state, entry.location)));
       } catch (error) {
-        issues.push({ path: `.cw/tasks/${taskId}/task.json`, message: formatError(error) });
+        issues.push({ path: `.ff/tasks/${taskId}/task.json`, message: formatError(error) });
       }
     }
     if (await exists(traceJsonl)) {
@@ -96,16 +96,16 @@ export async function doctorProject(root: string): Promise<DoctorReport> {
     try {
       const state = await readJsonFile<TaskStateRecord>(taskJson);
       if (state.lifecycle !== "closed" && state.next_action.trim().length === 0) {
-        warnings.push({ path: `.cw/tasks/${taskId}/task.json.next_action`, message: "unfinished task needs a next action" });
+        warnings.push({ path: `.ff/tasks/${taskId}/task.json.next_action`, message: "unfinished task needs a next action" });
       }
       if (state.lifecycle === "closed" && state.artifacts.resume !== null) {
-        warnings.push({ path: `.cw/tasks/${taskId}/task.json.artifacts.resume`, message: "closed task should not keep a resume note" });
+        warnings.push({ path: `.ff/tasks/${taskId}/task.json.artifacts.resume`, message: "closed task should not keep a resume note" });
       }
       if (state.lifecycle === "blocked" && state.blocked_reason === null) {
-        warnings.push({ path: `.cw/tasks/${taskId}/task.json.blocked_reason`, message: "blocked task should record a reason" });
+        warnings.push({ path: `.ff/tasks/${taskId}/task.json.blocked_reason`, message: "blocked task should record a reason" });
       }
       if (state.lifecycle === "parked" && state.parked_reason === null) {
-        warnings.push({ path: `.cw/tasks/${taskId}/task.json.parked_reason`, message: "parked task should record a reason" });
+        warnings.push({ path: `.ff/tasks/${taskId}/task.json.parked_reason`, message: "parked task should record a reason" });
       }
     } catch {
       continue;
@@ -118,7 +118,7 @@ export async function doctorProject(root: string): Promise<DoctorReport> {
 }
 
 async function readEnhancementStatus(root: string): Promise<DoctorReport["enhancements"]> {
-  const enhancementsPath = getCwPaths(root).enhancements;
+  const enhancementsPath = getFlowflowPaths(root).enhancements;
   if (!(await exists(enhancementsPath))) {
     return { code_intelligence: null, external_context: null };
   }
@@ -261,10 +261,10 @@ async function validateTraceJsonl(root: string, taskId: string, filePath: string
     try {
       const value = JSON.parse(line) as unknown;
       if (!isTraceEventShape(value)) {
-        issues.push({ path: `.cw/tasks/${taskId}/trace.jsonl:${index + 1}`, message: "trace event must include ts, type, and summary strings" });
+        issues.push({ path: `.ff/tasks/${taskId}/trace.jsonl:${index + 1}`, message: "trace event must include ts, type, and summary strings" });
       }
     } catch (error) {
-      issues.push({ path: `.cw/tasks/${taskId}/trace.jsonl:${index + 1}`, message: formatError(error) });
+      issues.push({ path: `.ff/tasks/${taskId}/trace.jsonl:${index + 1}`, message: formatError(error) });
     }
   }
   return issues;

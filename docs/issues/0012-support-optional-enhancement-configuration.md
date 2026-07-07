@@ -4,7 +4,7 @@ Label: `ready-for-agent`
 
 ## Parent
 
-`docs/prd/cw-version-1-workflow-kernel.md`
+`docs/prd/ff-version-1-workflow-kernel.md`
 
 ## What to build
 
@@ -21,5 +21,5 @@ Add skippable enhancement configuration for code intelligence and external memor
 
 ## Blocked by
 
-- `0001-initialize-usable-cw-repository.md`
+- `0001-initialize-usable-ff-repository.md`
 - `0010-run-preflight-and-repository-doctor.md`

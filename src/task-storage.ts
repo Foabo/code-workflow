@@ -2,7 +2,7 @@ import { access, appendFile, readdir, rename } from "node:fs/promises";
 import path from "node:path";
 import { ensureDir } from "./fs.js";
 import { readJsonFile, writeJsonFile } from "./json.js";
-import { getCwPaths, TASK_ARCHIVE_DIR_NAME, TaskLocation, taskDir, taskJsonPath, tracePath } from "./paths.js";
+import { getFlowflowPaths, TASK_ARCHIVE_DIR_NAME, TaskLocation, taskDir, taskJsonPath, tracePath } from "./paths.js";
 import { assertTaskStateRecord } from "./schema.js";
 import { TaskStateRecord, TraceEvent } from "./types.js";
 
@@ -176,7 +176,7 @@ async function resolveShortTaskReference(
 }
 
 async function listTaskDirectoryEntriesForLocation(root: string, location: TaskLocation): Promise<TaskDirectoryEntry[]> {
-  const paths = getCwPaths(root);
+  const paths = getFlowflowPaths(root);
   const rootDir = location === "active" ? paths.tasks : paths.tasksArchive;
   if (!(await exists(rootDir))) {
     return [];
@@ -211,7 +211,7 @@ async function readTaskStateAt(root: string, taskId: string, location: TaskLocat
 }
 
 function taskJsonDisplayPath(taskId: string, location: TaskLocation): string {
-  return location === "archived" ? `.cw/tasks/archived/${taskId}/task.json` : `.cw/tasks/${taskId}/task.json`;
+  return location === "archived" ? `.ff/tasks/archived/${taskId}/task.json` : `.ff/tasks/${taskId}/task.json`;
 }
 
 async function exists(filePath: string): Promise<boolean> {

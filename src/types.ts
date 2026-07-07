@@ -1,4 +1,4 @@
-export const CW_SCHEMA_VERSION = 1;
+export const FLOWFLOW_SCHEMA_VERSION = 1;
 
 export type TaskLifecycle = "open" | "blocked" | "parked" | "closed";
 export type EnhancementChoice = "skipped" | "detected" | "configured";
@@ -39,7 +39,7 @@ export type TaskStateRecord = {
 
 export type VersionRecord = {
   schema_version: 1;
-  cw_version: string;
+  flowflow_version: string;
   created_at: string;
 };
 

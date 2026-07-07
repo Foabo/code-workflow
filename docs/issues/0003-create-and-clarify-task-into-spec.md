@@ -4,7 +4,7 @@ Label: `ready-for-agent`
 
 ## Parent
 
-`docs/prd/cw-version-1-workflow-kernel.md`
+`docs/prd/ff-version-1-workflow-kernel.md`
 
 ## What to build
 
@@ -12,8 +12,8 @@ Implement the task creation and clarification path. A user should be able to sta
 
 ## Acceptance criteria
 
-- [ ] `cw-work` can create a new task with task state, trace events, and core task artifacts.
-- [ ] `cw-clarify` can update the task spec from user-provided goal, scope, constraints, decisions, and acceptance criteria.
+- [ ] `ff-work` can create a new task with task state, trace events, and core task artifacts.
+- [ ] `ff-clarify` can update the task spec from user-provided goal, scope, constraints, decisions, and acceptance criteria.
 - [ ] Clarification can move a task to the next phase when the spec is accepted.
 - [ ] Clarification can mark a task blocked with a reason and next action when user input is required.
 - [ ] Trace events are appended chronologically for task creation and spec acceptance.
@@ -21,5 +21,5 @@ Implement the task creation and clarification path. A user should be able to sta
 
 ## Blocked by
 
-- `0001-initialize-usable-cw-repository.md`
-- `0002-generate-harness-native-cw-command-entries.md`
+- `0001-initialize-usable-ff-repository.md`
+- `0002-generate-harness-native-ff-command-entries.md`

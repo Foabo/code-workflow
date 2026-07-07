@@ -3,7 +3,7 @@
     "Stop": [
       {
         "type": "command",
-        "command": "cw internal validate-clarify --watchdog"
+        "command": "ff internal validate-clarify --watchdog"
       }
     ]
   }

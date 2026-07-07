@@ -1,10 +1,10 @@
-# Coding Workflow Kernel
+# Flowflow Kernel
 
 This context defines the language for a repository-scoped coding workflow product that helps development tasks move through shared facts, phases, verification, review, finish, and optional resume notes across coding harnesses.
 
 ## Language
 
-**Coding Workflow Kernel**:
+**Flowflow Kernel**:
 A repository-scoped workflow product that turns development requests into recoverable, verifiable task progress. It coordinates task facts and phase transitions across coding harnesses.
 _Avoid_: Coding agent, coding harness manager, model router
 
@@ -33,7 +33,7 @@ An invocation surface inside a coding harness that lets the user trigger a workf
 _Avoid_: Kernel helper, raw CLI
 
 **Kernel Helper**:
-A deterministic script, thin CLI, or library function used by workflow actions to read, validate, and mutate CW files consistently.
+A deterministic script, thin CLI, or library function used by workflow actions to read, validate, and mutate Flowflow files consistently.
 _Avoid_: User-facing command, coding agent
 
 **CLI Wrapper**:
@@ -85,7 +85,7 @@ A human-readable task-local Markdown file that records the task contract, execut
 _Avoid_: Raw log, transcript, scratch note
 
 **Reference Framework**:
-An external workflow, spec, skill, memory, or harness-configuration project used as design input for CW. A reference framework can inspire adapters, templates, or heuristics, but it does not define CW's runtime or repository truth.
+An external workflow, spec, skill, memory, or harness-configuration project used as design input for Flowflow. A reference framework can inspire adapters, templates, or heuristics, but it does not define Flowflow's runtime or repository truth.
 _Avoid_: Core dependency, source of truth
 
 **Optional Enhancement**:

@@ -1009,30 +1009,30 @@ function printJson(value: unknown): void {
 
 function printUsage(): void {
   console.log(`Usage:
-  cw init [path] [--root <path>] [--harness codex|claude|opencode|pi|cursor] [--code-index skipped|codebase-memory-mcp|aft|codegraph|graphify] [--context-memory skipped|codex-native-memories|claude-mem|magic-context] [--pi-subagents install|skipped] [--yes]
-  cw validate [--root <path>]
-  cw doctor [--root <path>]
-  cw update [--root <path>] [--harness codex|claude|opencode|pi|cursor]
-  cw tasks [--root <path>] [--archived|--all]
-  cw preflight --action <action> [--task <id>] [--root <path>]
-  cw internal <helper> [flags]`);
+  ff init [path] [--root <path>] [--harness codex|claude|opencode|pi|cursor] [--code-index skipped|codebase-memory-mcp|aft|codegraph|graphify] [--context-memory skipped|codex-native-memories|claude-mem|magic-context] [--pi-subagents install|skipped] [--yes]
+  ff validate [--root <path>]
+  ff doctor [--root <path>]
+  ff update [--root <path>] [--harness codex|claude|opencode|pi|cursor]
+  ff tasks [--root <path>] [--archived|--all]
+  ff preflight --action <action> [--task <id>] [--root <path>]
+  ff internal <helper> [flags]`);
 }
 
 function printInternalUsage(): void {
   console.log(`Internal helpers:
-  cw internal create-task --title <title> [--id <id>] [--phase <phase>] [--next-action <text>]
-  cw internal select-task [--task <id>]
-  cw internal append-trace --task <id> --type <type> --summary <text>
-  cw internal propose-spec --task <id> --spec-file <path>
-  cw internal accept-spec --task <id> --verdict pass|concern|blocker [...] | --advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>
-  cw internal set-state --task <id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
-  cw internal finish-task --task <id> --summary <text> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none] [--edited-content <confirmed-current-state-sections>]
-  cw internal discard-task --task <id> --confirm [--worktree keep|stash|revert|delete-worktree|none]
-  cw internal create-resume --task <id> --content <markdown>
-  cw internal ensure-baseline-delta --task <id>
-  cw internal sync-baseline-delta --task <id> --decision accepted|selected|edited|skipped [--edited-content <confirmed-current-state-sections>]
-  cw internal consume-resume --task <id>
-  cw internal migrate-task-ids`);
+  ff internal create-task --title <title> [--id <id>] [--phase <phase>] [--next-action <text>]
+  ff internal select-task [--task <id>]
+  ff internal append-trace --task <id> --type <type> --summary <text>
+  ff internal propose-spec --task <id> --spec-file <path>
+  ff internal accept-spec --task <id> --verdict pass|concern|blocker [...] | --advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>
+  ff internal set-state --task <id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
+  ff internal finish-task --task <id> --summary <text> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none] [--edited-content <confirmed-current-state-sections>]
+  ff internal discard-task --task <id> --confirm [--worktree keep|stash|revert|delete-worktree|none]
+  ff internal create-resume --task <id> --content <markdown>
+  ff internal ensure-baseline-delta --task <id>
+  ff internal sync-baseline-delta --task <id> --decision accepted|selected|edited|skipped [--edited-content <confirmed-current-state-sections>]
+  ff internal consume-resume --task <id>
+  ff internal migrate-task-ids`);
 }
 
 main(process.argv.slice(2)).then((code) => {

@@ -26,7 +26,7 @@ async function run(workflowAction: WorkflowCommandAction, args: string[]): Promi
 }
 
 function actionFromCommand(command: string, fallback: string | undefined): WorkflowCommandAction {
-  const candidate = command.startsWith("cw-") ? command.slice(3) : fallback;
+  const candidate = command.startsWith("ff-") ? command.slice(3) : fallback;
   if (
     candidate === "work" ||
     candidate === "clarify" ||

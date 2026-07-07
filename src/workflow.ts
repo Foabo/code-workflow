@@ -20,7 +20,7 @@ import {
   readTaskState,
   updateTaskState
 } from "./tasks.js";
-import { getCwPaths, taskDir } from "./paths.js";
+import { getFlowflowPaths, taskDir } from "./paths.js";
 import { preflight, WorkflowAction } from "./preflight.js";
 import { selectTask } from "./task-store.js";
 import { BaselineDecision, DirtyWorktreeDecision, TaskStateRecord, ValidationIssue } from "./types.js";
@@ -108,7 +108,7 @@ async function runWork(root: string, options: WorkflowOptions): Promise<Workflow
     };
   }
 
-  const title = required(options.title, "--title is required when cw-work creates a task");
+  const title = required(options.title, "--title is required when ff-work creates a task");
   const task = await createTask(root, { id: options.taskId, title });
   const status = workStatus(task);
   return {
@@ -129,19 +129,19 @@ function workStatus(task: TaskStateRecord): { phase: string; nextAction: string;
 
 function recommendedWorkAction(task: TaskStateRecord): string {
   if (task.phase === "clarify") {
-    return `apply cw-clarify behavior next: ${task.next_action}`;
+    return `apply ff-clarify behavior next: ${task.next_action}`;
   }
   if (task.phase === "plan") {
-    return `apply cw-plan behavior next: ${task.next_action}`;
+    return `apply ff-plan behavior next: ${task.next_action}`;
   }
   if (task.phase === "run") {
-    return `apply cw-run behavior next: ${task.next_action}`;
+    return `apply ff-run behavior next: ${task.next_action}`;
   }
   if (task.phase === "check") {
-    return `apply cw-check behavior next: ${task.next_action}`;
+    return `apply ff-check behavior next: ${task.next_action}`;
   }
   if (task.phase === "finish") {
-    return `task is ready for cw-finish after explicit user confirmation: ${task.next_action}`;
+    return `task is ready for ff-finish after explicit user confirmation: ${task.next_action}`;
   }
   return `inspect task artifacts before continuing: ${task.next_action}`;
 }
@@ -195,7 +195,7 @@ async function runClarify(root: string, options: WorkflowOptions): Promise<Workf
       lifecycle: "blocked",
       phase: "clarify",
       blockedReason: "Proposed Spec requires advisor review and explicit accept before spec.md is written.",
-      nextAction: "Run advisor review for the current proposal, resolve concerns or blockers, then rerun cw-clarify with explicit accept."
+      nextAction: "Run advisor review for the current proposal, resolve concerns or blockers, then rerun ff-clarify with explicit accept."
     });
     return {
       action: "clarify",
@@ -418,8 +418,8 @@ async function runCheck(root: string, options: WorkflowOptions): Promise<Workflo
   checkedContent = recordBaselineOutcome(checkedContent, baselineOutcome);
   await writeFile(taskPath, checkedContent, "utf8");
   const finishNextAction = task.artifacts.baseline_delta !== null
-    ? "Run cw-finish to merge baseline-delta.md by default; use selected, edited, or skipped only when needed"
-    : "Run cw-finish after user confirmation";
+    ? "Run ff-finish to merge baseline-delta.md by default; use selected, edited, or skipped only when needed"
+    : "Run ff-finish after user confirmation";
   const updated = await updateTaskState(root, task.id, {
     healthFlags: task.health_flags.filter((flag) => flag !== "drift_suspected"),
     invalidatedArtifacts: [],
@@ -555,7 +555,7 @@ async function consumeResumeAfterProgress(root: string, task: TaskStateRecord): 
 }
 
 async function runUnderstand(root: string, options: WorkflowOptions): Promise<WorkflowResult> {
-  const paths = getCwPaths(root);
+  const paths = getFlowflowPaths(root);
   await preflight(root, { action: "understand" });
   const draftDir = paths.understandDraft;
   await mkdir(draftDir, { recursive: true });
@@ -569,7 +569,7 @@ async function runUnderstand(root: string, options: WorkflowOptions): Promise<Wo
     message: options.merge === true
       ? "Project baseline draft written; review and merge accepted content separately."
       : "Project baseline draft written.",
-    details: { draft_dir: ".cw/understand-draft", files: Object.keys(draft), merged: false }
+    details: { draft_dir: ".ff/understand-draft", files: Object.keys(draft), merged: false }
   };
 }
 
@@ -709,7 +709,7 @@ Break implementation into small, verifiable vertical slices that stay within spe
 
 ## Validation Strategy
 
-Run the relevant commands from .cw/project/commands.md and review changes against spec.md.
+Run the relevant commands from .ff/project/commands.md and review changes against spec.md.
 `;
 }
 
