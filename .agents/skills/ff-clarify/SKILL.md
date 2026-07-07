@@ -40,7 +40,7 @@ Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md
 7. If advisor is unavailable, record `advisor.unavailable` with attempted invocation, harness, failure reason, timestamp, and fallback checklist result, then perform the same checklist inline as degraded execution.
 8. Resolve, defer with rationale, or get explicit user risk acceptance for each concern. Fix blockers and re-review, or record explicit user override.
 9. Wait for explicit user accept before recording `spec.accepted`.
-10. After accept, run `ff internal accept-spec --task <task-id> --verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override]` (or the `--advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>` fallback); it auto-binds the latest proposal identity and appends `advisor.reviewed`|`advisor.unavailable` + `spec.accepted(explicit:true)`. Then run `ff internal validate-clarify --task <task-id> --stage advance` before moving to plan.
+10. After accept, run `ff internal accept-spec --task <task-id> --verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override]`. If advisor was unavailable, omit `--verdict` and run `ff internal accept-spec --task <task-id> --advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>`. It auto-binds the latest proposal identity and appends `advisor.reviewed`|`advisor.unavailable` + `spec.accepted(explicit:true)`. Then run `ff internal validate-clarify --task <task-id> --stage advance` before moving to plan.
 11. spec.md is written at propose time and bound by `proposal_hash`; do not edit it between propose and accept. The clarify gate validates trace events, not the spec.md file directly.
 12. Capture confirmed long-term project facts as task-local baseline candidates; do not update Project Baseline files during clarify.
 13. Run `ff internal set-state --task <task-id> --phase plan --next-action <text>` when the spec is accepted.
@@ -91,7 +91,7 @@ Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md
 - ff internal append-trace --task <task-id> --type <event-type> --summary <summary>
 - ff internal append-trace --task <task-id> --type <event-type> --summary <summary> --data-json <json-object>
 - ff internal propose-spec --task <task-id> --spec-file <path>
-- ff internal accept-spec --task <task-id> --verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override] | [--advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>]
+- ff internal accept-spec --task <task-id> (--verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override] | --advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>)
 - ff internal validate-clarify --task <task-id> --stage proposal|accept|advance
 - ff internal set-state --task <task-id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
 - ff internal finish-task --task <task-id> --summary <summary> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none] [--edited-content <confirmed-current-state-sections>]

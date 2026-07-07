@@ -27,3 +27,6 @@
 - Flowflow stores Repo Truth under `.ff/`. Project baseline, templates, task state, archived tasks, enhancement config, orchestration config, trace events, and task artifacts live under this directory.
 - Generated invocation surfaces use the `ff-*` prefix. Codex, OpenCode, and Pi repo-local skills are generated under `.agents/skills/`; Claude skills are generated under `.claude/skills/`; role agents are generated as `ff-<role>` files for each supported harness.
 - Local clarify watchdog artifacts call `ff internal validate-clarify --watchdog`.
+
+- `ff update` uses `.ff/orchestration.json` as the durable source for Flowflow role agent model configuration. Generated role agent files remain invocation surfaces.
+- During update, Flowflow protects recognized user-edited role agent configuration fields before overwriting generated role agents: Codex TOML model fields and markdown/frontmatter model, temperature, tools, readonly, background, and capability-tier fields.

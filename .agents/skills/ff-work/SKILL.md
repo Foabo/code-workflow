@@ -79,7 +79,7 @@ Role routing for this command:
 - ff internal append-trace --task <task-id> --type <event-type> --summary <summary>
 - ff internal append-trace --task <task-id> --type <event-type> --summary <summary> --data-json <json-object>
 - ff internal propose-spec --task <task-id> --spec-file <path>
-- ff internal accept-spec --task <task-id> --verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override] | [--advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>]
+- ff internal accept-spec --task <task-id> (--verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override] | --advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>)
 - ff internal validate-clarify --task <task-id> --stage proposal|accept|advance
 - ff internal set-state --task <task-id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
 - ff internal finish-task --task <task-id> --summary <summary> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none] [--edited-content <confirmed-current-state-sections>]

@@ -2,7 +2,7 @@ export { initProject } from "./init.js";
 export type { InitOptions, InitResult } from "./init.js";
 
 export { updateProject } from "./update.js";
-export type { UpdateResult } from "./update.js";
+export type { UpdateOptions, UpdateResult } from "./update.js";
 
 export { runWorkflowAction } from "./workflow.js";
 export type { WorkflowCommandAction, WorkflowOptions, WorkflowResult } from "./workflow.js";

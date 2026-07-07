@@ -22,4 +22,7 @@
 - `ff internal validate-clarify --stage proposal|accept|advance` validates clarify event order, proposal identity, advisor review or degraded execution evidence, and explicit accept.
 
 - `ff internal propose-spec --task <id> --spec-file <path>` — hashes the spec file, appends `brainstorm.done` + `spec.proposed` with identity, returns the identity.
-- `ff internal accept-spec --task <id> --verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override] | --advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>` — auto-binds the latest proposal identity, appends `advisor.reviewed`|`advisor.unavailable` + `spec.accepted(explicit:true)`.
+- `ff internal accept-spec --task <id> (--verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override] | --advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>)` — auto-binds the latest proposal identity, appends `advisor.reviewed`|`advisor.unavailable` + `spec.accepted(explicit:true)`.
+
+- `ff update --harness <codex|claude|opencode|pi|cursor>` refreshes generated skills, role agents, and local watchdog artifacts, then reports a restart/reload notice when the update completes successfully.
+- `ff update --force --harness <codex|claude|opencode|pi|cursor>` intentionally overwrites protected generated role agent configuration from `.ff/orchestration.json`.

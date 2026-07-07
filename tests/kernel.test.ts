@@ -191,6 +191,7 @@ describe("ff kernel", () => {
     assert.match(clarifySkill, /validate-clarify/);
     assert.match(clarifySkill, /propose-spec/);
     assert.match(clarifySkill, /accept-spec/);
+    assert.match(clarifySkill, /If advisor was unavailable, omit `--verdict`/);
     assert.match(clarifySkill, /proposal_hash = sha256/);
     assert.match(clarifySkill, /Do not create clarify\.md/);
     assert.match(clarifySkill, /one concrete question at a time/);
@@ -303,8 +304,100 @@ describe("ff kernel", () => {
 
     const update = await updateProject(root, ["codex"]);
     assert.equal(update.validation.ok, true);
+    assert.match(update.restart_notice ?? "", /Restart or reload your Codex agent/);
     assert.match(await readFile(path.join(root, ".agents/skills/ff-work/SKILL.md"), "utf8"), /ff preflight --action work/);
     assert.match(await readFile(path.join(root, ".codex/agents/ff-advisor.toml"), "utf8"), /Watch bounded primary-session deltas/);
+  });
+
+  it("protects user-edited Codex role agent model config unless update is forced", async () => {
+    const root = await tempRoot();
+    await initProject(root, { harnesses: ["codex"] });
+    const advisorPath = path.join(root, ".codex/agents/ff-advisor.toml");
+    const original = await readFile(advisorPath, "utf8");
+    await writeFile(
+      advisorPath,
+      original.replace(
+        `model_reasoning_effort = "high"\n`,
+        `model = "local-user-model"\nmodel_reasoning_effort = "xhigh"\n`
+      ),
+      "utf8"
+    );
+
+    await assert.rejects(
+      () => updateProject(root, ["codex"]),
+      /ff update refused to overwrite user-edited role agent configuration\.[\s\S]*\.codex\/agents\/ff-advisor\.toml: model, model_reasoning_effort[\s\S]*\.ff\/orchestration\.json[\s\S]*ff update --force/
+    );
+    assert.match(await readFile(advisorPath, "utf8"), /local-user-model/);
+
+    const forced = await updateProject(root, ["codex"], { force: true });
+    assert.equal(forced.validation.ok, true);
+    assert.match(forced.restart_notice ?? "", /Restart or reload your Codex agent/);
+    const regenerated = await readFile(advisorPath, "utf8");
+    assert.doesNotMatch(regenerated, /local-user-model/);
+    assert.match(regenerated, /model_reasoning_effort = "high"/);
+  });
+
+  it("protects user-edited markdown role agent frontmatter config", async () => {
+    const cases = [
+      {
+        harness: "claude",
+        generatedPath: ".claude/agents/ff-advisor.md",
+        edit: (content: string) => content
+          .replace("model: inherit", "model: local/claude-model")
+          .replace("tools: Read, Grep, Glob", "tools: Read"),
+        fields: "model, tools",
+        marker: /local\/claude-model/
+      },
+      {
+        harness: "opencode",
+        generatedPath: ".opencode/agents/ff-advisor.md",
+        edit: (content: string) => content
+          .replace("model: inherit", "model: local/opencode-model")
+          .replace("  write: false", "  write: true"),
+        fields: "model, tools.write",
+        marker: /local\/opencode-model/
+      },
+      {
+        harness: "pi",
+        generatedPath: ".pi/agents/ff-advisor.md",
+        edit: (content: string) => content
+          .replace("capability_tier: high-reasoning", "capability_tier: fast")
+          .replace("model: inherit", "model: local/pi-model"),
+        fields: "capability_tier, model",
+        marker: /local\/pi-model/
+      },
+      {
+        harness: "cursor",
+        generatedPath: ".cursor/agents/ff-advisor.md",
+        edit: (content: string) => content
+          .replace("model: inherit", "model: local/cursor-model")
+          .replace("readonly: true", "readonly: false")
+          .replace("is_background: false", "is_background: true"),
+        fields: "is_background, model, readonly",
+        marker: /local\/cursor-model/
+      }
+    ] as const;
+
+    for (const testCase of cases) {
+      const root = await tempRoot();
+      await initProject(root, { harnesses: [testCase.harness] });
+      const advisorPath = path.join(root, testCase.generatedPath);
+      const original = await readFile(advisorPath, "utf8");
+      await writeFile(advisorPath, testCase.edit(original), "utf8");
+
+      await assert.rejects(
+        () => updateProject(root, [testCase.harness]),
+        (error) => {
+          assert.ok(error instanceof Error);
+          assert.match(error.message, /ff update refused to overwrite user-edited role agent configuration/);
+          assert.ok(error.message.includes(`${testCase.generatedPath}: ${testCase.fields}`), error.message);
+          assert.match(error.message, /\.ff\/orchestration\.json/);
+          assert.match(error.message, /ff update --force/);
+          return true;
+        }
+      );
+      assert.match(await readFile(advisorPath, "utf8"), testCase.marker);
+    }
   });
 
   it("renders Codex role agents from role-specific orchestration model overrides", async () => {
@@ -329,6 +422,7 @@ describe("ff kernel", () => {
 
     const update = await updateProject(root, ["codex"]);
     assert.equal(update.validation.ok, true);
+    assert.match(update.restart_notice ?? "", /Restart or reload your Codex agent/);
     const expectedAgents = [
       ["advisor", "gpt-5.5", "xhigh"],
       ["planner", "gpt-5.5", "high"],
@@ -629,6 +723,40 @@ describe("ff kernel", () => {
       assert.equal((enhancements.context_memory as Record<string, unknown>).status, "skipped");
       assert.deepEqual(await validateProject(root), []);
     }
+  });
+
+  it("prints a restart notice after successful update", async () => {
+    const root = await tempRoot();
+    await initProject(root, { harnesses: ["codex"] });
+
+    const cli = await runCli(["update", "--root", root, "--harness", "codex"]);
+
+    assert.equal(cli.code, 0, cli.stderr);
+    const result = parseJsonOutput<{ restart_notice: string | null; validation: { ok: boolean } }>(cli.stdout);
+    assert.equal(result.validation.ok, true);
+    assert.match(result.restart_notice ?? "", /Restart or reload your Codex agent/);
+  });
+
+  it("does not print restart notice when update refuses protected role agent config", async () => {
+    const root = await tempRoot();
+    await initProject(root, { harnesses: ["codex"] });
+    const advisorPath = path.join(root, ".codex/agents/ff-advisor.toml");
+    const original = await readFile(advisorPath, "utf8");
+    await writeFile(
+      advisorPath,
+      original.replace(`model_reasoning_effort = "high"\n`, `model = "local-user-model"\nmodel_reasoning_effort = "xhigh"\n`),
+      "utf8"
+    );
+
+    const cli = await runCli(["update", "--root", root, "--harness", "codex"]);
+
+    assert.equal(cli.code, 1);
+    assert.match(cli.stderr, /ff update refused to overwrite user-edited role agent configuration/);
+    assert.match(cli.stderr, /\.codex\/agents\/ff-advisor\.toml: model, model_reasoning_effort/);
+    assert.match(cli.stderr, /\.ff\/orchestration\.json/);
+    assert.match(cli.stderr, /ff update --force/);
+    assert.doesNotMatch(cli.stderr, /Restart or reload/);
+    assert.equal(cli.stdout.trim(), "");
   });
 
   it("keeps provider setup pending for --yes init", async () => {

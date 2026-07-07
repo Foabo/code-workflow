@@ -1,6 +1,6 @@
 import path from "node:path";
-import { writeFile } from "node:fs/promises";
-import { ensureDir, writeFileIfMissing } from "./fs.js";
+import { readFile, writeFile } from "node:fs/promises";
+import { ensureDir, isNodeError, writeFileIfMissing } from "./fs.js";
 import { AGENT_ROLE_NAMES, DEFAULT_ROLE_MODEL_PROFILES } from "./orchestration.js";
 import { readJsonFile } from "./json.js";
 import { getFlowflowPaths } from "./paths.js";
@@ -23,7 +23,23 @@ export type AdapterResult = {
 
 export type AdapterOptions = {
   overwrite?: boolean;
+  force?: boolean;
 };
+
+export type ProtectedRoleAgentConfigConflict = {
+  path: string;
+  fields: string[];
+};
+
+export class ProtectedRoleAgentConfigConflictError extends Error {
+  readonly conflicts: ProtectedRoleAgentConfigConflict[];
+
+  constructor(conflicts: ProtectedRoleAgentConfigConflict[]) {
+    super(formatProtectedRoleAgentConfigConflictMessage(conflicts));
+    this.name = "ProtectedRoleAgentConfigConflictError";
+    this.conflicts = conflicts;
+  }
+}
 
 const commandPurposes: Record<(typeof AGENT_COMMANDS)[number], string> = {
   "ff-work": "Default task progress action. Create or select a task, advance the next responsible phase, run check when appropriate, then stop before finish.",
@@ -59,7 +75,7 @@ const commandSteps: Record<(typeof AGENT_COMMANDS)[number], string[]> = {
     "If advisor is unavailable, record `advisor.unavailable` with attempted invocation, harness, failure reason, timestamp, and fallback checklist result, then perform the same checklist inline as degraded execution.",
     "Resolve, defer with rationale, or get explicit user risk acceptance for each concern. Fix blockers and re-review, or record explicit user override.",
     "Wait for explicit user accept before recording `spec.accepted`.",
-    "After accept, run `ff internal accept-spec --task <task-id> --verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override]` (or the `--advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>` fallback); it auto-binds the latest proposal identity and appends `advisor.reviewed`|`advisor.unavailable` + `spec.accepted(explicit:true)`. Then run `ff internal validate-clarify --task <task-id> --stage advance` before moving to plan.",
+    "After accept, run `ff internal accept-spec --task <task-id> --verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override]`. If advisor was unavailable, omit `--verdict` and run `ff internal accept-spec --task <task-id> --advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>`. It auto-binds the latest proposal identity and appends `advisor.reviewed`|`advisor.unavailable` + `spec.accepted(explicit:true)`. Then run `ff internal validate-clarify --task <task-id> --stage advance` before moving to plan.",
     "spec.md is written at propose time and bound by `proposal_hash`; do not edit it between propose and accept. The clarify gate validates trace events, not the spec.md file directly.",
     "Capture confirmed long-term project facts as task-local baseline candidates; do not update Project Baseline files during clarify.",
     "Run `ff internal set-state --task <task-id> --phase plan --next-action <text>` when the spec is accepted.",
@@ -272,6 +288,7 @@ type RoleAgentDefinition = {
 type ResolvedRoleModelProfile = RoleModelProfile & {
   temperature: number | null;
 };
+type ProtectedConfigMap = Map<string, string>;
 
 const roleAgentDefinitions: Record<AgentRoleName, RoleAgentDefinition> = {
   advisor: {
@@ -426,6 +443,7 @@ async function generateAgentSkillAdapter(
   const result: AdapterResult = { harness, created: [], existing: [] };
   const skillsRoot = path.join(root, ".agents", "skills");
   await ensureDir(skillsRoot);
+  await assertNoProtectedRoleAgentConfigConflicts(root, harness, options);
 
   for (const command of AGENT_COMMANDS) {
     const skillDir = path.join(skillsRoot, command);
@@ -443,6 +461,7 @@ async function generateClaudeAdapter(root: string, options: AdapterOptions): Pro
   const result: AdapterResult = { harness: "claude", created: [], existing: [] };
   const skillsRoot = path.join(root, ".claude", "skills");
   await ensureDir(skillsRoot);
+  await assertNoProtectedRoleAgentConfigConflicts(root, "claude", options);
 
   for (const command of AGENT_COMMANDS) {
     const skillDir = path.join(skillsRoot, command);
@@ -505,12 +524,13 @@ export async function expectedGeneratedRoleAgentsForRoot(root: string, harness: 
 export function expectedGeneratedRoleAgents(
   harness: HarnessName,
   orchestration: OrchestrationConfigRecord | null = null
-): Array<{ path: string; content: string }> {
+): Array<{ role: AgentRoleName; path: string; content: string }> {
   const rootPath = roleAgentRoot(harness);
   return AGENT_ROLE_NAMES.map((role) => {
     const fileName = harness === "codex" ? `${roleAgentName(role)}.toml` : `${roleAgentName(role)}.md`;
     const profile = resolvedRoleProfile(orchestration, harness, role);
     return {
+      role,
       path: path.join(rootPath, fileName),
       content: renderRoleAgent(roleAgentDefinitions[role], harness, profile)
     };
@@ -783,7 +803,7 @@ ${commandSteps[command].map((step, index) => `${index + 1}. ${step}`).join("\n")
 - ff internal append-trace --task <task-id> --type <event-type> --summary <summary>
 - ff internal append-trace --task <task-id> --type <event-type> --summary <summary> --data-json <json-object>
 - ff internal propose-spec --task <task-id> --spec-file <path>
-- ff internal accept-spec --task <task-id> --verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override] | [--advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>]
+- ff internal accept-spec --task <task-id> (--verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override] | --advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>)
 - ff internal validate-clarify --task <task-id> --stage proposal|accept|advance
 - ff internal set-state --task <task-id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
 - ff internal finish-task --task <task-id> --summary <summary> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none] [--edited-content <confirmed-current-state-sections>]
@@ -899,6 +919,197 @@ export function isGeneratedSkillCurrent(
 ): boolean {
   const harnesses: HarnessName[] = skillsPath === ".claude/skills" ? ["claude"] : ["codex", "opencode", "pi", "cursor"];
   return harnesses.some((harness) => content === renderHarnessSkill(command, harness));
+}
+
+async function assertNoProtectedRoleAgentConfigConflicts(
+  root: string,
+  harness: HarnessName,
+  options: AdapterOptions
+): Promise<void> {
+  if (options.overwrite !== true || options.force === true) {
+    return;
+  }
+
+  const orchestration = await readOrchestrationConfig(root);
+  const conflicts: ProtectedRoleAgentConfigConflict[] = [];
+  for (const expected of expectedGeneratedRoleAgents(harness, orchestration)) {
+    const filePath = path.join(root, expected.path);
+    const existing = await readFileIfPresent(filePath);
+    if (existing === null) {
+      continue;
+    }
+    const fields = protectedRoleAgentConfigDiffFields(
+      harness,
+      expected.role,
+      existing,
+      expected.content,
+      explicitProtectedConfigFields(orchestration, harness, expected.role)
+    );
+    if (fields.length > 0) {
+      conflicts.push({ path: expected.path, fields });
+    }
+  }
+
+  if (conflicts.length > 0) {
+    throw new ProtectedRoleAgentConfigConflictError(conflicts);
+  }
+}
+
+async function readFileIfPresent(filePath: string): Promise<string | null> {
+  try {
+    return await readFile(filePath, "utf8");
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+}
+
+function protectedRoleAgentConfigDiffFields(
+  harness: HarnessName,
+  role: AgentRoleName,
+  existingContent: string,
+  expectedContent: string,
+  explicitlyOwnedFields: Set<string>
+): string[] {
+  const existing = protectedConfigFields(harness, existingContent);
+  const expected = protectedConfigFields(harness, expectedContent);
+  const fields: string[] = [];
+
+  for (const [field, existingValue] of existing) {
+    if (explicitlyOwnedFields.has(field)) {
+      continue;
+    }
+    const expectedValue = expected.get(field);
+    if (existingValue !== expectedValue) {
+      fields.push(field);
+    }
+  }
+
+  return fields.sort((left, right) => left.localeCompare(right));
+}
+
+function protectedConfigFields(harness: HarnessName, content: string): ProtectedConfigMap {
+  return harness === "codex" ? protectedCodexConfigFields(content) : protectedFrontmatterConfigFields(content);
+}
+
+function protectedCodexConfigFields(content: string): ProtectedConfigMap {
+  const fields: ProtectedConfigMap = new Map();
+  for (const line of content.split(/\r?\n/)) {
+    const match = line.match(/^\s*(model|model_reasoning_effort)\s*=\s*(.+?)\s*$/);
+    if (match !== null) {
+      fields.set(match[1], normalizeConfigValue(match[2]));
+    }
+  }
+  return fields;
+}
+
+function protectedFrontmatterConfigFields(content: string): ProtectedConfigMap {
+  const fields: ProtectedConfigMap = new Map();
+  if (!content.startsWith("---\n")) {
+    return fields;
+  }
+  const end = content.indexOf("\n---", 4);
+  if (end === -1) {
+    return fields;
+  }
+
+  let currentObjectKey: string | null = null;
+  for (const line of content.slice(4, end).split(/\r?\n/)) {
+    const nested = line.match(/^\s+([A-Za-z_][\w-]*)\s*:\s*(.*)$/);
+    if (nested !== null && currentObjectKey === "tools") {
+      fields.set(`tools.${nested[1]}`, normalizeConfigValue(nested[2]));
+      continue;
+    }
+
+    const topLevel = line.match(/^([A-Za-z_][\w-]*)\s*:\s*(.*)$/);
+    if (topLevel === null) {
+      continue;
+    }
+
+    const key = topLevel[1];
+    const value = topLevel[2];
+    currentObjectKey = value.trim().length === 0 ? key : null;
+    if (isProtectedFrontmatterField(key) && value.trim().length > 0) {
+      fields.set(key, normalizeConfigValue(value));
+    }
+  }
+
+  return fields;
+}
+
+function isProtectedFrontmatterField(key: string): boolean {
+  return key === "model" ||
+    key === "temperature" ||
+    key === "tools" ||
+    key === "readonly" ||
+    key === "is_background" ||
+    key === "capability_tier";
+}
+
+function normalizeConfigValue(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+    try {
+      return JSON.parse(trimmed) as string;
+    } catch {
+      return trimmed;
+    }
+  }
+  return trimmed;
+}
+
+function explicitProtectedConfigFields(
+  orchestration: OrchestrationConfigRecord | null,
+  harness: HarnessName,
+  role: AgentRoleName
+): Set<string> {
+  const fields = new Set<string>();
+  const roleProfileOverride = orchestration?.roles?.[role];
+  const harnessOverride = orchestration?.harness_overrides?.[harness]?.[role];
+  const base = DEFAULT_ROLE_MODEL_PROFILES[role];
+
+  if (roleProfileOverride !== undefined) {
+    if (roleProfileOverride.model !== base.model) {
+      fields.add("model");
+    }
+    if (roleProfileOverride.reasoning_effort !== base.reasoning_effort) {
+      fields.add("model_reasoning_effort");
+    }
+    if ((roleProfileOverride.temperature ?? null) !== (base.temperature ?? null)) {
+      fields.add("temperature");
+    }
+    if (roleProfileOverride.capability_tier !== base.capability_tier) {
+      fields.add("capability_tier");
+    }
+  }
+
+  if (harnessOverride !== undefined) {
+    if ("model" in harnessOverride) {
+      fields.add("model");
+    }
+    if ("reasoning_effort" in harnessOverride) {
+      fields.add("model_reasoning_effort");
+    }
+    if ("temperature" in harnessOverride) {
+      fields.add("temperature");
+    }
+  }
+
+  return fields;
+}
+
+function formatProtectedRoleAgentConfigConflictMessage(conflicts: ProtectedRoleAgentConfigConflict[]): string {
+  const files = conflicts
+    .map((conflict) => `- ${conflict.path}: ${conflict.fields.join(", ")}`)
+    .join("\n");
+  return [
+    "ff update refused to overwrite user-edited role agent configuration.",
+    files,
+    "Move durable role model configuration to .ff/orchestration.json, then rerun ff update.",
+    "To intentionally overwrite these generated role agent files from .ff/orchestration.json, rerun ff update --force."
+  ].join("\n");
 }
 
 function roleProfile(role: AgentRoleName): RoleModelProfile {

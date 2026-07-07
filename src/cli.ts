@@ -148,7 +148,9 @@ async function main(argv: string[]): Promise<number> {
         return report.ok ? 0 : 1;
       }
       case "update": {
-        const result = await updateProject(root, [optionalHarness(publicFlags, "harness") ?? "codex"]);
+        const result = await updateProject(root, [optionalHarness(publicFlags, "harness") ?? "codex"], {
+          force: flagEnabled(publicFlags, "force")
+        });
         printJson(result);
         return result.validation.ok ? 0 : 1;
       }
@@ -1012,7 +1014,7 @@ function printUsage(): void {
   ff init [path] [--root <path>] [--harness codex|claude|opencode|pi|cursor] [--code-index skipped|codebase-memory-mcp|aft|codegraph|graphify] [--context-memory skipped|codex-native-memories|claude-mem|magic-context] [--pi-subagents install|skipped] [--yes]
   ff validate [--root <path>]
   ff doctor [--root <path>]
-  ff update [--root <path>] [--harness codex|claude|opencode|pi|cursor]
+  ff update [--root <path>] [--harness codex|claude|opencode|pi|cursor] [--force]
   ff tasks [--root <path>] [--archived|--all]
   ff preflight --action <action> [--task <id>] [--root <path>]
   ff internal <helper> [flags]`);

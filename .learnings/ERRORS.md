@@ -1,5 +1,34 @@
 # Errors
 
+## [ERR-20260707-001] accept_spec_advisor_unavailable_mutex
+
+**Logged**: 2026-07-07T21:14:06+08:00
+**Priority**: low
+**Status**: pending
+**Area**: workflow
+
+### Summary
+`accept-spec` rejected a command that combined `--verdict pass` with `--advisor-unavailable`.
+
+### Error
+```text
+accept-spec: --advisor-unavailable and --verdict are mutually exclusive
+```
+
+### Context
+- Command attempted: `node dist/src/cli.js internal accept-spec --task 0018... --verdict pass --advisor-unavailable ...`
+- Workspace: `/Users/abboo/src/work/agents/code-workflow`
+- The generated `ff-clarify` guidance presents the normal verdict path and advisor-unavailable fallback close together; the actual CLI treats them as mutually exclusive modes.
+
+### Suggested Fix
+Align generated skill wording with the CLI: advisor-unavailable acceptance should omit `--verdict`.
+
+### Metadata
+- Reproducible: yes
+- Related Files: src/cli.ts, src/adapters.ts, .agents/skills/ff-clarify/SKILL.md
+
+---
+
 ## [ERR-20260703-001] npm_install_hung
 
 **Logged**: 2026-07-03T23:48:01+08:00

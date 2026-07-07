@@ -36,3 +36,7 @@
 - Current workflow commands and generated skills must use `ff` / `ff-*` and `.ff`. Old `cw` / `cw-*` / `.cw` names are historical migration context only.
 - Do not edit generated Flowflow skills as canonical workflow truth; update adapter rendering code and regenerate harness artifacts.
 - Use `ff internal ...` helpers for deterministic task state changes and trace events.
+
+- Ordinary `ff update` must not silently overwrite recognized user-edited role agent configuration. Use `ff update --force` only when intentionally regenerating role agents from `.ff/orchestration.json`.
+- Direct edits to generated role agent files are protected only for recognized configuration fields; arbitrary generated instruction-body edits remain generated-output drift.
+- Generated `ff-clarify` guidance must show `accept-spec --advisor-unavailable` as mutually exclusive with `--verdict`.
