@@ -1,6 +1,6 @@
 import { generateAdapter, HarnessName } from "./adapters.js";
-import { validateProject } from "./validate.js";
-import { ValidationIssue } from "./types.js";
+import { validateProject } from "../project/index.js";
+import { ValidationIssue } from "../domain/index.js";
 
 export type UpdateResult = {
   adapters: Awaited<ReturnType<typeof generateAdapter>>[];

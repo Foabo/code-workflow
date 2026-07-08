@@ -1,6 +1,6 @@
-import { readTaskStateAt } from "./tasks.js";
-import { resolveTaskReference, listTaskDirectoryEntries, TaskListScope } from "./task-storage.js";
-import { TaskLifecycle, TaskStateRecord } from "./types.js";
+import { readTaskStateAt } from "./lifecycle.js";
+import { resolveTaskReference, listTaskDirectoryEntries, TaskListScope } from "./storage.js";
+import { TaskLifecycle, TaskStateRecord } from "../domain/index.js";
 
 export type TaskSummary = Pick<
   TaskStateRecord,

@@ -1,17 +1,17 @@
 import path from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
-import { ensureDir, isNodeError, writeFileIfMissing } from "./fs.js";
-import { AGENT_ROLE_NAMES, DEFAULT_ROLE_MODEL_PROFILES } from "./orchestration.js";
-import { readJsonFile } from "./json.js";
-import { getFlowflowPaths } from "./paths.js";
-import { AGENT_COMMANDS } from "./templates.js";
+import { ensureDir, isNodeError, writeFileIfMissing } from "../shared/index.js";
+import { AGENT_ROLE_NAMES, DEFAULT_ROLE_MODEL_PROFILES } from "../domain/index.js";
+import { readJsonFile } from "../shared/index.js";
+import { getFlowflowPaths } from "../project/index.js";
+import { AGENT_COMMANDS } from "../domain/index.js";
 import {
   AgentRoleName,
   HarnessRoleModelOverride,
   ModelReasoningEffort,
   OrchestrationConfigRecord,
   RoleModelProfile
-} from "./types.js";
+} from "../domain/index.js";
 
 export type HarnessName = "codex" | "claude" | "opencode" | "pi" | "cursor";
 

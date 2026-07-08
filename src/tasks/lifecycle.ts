@@ -1,11 +1,12 @@
 import path from "node:path";
 import { appendFile, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { ensureDir, writeFileIfMissing } from "./fs.js";
-import { getGitStatus } from "./git.js";
-import { readJsonFile, writeJsonFile } from "./json.js";
-import { getFlowflowPaths, TaskLocation, taskDir, taskJsonPath, tracePath } from "./paths.js";
-import { assertTaskStateRecord } from "./schema.js";
-import { allocateTaskId, isFullNumericTaskId, listTaskIds, migrateLegacyTaskIds, LegacyTaskMigrationResult } from "./task-storage.js";
+import { ensureDir, writeFileIfMissing } from "../shared/index.js";
+import { getGitStatus } from "../shared/index.js";
+import { readJsonFile, writeJsonFile } from "../shared/index.js";
+import { getFlowflowPaths } from "../project/paths.js";
+import { TaskLocation, taskDir, taskJsonPath, tracePath } from "./paths.js";
+import { assertTaskStateRecord } from "../domain/index.js";
+import { allocateTaskId, isFullNumericTaskId, listTaskIds, migrateLegacyTaskIds, LegacyTaskMigrationResult } from "./storage.js";
 import { TASK_ARTIFACT_TEMPLATES } from "./templates.js";
 import {
   BaselineDecision,
@@ -14,7 +15,7 @@ import {
   TaskLifecycle,
   TaskStateRecord,
   TraceEvent
-} from "./types.js";
+} from "../domain/index.js";
 
 export type CreateTaskInput = {
   id?: string;

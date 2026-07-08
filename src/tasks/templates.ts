@@ -1,56 +1,3 @@
-export const PROJECT_BASELINE_TEMPLATES: Record<string, string> = {
-  "overview.md": `# Project Overview
-
-## Purpose
-
-## Current Shape
-
-## Major Capabilities
-
-## Non-goals
-`,
-  "architecture.md": `# Architecture
-
-## Stack
-
-## Modules
-
-## Data Flow
-
-## Integration Points
-
-## Constraints
-`,
-  "rules.md": `# Rules
-
-## Coding
-
-## Testing
-
-## Review
-
-## Agent Rules
-
-## Do Not
-`,
-  "commands.md": `# Commands
-
-## Setup
-
-## Run
-
-## Test
-
-## Lint
-
-## Typecheck
-
-## Build
-
-## Troubleshooting
-`
-};
-
 export const TASK_ARTIFACT_TEMPLATES: Record<string, string> = {
   "spec.md": `# Spec
 
@@ -112,16 +59,3 @@ export const TASK_ARTIFACT_TEMPLATES: Record<string, string> = {
 ## References
 `
 };
-
-export const AGENT_COMMANDS = [
-  "ff-work",
-  "ff-clarify",
-  "ff-plan",
-  "ff-run",
-  "ff-check",
-  "ff-finish",
-  "ff-resume",
-  "ff-discard",
-  "ff-doctor",
-  "ff-understand"
-] as const;

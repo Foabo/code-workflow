@@ -1,14 +1,15 @@
 import path from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
-import { appendTrace, readTaskState } from "./tasks.js";
-import { getFlowflowPaths, taskDir, taskJsonPath } from "./paths.js";
-import { TASK_ARTIFACT_TEMPLATES } from "./templates.js";
-import { writeJsonFile } from "./json.js";
-import { BaselineDecision, TaskStateRecord } from "./types.js";
+import { appendTrace, readTaskState } from "../tasks/index.js";
+import { getFlowflowPaths } from "../project/index.js";
+import { taskDir, taskJsonPath } from "../tasks/index.js";
+import { TASK_ARTIFACT_TEMPLATES } from "../tasks/index.js";
+import { writeJsonFile } from "../shared/index.js";
+import { BaselineDecision, TaskStateRecord } from "../domain/index.js";
 
 const baselineFiles = ["overview.md", "architecture.md", "rules.md", "commands.md"] as const;
 
-export type { BaselineDecision } from "./types.js";
+export type { BaselineDecision } from "../domain/index.js";
 
 export type BaselineFile = (typeof baselineFiles)[number];
 

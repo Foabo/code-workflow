@@ -2,14 +2,14 @@ import path from "node:path";
 import { exec } from "node:child_process";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
-import { BaselineFile, ensureBaselineDelta, previewBaselineMerge, syncBaselineDelta } from "./baseline.js";
+import { BaselineFile, ensureBaselineDelta, previewBaselineMerge, syncBaselineDelta } from "../baseline/index.js";
 import {
   proposalHash,
   proposalIdFromHash,
   readTraceEvents,
   validateClarifyGate
 } from "./clarify-gate.js";
-import { doctorProject } from "./validate.js";
+import { doctorProject } from "../project/index.js";
 import {
   appendTrace,
   checkClosureGate,
@@ -19,13 +19,25 @@ import {
   finishTask,
   readTaskState,
   updateTaskState
-} from "./tasks.js";
-import { getFlowflowPaths, taskDir } from "./paths.js";
+} from "../tasks/index.js";
+import { getFlowflowPaths } from "../project/index.js";
+import { taskDir } from "../tasks/index.js";
 import { preflight, WorkflowAction } from "./preflight.js";
-import { selectTask } from "./task-store.js";
-import { BaselineDecision, DirtyWorktreeDecision, TaskStateRecord, ValidationIssue } from "./types.js";
+import { selectTask } from "../tasks/index.js";
+import { BaselineDecision, DirtyWorktreeDecision, TaskStateRecord, ValidationIssue } from "../domain/index.js";
 
 const execAsync = promisify(exec);
+
+export {
+  latestProposalIdentity,
+  proposalHash,
+  proposalIdFromHash,
+  readTraceEvents,
+  validateClarifyGate
+} from "./clarify-gate.js";
+export type { ClarifyGateStage } from "./clarify-gate.js";
+export { preflight } from "./preflight.js";
+export type { WorkflowAction } from "./preflight.js";
 
 export type WorkflowCommandAction = WorkflowAction | "doctor";
 

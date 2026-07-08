@@ -1,10 +1,11 @@
 import { access, appendFile, readdir, rename } from "node:fs/promises";
 import path from "node:path";
-import { ensureDir } from "./fs.js";
-import { readJsonFile, writeJsonFile } from "./json.js";
-import { getFlowflowPaths, TASK_ARCHIVE_DIR_NAME, TaskLocation, taskDir, taskJsonPath, tracePath } from "./paths.js";
-import { assertTaskStateRecord } from "./schema.js";
-import { TaskStateRecord, TraceEvent } from "./types.js";
+import { ensureDir } from "../shared/index.js";
+import { readJsonFile, writeJsonFile } from "../shared/index.js";
+import { getFlowflowPaths, TASK_ARCHIVE_DIR_NAME } from "../project/paths.js";
+import { TaskLocation, taskDir, taskJsonPath, tracePath } from "./paths.js";
+import { assertTaskStateRecord } from "../domain/index.js";
+import { TaskStateRecord, TraceEvent } from "../domain/index.js";
 
 export type TaskListScope = TaskLocation | "all";
 

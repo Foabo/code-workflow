@@ -4,19 +4,19 @@ import {
   expectedGeneratedRoleAgentsForRoot,
   expectedGeneratedWatchdogArtifactsForRoot,
   isGeneratedSkillCurrent
-} from "./adapters.js";
-import { readJsonFile } from "./json.js";
-import { getFlowflowPaths, TaskLocation, taskDir } from "./paths.js";
+} from "../harness/index.js";
+import { readJsonFile } from "../shared/index.js";
+import { getFlowflowPaths } from "./paths.js";
 import {
   validateEnhancementConfigRecord,
   validateOrchestrationConfigRecord,
   validateTaskStateRecord,
   validateVersionRecord
-} from "./schema.js";
-import { listTaskDirectoryEntries } from "./task-storage.js";
-import { PROJECT_BASELINE_TEMPLATES, TASK_ARTIFACT_TEMPLATES } from "./templates.js";
-import { AGENT_COMMANDS } from "./templates.js";
-import { DoctorReport, EnhancementConfigRecord, TaskStateRecord, ValidationIssue } from "./types.js";
+} from "../domain/index.js";
+import { listTaskDirectoryEntries, taskDir, TASK_ARTIFACT_TEMPLATES, TaskLocation } from "../tasks/index.js";
+import { PROJECT_BASELINE_TEMPLATES } from "./templates.js";
+import { AGENT_COMMANDS } from "../domain/index.js";
+import { DoctorReport, EnhancementConfigRecord, TaskStateRecord, ValidationIssue } from "../domain/index.js";
 
 export async function validateProject(root: string): Promise<ValidationIssue[]> {
   const paths = getFlowflowPaths(root);

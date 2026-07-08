@@ -1,10 +1,10 @@
 import path from "node:path";
 import { access } from "node:fs/promises";
-import { getGitStatus, GitStatus } from "./git.js";
-import { taskDir } from "./paths.js";
-import { selectTask } from "./task-store.js";
-import { validateProject } from "./validate.js";
-import { TaskStateRecord, ValidationIssue } from "./types.js";
+import { getGitStatus, GitStatus } from "../shared/index.js";
+import { taskDir } from "../tasks/index.js";
+import { selectTask } from "../tasks/index.js";
+import { validateProject } from "../project/index.js";
+import { TaskStateRecord, ValidationIssue } from "../domain/index.js";
 
 export type WorkflowAction =
   | "work"

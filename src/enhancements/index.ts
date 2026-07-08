@@ -3,16 +3,16 @@ import { constants } from "node:fs";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { HarnessName } from "./adapters.js";
-import { readJsonFile, writeJsonFile } from "./json.js";
-import { getFlowflowPaths } from "./paths.js";
+import { HarnessName } from "../harness/index.js";
+import { readJsonFile, writeJsonFile } from "../shared/index.js";
+import { getFlowflowPaths } from "../project/index.js";
 import {
   FLOWFLOW_SCHEMA_VERSION,
   EnhancementCategory,
   EnhancementChoice,
   EnhancementConfigRecord,
   EnhancementProviderRecord
-} from "./types.js";
+} from "../domain/index.js";
 
 export type EnhancementProviderId =
   | "skipped"

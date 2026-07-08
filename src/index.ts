@@ -1,16 +1,16 @@
-export { initProject } from "./init.js";
-export type { InitOptions, InitResult } from "./init.js";
+export { initProject } from "./project/index.js";
+export type { InitOptions, InitResult } from "./project/index.js";
 
-export { updateProject } from "./update.js";
-export type { UpdateOptions, UpdateResult } from "./update.js";
+export { updateProject } from "./harness/index.js";
+export type { UpdateOptions, UpdateResult } from "./harness/index.js";
 
-export { runWorkflowAction } from "./workflow.js";
-export type { WorkflowCommandAction, WorkflowOptions, WorkflowResult } from "./workflow.js";
+export { runWorkflowAction } from "./workflow/index.js";
+export type { WorkflowCommandAction, WorkflowOptions, WorkflowResult } from "./workflow/index.js";
 
-export { doctorProject, validateProject } from "./validate.js";
+export { doctorProject, validateProject } from "./project/index.js";
 
-export type { HarnessName } from "./adapters.js";
-export type { BaselineFile } from "./baseline.js";
+export type { HarnessName } from "./harness/index.js";
+export type { BaselineFile } from "./baseline/index.js";
 export type {
   BaselineDecision,
   DirtyWorktreeDecision,
@@ -19,4 +19,4 @@ export type {
   OrchestrationConfigRecord,
   TaskStateRecord,
   ValidationIssue
-} from "./types.js";
+} from "./domain/index.js";

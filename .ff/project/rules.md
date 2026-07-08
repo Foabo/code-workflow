@@ -2,7 +2,15 @@
 
 ## Coding
 
+- Keep root source entries thin. Do not add product logic to `src/index.ts`, `src/cli.ts`, or `src/agent-command.ts`.
+- Do not add business rules to `src/shared/`.
+- Do not let `src/domain/` import product capability modules.
+
 ## Testing
+
+- Tests are organized by product capability under `tests/<capability>/`.
+- Shared test helpers live under `tests/support/` and should not import concrete test suites.
+- Module boundary rules are enforced by `tests/architecture/module-boundaries.test.ts`.
 
 ## Review
 

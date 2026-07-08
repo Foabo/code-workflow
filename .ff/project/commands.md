@@ -6,6 +6,8 @@
 
 ## Test
 
+- `npm test` clears `dist`, builds the project, then runs every compiled nested test file under `dist/tests`.
+
 ## Lint
 
 ## Typecheck

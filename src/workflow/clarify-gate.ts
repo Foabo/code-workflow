@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { tracePath } from "./paths.js";
-import { TaskStateRecord, TraceEvent, ValidationIssue } from "./types.js";
+import { tracePath } from "../tasks/index.js";
+import { TaskStateRecord, TraceEvent, ValidationIssue } from "../domain/index.js";
 
 export type ClarifyGateStage = "proposal" | "accept" | "advance" | "watchdog";
 

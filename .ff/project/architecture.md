@@ -4,11 +4,23 @@
 
 ## Modules
 
+- `src/index.ts`, `src/cli.ts`, and `src/agent-command.ts` are root thin entries. Product implementation lives under capability directories.
+- Source modules are organized by product capability: `src/cli/`, `src/project/`, `src/workflow/`, `src/tasks/`, `src/baseline/`, `src/harness/`, `src/enhancements/`, `src/domain/`, and `src/shared/`.
+- Each product capability exposes its cross-module surface through `src/<capability>/index.ts`.
+- `src/domain/` contains shared Flowflow domain types, schema validators, orchestration constants, and pure shared rules.
+- `src/shared/` contains business-neutral utilities such as filesystem, JSON, and Git helpers.
+- `src/tasks/` owns task ids, task state files, traces, archive layout, resume notes, task selection, and task artifact templates.
+- `src/harness/` owns generated skills, role agents, watchdog artifacts, and harness update behavior.
+- `src/enhancements/` owns enhancement provider registry, setup planning, setup execution, and setup metadata.
+
 ## Data Flow
 
 ## Integration Points
 
 ## Constraints
+
+- Cross-capability imports should use the target capability public entry by default. Required deep-import exceptions belong in `tests/architecture/module-boundaries.test.ts` with a narrow allowlist and reason.
+- The stable package and command paths remain `./dist/src/index.js`, `./dist/src/index.d.ts`, `./dist/src/cli.js`, and `./dist/src/agent-command.js`.
 
 ## From task-codex-self-evolution
 

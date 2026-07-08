@@ -1,10 +1,11 @@
 import path from "node:path";
-import { AdapterResult, generateAdapter, HarnessName } from "./adapters.js";
-import { ensureDir, writeFileIfMissing } from "./fs.js";
-import { defaultOrchestrationConfig } from "./orchestration.js";
+import { AdapterResult, generateAdapter, HarnessName } from "../harness/index.js";
+import { ensureDir, writeFileIfMissing } from "../shared/index.js";
+import { defaultOrchestrationConfig } from "../domain/index.js";
 import { getFlowflowPaths } from "./paths.js";
-import { PROJECT_BASELINE_TEMPLATES, TASK_ARTIFACT_TEMPLATES } from "./templates.js";
-import { FLOWFLOW_SCHEMA_VERSION, EnhancementChoice, EnhancementConfigRecord, VersionRecord } from "./types.js";
+import { PROJECT_BASELINE_TEMPLATES } from "./templates.js";
+import { TASK_ARTIFACT_TEMPLATES } from "../tasks/index.js";
+import { FLOWFLOW_SCHEMA_VERSION, EnhancementChoice, EnhancementConfigRecord, VersionRecord } from "../domain/index.js";
 
 export type InitResult = {
   created: string[];

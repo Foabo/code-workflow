@@ -1,0 +1,24 @@
+{"ts":"2026-07-07T13:43:56.453Z","type":"task.created","summary":"Task created: 规范化 src 与 tests 模块结构"}
+{"ts":"2026-07-07T13:44:41.824Z","type":"task.state.updated","summary":"next action updated"}
+{"ts":"2026-07-07T13:47:03.132Z","type":"task.state.updated","summary":"next action updated"}
+{"ts":"2026-07-07T13:48:50.973Z","type":"task.state.updated","summary":"next action updated"}
+{"ts":"2026-07-07T13:50:30.511Z","type":"task.state.updated","summary":"next action updated"}
+{"ts":"2026-07-07T13:53:17.810Z","type":"task.state.updated","summary":"next action updated"}
+{"ts":"2026-07-07T13:54:51.759Z","type":"brainstorm.done","summary":"Brainstorm Pass complete; propose-spec recorded proposal identity.","data":{"attempt_id":"a-mrapnppr-f82a1910","proposal_id":"p-f82a1910f4fa","proposal_hash":"f82a1910f4fa8556090818b9500c62784c674ad737fd98e99ac3b086c3d0f1ae"}}
+{"ts":"2026-07-07T13:54:51.760Z","type":"spec.proposed","summary":"Proposed spec recorded from .ff/tasks/0019-src-tests/spec.md.","data":{"attempt_id":"a-mrapnppr-f82a1910","proposal_id":"p-f82a1910f4fa","proposal_hash":"f82a1910f4fa8556090818b9500c62784c674ad737fd98e99ac3b086c3d0f1ae"}}
+{"ts":"2026-07-07T13:58:51.007Z","type":"brainstorm.done","summary":"Brainstorm Pass complete; propose-spec recorded proposal identity.","data":{"attempt_id":"a-mrapsubj-af90ba12","proposal_id":"p-af90ba12329e","proposal_hash":"af90ba12329e1314102a487971ba48b8b1082e9ed198e1d782071bfded630eab"}}
+{"ts":"2026-07-07T13:58:51.008Z","type":"spec.proposed","summary":"Proposed spec recorded from .ff/tasks/0019-src-tests/spec.md.","data":{"attempt_id":"a-mrapsubj-af90ba12","proposal_id":"p-af90ba12329e","proposal_hash":"af90ba12329e1314102a487971ba48b8b1082e9ed198e1d782071bfded630eab"}}
+{"ts":"2026-07-07T14:01:11.717Z","type":"task.state.updated","summary":"next action updated"}
+{"ts":"2026-07-07T14:03:04.744Z","type":"advisor.reviewed","summary":"Advisor review recorded (verdict pass).","data":{"attempt_id":"a-mrapsubj-af90ba12","proposal_id":"p-af90ba12329e","proposal_hash":"af90ba12329e1314102a487971ba48b8b1082e9ed198e1d782071bfded630eab","verdict":"pass"}}
+{"ts":"2026-07-07T14:03:04.745Z","type":"spec.accepted","summary":"Spec explicitly accepted via accept-spec.","data":{"attempt_id":"a-mrapsubj-af90ba12","proposal_id":"p-af90ba12329e","proposal_hash":"af90ba12329e1314102a487971ba48b8b1082e9ed198e1d782071bfded630eab","explicit":true}}
+{"ts":"2026-07-07T14:03:15.443Z","type":"task.state.updated","summary":"phase clarify -> plan; next action updated"}
+{"ts":"2026-07-07T14:15:39.752Z","type":"plan.updated","summary":"Plan and task checklist created for src/tests product-capability reorganization."}
+{"ts":"2026-07-07T14:15:47.347Z","type":"task.state.updated","summary":"phase plan -> run; next action updated"}
+{"ts":"2026-07-07T14:58:00.342Z","type":"baseline_delta.created","summary":"Baseline delta created."}
+{"ts":"2026-07-07T15:31:52.962Z","type":"run.updated","summary":"Reorganized src by product capability, split tests by capability, added architecture and ff-* bin dispatch tests, and verified typecheck/test/build/validate."}
+{"ts":"2026-07-07T15:31:57.029Z","type":"task.state.updated","summary":"phase run -> check; next action updated"}
+{"ts":"2026-07-08T12:19:30.441Z","type":"check.passed","summary":"Verification and artifact review passed for product-capability src/tests reorganization."}
+{"ts":"2026-07-08T12:19:33.119Z","type":"task.state.updated","summary":"phase check -> finish; next action updated"}
+{"ts":"2026-07-08T12:31:47.985Z","type":"baseline_delta.synced","summary":"Baseline delta synced to .ff/project/architecture.md, .ff/project/rules.md, .ff/project/commands.md.","data":{"decision":"accepted","updated":[".ff/project/architecture.md",".ff/project/rules.md",".ff/project/commands.md"],"selected":null,"highImpact":true}}
+{"ts":"2026-07-08T12:41:05.097Z","type":"baseline_delta.synced","summary":"Baseline delta synced to .ff/project/architecture.md, .ff/project/rules.md, .ff/project/commands.md.","data":{"decision":"accepted","updated":[".ff/project/architecture.md",".ff/project/rules.md",".ff/project/commands.md"],"selected":null,"highImpact":true}}
+{"ts":"2026-07-08T12:41:05.117Z","type":"task.finished","summary":"Completed product-capability reorganization of src and tests with behavior preserved.","data":{"baseline_decision":"accepted","dirty_worktree_handling":"covered"}}
