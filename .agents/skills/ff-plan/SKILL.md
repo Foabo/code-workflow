@@ -62,9 +62,14 @@ Role routing for this command:
 - Plan from the accepted contract. Implementation choices may be recorded in plan.md only when they stay inside the confirmed spec.
 - Capture stable design, workflow, command, or rule candidates when they are reusable project facts; keep one-off implementation steps out of baseline candidates.
 - Break task.md implementation items into small, verifiable vertical slices. Keep file-level edits as implementation details, not primary checklist items.
+- Match the user's language in user-visible planning text. If the accepted spec or user request is Chinese, write plan summaries, task items, risks, and evidence notes in Chinese except commands, file paths, API names, code identifiers, and product names.
+- Write plan.md and task.md as executable actions, concrete trade-offs, and verification evidence. Say what will change, why it stays inside the accepted spec, and how check can prove it.
+- For each accepted acceptance criterion, plan.md or task.md must name the concrete action, target artifact or behavior, expected observable result, and verification evidence. Avoid checklist items that are only topic labels such as `update guidance`, `improve tests`, or `review behavior` unless they state the exact changed surface and proof.
+- Key Decisions must record the chosen approach and the reason it stays within scope. Risks must name the failure mode and the check that would reveal it.
+- Avoid abstract labels, jargon stacks, grand claims, unexplained internal terms, formulaic three-part lists, binary contrast formulas, empty positive endings, overused discourse markers, passive or actorless claims, and acceptance criteria without evidence.
 - When delegation is available, ask `ff-planner` to draft plan.md and task.md from the accepted spec, then ask `ff-reviewer` to run the post-plan artifact cross-review. The main session resolves drift and moves phase.
 - Post-plan artifact cross-review checks spec.md, plan.md, and task.md for contradiction, missing coverage, overbuilding, unclear interfaces, and placeholder work. Use `ff-reviewer` only when the harness, tools, and user or environment permission allow delegation; otherwise run the same check inline.
-- For generated workflow guidance changes, include behavior-review checks in task.md. Look for skipped challenge, skipped grill, unclear delegation permission, premature phase movement, and acceptance criteria without evidence.
+- For generated workflow guidance changes, task.md Check must include behavior probes in addition to string assertions: at least one `ff-clarify` sample request and one `ff-plan` accepted-spec scenario, each with expected failure mode, desired behavior, reviewer verdict, and remaining risk. Use `ff-reviewer` or `ff-advisor` when delegation is available; otherwise record degraded inline review.
 - Keep deterministic tests separate from behavior review. Tests should verify generated output, while check-stage review evaluates likely agent behavior.
 
 

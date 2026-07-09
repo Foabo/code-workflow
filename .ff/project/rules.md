@@ -50,3 +50,5 @@
 - Generated `ff-clarify` guidance must show `accept-spec --advisor-unavailable` as mutually exclusive with `--verdict`.
 
 - Public CLI help requests must return before workflow execution, project checks, task selection, trace writes, resume-note consumption, or other repository state changes.
+
+- Generated `ff-clarify` and `ff-plan` guidance should include portable plain-language rules for user-visible output: follow the user's language, explain required workflow terms, connect motivation, scope, trade-offs, and evidence, and avoid vague jargon or formulaic AI prose. Generated workflow guidance changes should be checked with behavior probes, including concrete sample inputs, expected failure modes, desired behavior, reviewer verdicts, and remaining risks.
