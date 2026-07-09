@@ -109,6 +109,16 @@ Flowflow 不把仓库内 `.codex/prompts/` 作为命令入口。
 
 ## 日常工作流
 
+极简流程：
+
+```text
+work -> clarify -> plan -> run -> check -> finish
+          ^                         |
+          |_________________________|
+```
+
+`clarify -> plan -> run -> check` 可以按需反复执行。后续节点发现目标、方案或实现需要调整时，可以回到前面的节点继续补齐。`check` 确认任务可关闭后，再进入 `finish`。
+
 可以通过生成的 skill 调用，也可以直接在 shell 中运行：
 
 ```bash

@@ -109,6 +109,16 @@ If a running agent thread cannot see newly generated skills, reload the workspac
 
 ## Daily Workflow
 
+Minimal flow:
+
+```text
+work -> clarify -> plan -> run -> check -> finish
+          ^                         |
+          |_________________________|
+```
+
+`clarify -> plan -> run -> check` can repeat as needed. A later step may return to an earlier step when the task goal, plan, or implementation needs adjustment. Move to `finish` after `check` confirms the task is ready to close.
+
 Use the workflow commands through the generated skills or directly from the shell:
 
 ```bash
