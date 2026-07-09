@@ -52,3 +52,8 @@
 - Public CLI help requests must return before workflow execution, project checks, task selection, trace writes, resume-note consumption, or other repository state changes.
 
 - Generated `ff-clarify` and `ff-plan` guidance should include portable plain-language rules for user-visible output: follow the user's language, explain required workflow terms, connect motivation, scope, trade-offs, and evidence, and avoid vague jargon or formulaic AI prose. Generated workflow guidance changes should be checked with behavior probes, including concrete sample inputs, expected failure modes, desired behavior, reviewer verdicts, and remaining risks.
+
+- `.ff/tasks/<task-id>/context-package.md` 与 `.ff/tasks/<task-id>/context-package.manifest.json` 是 generated cache。Repo Truth 仍是 authored `.ff` task artifacts、Project Baseline、trace 和 Git。
+- workflow 和 role guidance 可以使用 current context package 来减少重复读取。package 缺失、stale、不完整或包含 uncertain diff entry 时，必须读取原始 `.ff` 文件和 git 信息后再判断。
+- reviewer/checker 不能只根据 diff summary 给出 spec verdict；必须同时对照 diff、task brief、accepted spec、acceptance criteria 和 verification evidence。
+- context package manifest 包含 generator version 和输入 fingerprints。package 渲染语义变化时要 bump generator version，使旧 cache 自动刷新。

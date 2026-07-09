@@ -28,6 +28,7 @@ import {
   discardTask,
   finishTask,
   migrateTasks,
+  refreshContextPackage,
   updateTaskState
 } from "../tasks/index.js";
 import { resolveTaskReference } from "../tasks/index.js";
@@ -349,6 +350,12 @@ async function runInternal(subcommand: string | undefined, args: string[], root:
       const taskId = await requiredActiveTaskId(root, flags);
       const task = await consumeResumeNote(root, taskId);
       printJson(task);
+      return 0;
+    }
+    case "refresh-context-package": {
+      const taskId = await requiredActiveTaskId(root, flags);
+      const result = await refreshContextPackage(root, taskId);
+      printJson(result);
       return 0;
     }
     case "migrate-task-ids": {

@@ -66,6 +66,9 @@ describe("ff harness", () => {
     assert.match(skill, /generated `ff-<role>` agent files/);
     assert.match(skill, /Explicitly ask the harness to spawn the named `ff-<role>` agent/);
     assert.match(skill, /Delegation is optional and permission-bound/);
+    assert.match(skill, /refresh-context-package/);
+    assert.match(skill, /context-package\.md/);
+    assert.match(skill, /The context package is not Repo Truth/);
     assert.match(skill, /Role routing for this command/);
     assert.match(skill, /Clarify phase: use `ff-advisor`/);
     assert.match(skill, /Plan phase: use `ff-planner`/);
@@ -89,10 +92,13 @@ describe("ff harness", () => {
     assert.match(advisorAgent, /Do not ask the user directly/);
     assert.match(advisorAgent, /severity: nit \| concern \| blocker/);
     assert.match(advisorAgent, /proposal hash/);
+    assert.match(advisorAgent, /context packages only as navigation/);
+    assert.match(advisorAgent, /current spec\.md and proposal identity/);
     const codexWatchdog = await readFile(path.join(root, ".codex/hooks.json"), "utf8");
     assert.match(codexWatchdog, /ff internal validate-clarify --watchdog/);
     const implementerAgent = await readFile(path.join(root, ".codex/agents/ff-implementer.toml"), "utf8");
     assert.match(implementerAgent, /Modify code and tests within the accepted task contract/);
+    assert.match(implementerAgent, /Use a current context package to reduce handoff reading/);
     assert.match(implementerAgent, /Do not decide requirement drift/);
     for (const skillName of await readdir(path.join(root, ".agents/skills"))) {
       const skill = await readFile(path.join(root, ".agents/skills", skillName, "SKILL.md"), "utf8");
@@ -160,6 +166,8 @@ describe("ff harness", () => {
     assert.ok(!skillNames.includes("ff-grill"));
     const planSkill = await readFile(path.join(root, ".agents/skills/ff-plan/SKILL.md"), "utf8");
     assert.match(planSkill, /spec quality gate/);
+    assert.match(planSkill, /When a current context-package\.md exists/);
+    assert.match(planSkill, /spec quality gate must still read accepted spec\.md directly/);
     assert.match(planSkill, /Do not modify spec\.md during planning/);
     assert.match(planSkill, /one concrete next question/);
     assert.match(planSkill, /vertical slices/);
@@ -190,6 +198,8 @@ describe("ff harness", () => {
     assert.match(planSkill, /stable design, workflow, command, or rule candidates/);
     const runSkill = await readFile(path.join(root, ".agents/skills/ff-run/SKILL.md"), "utf8");
     assert.match(runSkill, /accepted task contract/);
+    assert.match(runSkill, /Refresh context-package\.md before delegating implementation slices/);
+    assert.match(runSkill, /stale, incomplete, or uncertain packages require reading original task artifacts and git information/);
     assert.match(runSkill, /requirement drift/);
     assert.match(runSkill, /Behavior changes require test evidence/);
     assert.match(runSkill, /## Execution Strategy Guidance/);
@@ -205,6 +215,9 @@ describe("ff harness", () => {
     const checkSkill = await readFile(path.join(root, ".agents/skills/ff-check/SKILL.md"), "utf8");
     assert.match(checkSkill, /Artifact alignment review/);
     assert.match(checkSkill, /Implementation evidence review/);
+    assert.match(checkSkill, /Refresh context-package\.md before review\/check/);
+    assert.match(checkSkill, /Do not issue a spec verdict from a diff summary alone/);
+    assert.match(checkSkill, /accepted spec, acceptance criteria, and verification evidence/);
     assert.match(checkSkill, /--baseline-outcome <text>/);
     assert.match(checkSkill, /environment, action, and result/);
     assert.match(checkSkill, /## Execution Strategy Guidance/);

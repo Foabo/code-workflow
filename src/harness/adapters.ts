@@ -185,6 +185,7 @@ const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>
     "The spec quality gate checks that Goal is concrete, Scope bounds the work, Acceptance Criteria are checkable, and Decisions cover product trade-offs that affect implementation.",
     "Do not modify spec.md during planning. If the gate fails, block the task in clarify phase and provide one concrete next question in the blocked reason or next action.",
     "Plan from the accepted contract. Implementation choices may be recorded in plan.md only when they stay inside the confirmed spec.",
+    "When a current context-package.md exists, use it to navigate task facts quickly, but the spec quality gate must still read accepted spec.md directly.",
     "Capture stable design, workflow, command, or rule candidates when they are reusable project facts; keep one-off implementation steps out of baseline candidates.",
     "Break task.md implementation items into small, verifiable vertical slices. Keep file-level edits as implementation details, not primary checklist items.",
     "Match the user's language in user-visible planning text. If the accepted spec or user request is Chinese, write plan summaries, task items, risks, and evidence notes in Chinese except commands, file paths, API names, code identifiers, and product names.",
@@ -199,6 +200,7 @@ const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>
   ],
   "ff-run": [
     "Run executes the accepted task contract. Do not expand product behavior or implementation scope beyond spec.md and plan.md without user confirmation.",
+    "Refresh context-package.md before delegating implementation slices when a task id is known; stale, incomplete, or uncertain packages require reading original task artifacts and git information.",
     "Behavior changes require test evidence by default. Use red-green TDD when a clear public seam exists; use commands, fixtures, snapshots, file checks, or manual review when those are the right evidence.",
     "Use `ff-implementer` for independent vertical slices only when the harness, tools, and user or environment permission allow delegation; otherwise implement the same checklist items inline.",
     "Delegated implementers may write code and update checklist progress, but they must not close tasks or decide requirement drift.",
@@ -208,6 +210,8 @@ const commandGuidance: Partial<Record<(typeof AGENT_COMMANDS)[number], string[]>
   "ff-check": [
     "Artifact alignment review checks spec.md, plan.md, and task.md for contradiction, missing coverage, overbuilding, unclear interfaces, and placeholder work.",
     "Implementation evidence review maps every acceptance criterion to evidence in task.md Verification or Check entries. Evidence can be tests, commands, file checks, CI/CD or test-environment notes, or manual verification.",
+    "Refresh context-package.md before review/check when a task id is known, then use it as navigation only. Stale manifests, missing sections, or uncertain diff entries require reading original task artifacts and git information.",
+    "Do not issue a spec verdict from a diff summary alone. Review/check verdicts must compare the diff, task brief, accepted spec, acceptance criteria, and verification evidence.",
     "CI/CD or test-environment evidence states environment, action, and result without relying on commit identity.",
     "Small local defects may be fixed during check when the accepted spec.md contract is unchanged. Changes to spec.md or out-of-scope implementation behavior return to clarify for user confirmation.",
     "Check owns the final Baseline Outcome. Update baseline-delta.md for stable reusable facts, or record that there are no reusable project facts or that candidates are not stable yet.",
@@ -312,6 +316,7 @@ const roleAgentDefinitions: Record<AgentRoleName, RoleAgentDefinition> = {
       "Emit concise advisory feedback with severity nit, concern, or blocker.",
       "Challenge missing motivation, vague acceptance criteria, skipped verification, unsafe worktree handling, and spec drift.",
       "For ff-clarify, bind feedback to the current attempt_id, proposal_id, or proposal hash so old review cannot approve a new proposal.",
+      "Use context packages only as navigation; clarify verdicts must inspect the current spec.md and proposal identity.",
       "Deduplicate advice and stay within sync_backlog from .ff/orchestration.json."
     ],
     boundaries: [
@@ -352,6 +357,7 @@ const roleAgentDefinitions: Record<AgentRoleName, RoleAgentDefinition> = {
     useWhen: ["The current task phase is run.", "A vertical implementation slice is independent enough for delegation."],
     responsibilities: [
       "Read spec.md, plan.md, task.md, relevant Project Baseline, and necessary code.",
+      "Use a current context package to reduce handoff reading, then fall back to original artifacts when the package is stale, incomplete, or uncertain.",
       "Modify code and tests within the accepted task contract.",
       "Update task.md progress for completed implementation items.",
       "Append material progress through Flowflow helpers when delegated tooling permits it."
@@ -371,6 +377,7 @@ const roleAgentDefinitions: Record<AgentRoleName, RoleAgentDefinition> = {
     responsibilities: [
       "Map every acceptance criterion to evidence.",
       "Inspect spec.md, plan.md, task.md, and relevant code for contradiction or overbuild.",
+      "Never give a spec verdict from a diff summary alone; compare diff, task brief, accepted spec, acceptance criteria, and verification evidence.",
       "Prioritize bugs, regressions, and missing verification.",
       "Separate findings from style preferences."
     ],
@@ -389,6 +396,7 @@ const roleAgentDefinitions: Record<AgentRoleName, RoleAgentDefinition> = {
     responsibilities: [
       "Run relevant commands from .ff/project/commands.md.",
       "Record verification evidence in task.md.",
+      "Refresh or read the context package before check, but return to original .ff files and git information for stale manifests, missing sections, or uncertain diff entries.",
       "Fix small local defects when the accepted spec is unchanged.",
       "Report spec drift or behavior changes instead of resolving them silently."
     ],
@@ -704,6 +712,7 @@ ${definition.boundaries.map((item) => `- ${item}`).join("\n")}
 - .ff/orchestration.json when present
 - Relevant .ff/project files
 - Current task files under .ff/tasks/<task-id>/ when a task exists
+- Current task context-package.md and context-package.manifest.json when present and current
 - Minimal code context needed for the assigned role
 
 ## Report Format
@@ -786,6 +795,7 @@ ${commandPurposes[command]}
 - .ff/project/rules.md
 - .ff/project/commands.md
 - Current task files under .ff/tasks/<task-id>/ when a task exists
+- Current task context package under .ff/tasks/<task-id>/context-package.md when present and current
 
 ## Rules
 
@@ -793,6 +803,7 @@ ${commandPurposes[command]}
 - Use Git as the source of truth for code changes.
 - Use ff internal helpers for deterministic task state changes and trace events.
 - Keep edits scoped to the current workflow action.
+- Treat context-package.md as a generated cache; refresh it or fall back to original .ff files and git information when it is missing, stale, incomplete, or uncertain.
 - Stop for user judgment when requirements, product behavior, destructive worktree handling, workflow overrides, or baseline promotion need confirmation.
 - Inline execution must remain complete; if optional helpers are unavailable, continue inline when responsible.
 
@@ -820,6 +831,7 @@ ${commandSteps[command].map((step, index) => `${index + 1}. ${step}`).join("\n")
 - ff internal ensure-baseline-delta --task <task-id>
 - ff internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped [--selected-files <overview.md,architecture.md,rules.md,commands.md>] [--edited-content <confirmed-current-state-sections>]
 - ff internal consume-resume --task <task-id>
+- ff internal refresh-context-package --task <task-id>
 `;
 }
 
@@ -834,7 +846,9 @@ function renderExecutionStrategyGuidance(command: (typeof AGENT_COMMANDS)[number
 - Use \`.ff/orchestration.json\` and generated \`ff-<role>\` agent files as the role and model contract when delegation is available.
 - Explicitly ask the harness to spawn the named \`ff-<role>\` agent for bounded delegated work; Codex only spawns subagents after the main session asks.
 - Delegation is optional and permission-bound; continue inline when delegation is unavailable or unauthorized.
-- Delegated work receives task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
+- Before delegated work, run \`ff internal refresh-context-package --task <task-id>\` when a task id is known, then provide context-package.md plus any role-specific original files that remain necessary.
+- Delegated work receives the current context package, task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
+- The context package is not Repo Truth; stale manifests, missing sections, uncertain diff entries, or verdict work require reading original .ff files and git information.
 - Delegated agents must not close tasks; closure decisions and unresolved drift return to the main session.
 ${renderRoleRoutingGuidance(command)}
 

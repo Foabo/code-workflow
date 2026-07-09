@@ -43,6 +43,7 @@ Draft current-state Project Baseline updates from an accepted baseline-delta.md.
 - .ff/orchestration.json when present
 - Relevant .ff/project files
 - Current task files under .ff/tasks/<task-id>/ when a task exists
+- Current task context-package.md and context-package.manifest.json when present and current
 - Minimal code context needed for the assigned role
 
 ## Report Format

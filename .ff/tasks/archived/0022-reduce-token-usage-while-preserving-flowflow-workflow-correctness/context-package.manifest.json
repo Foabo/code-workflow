@@ -1,0 +1,505 @@
+{
+  "schema_version": 1,
+  "generator_version": 1,
+  "task_id": "0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness",
+  "package_path": ".ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/context-package.md",
+  "manifest_path": ".ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/context-package.manifest.json",
+  "generated_at": "2026-07-09T13:21:30.440Z",
+  "status": "current",
+  "inputs": {
+    "files": [
+      {
+        "path": ".ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/spec.md",
+        "sha256": "4c157cee64847c297fd23ac882aa43ab7289bd8c2cecd46791156faf14806c25",
+        "bytes": 8015,
+        "missing": false
+      },
+      {
+        "path": ".ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/plan.md",
+        "sha256": "8520fbb2718118c8bc870bef0b0745ad5f0eec8ea67dd3b661c28891520dec08",
+        "bytes": 4273,
+        "missing": false
+      },
+      {
+        "path": ".ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/task.md",
+        "sha256": "0ceeb5cbfea2dc8593f5fce15483c654c5572dfdc7ac790e1343de58f7dcd648",
+        "bytes": 10933,
+        "missing": false
+      },
+      {
+        "path": ".ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/trace.jsonl",
+        "sha256": "71f903c8e7d39d09670b98aca0388e12b4a888a1c518b2f29b1988bc79261848",
+        "bytes": 4629,
+        "missing": false
+      },
+      {
+        "path": ".ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/task.json",
+        "sha256": "5253874bb6da7c5999441eda5cf4c9b92a9b245e89aec415395c02b0852ec9e0",
+        "bytes": 717,
+        "missing": false
+      },
+      {
+        "path": ".ff/project/overview.md",
+        "sha256": "424a3496466ef8fb5f7da7429024c9a41ecad7d91d87daa1137a6bb1a823a239",
+        "bytes": 922,
+        "missing": false
+      },
+      {
+        "path": ".ff/project/architecture.md",
+        "sha256": "5999dbf7a524e479a6a2178b34214b14b316c83773aef72a89f435f04e6ff39b",
+        "bytes": 4818,
+        "missing": false
+      },
+      {
+        "path": ".ff/project/rules.md",
+        "sha256": "79ee1451abde67a23f32ad0db657ee4f0fb7d7b8220e0cacf570d9d29bb7ddba",
+        "bytes": 5591,
+        "missing": false
+      },
+      {
+        "path": ".ff/project/commands.md",
+        "sha256": "99511dc0cb366c9986075e05b24694bb989b9a844f03614c2549a1c3d1d3b135",
+        "bytes": 2293,
+        "missing": false
+      }
+    ],
+    "git_status": [
+      " M .agents/skills/ff-check/SKILL.md",
+      " M .agents/skills/ff-clarify/SKILL.md",
+      " M .agents/skills/ff-discard/SKILL.md",
+      " M .agents/skills/ff-doctor/SKILL.md",
+      " M .agents/skills/ff-finish/SKILL.md",
+      " M .agents/skills/ff-plan/SKILL.md",
+      " M .agents/skills/ff-resume/SKILL.md",
+      " M .agents/skills/ff-run/SKILL.md",
+      " M .agents/skills/ff-understand/SKILL.md",
+      " M .agents/skills/ff-work/SKILL.md",
+      " M .claude/agents/ff-advisor.md",
+      " M .claude/agents/ff-baseline-writer.md",
+      " M .claude/agents/ff-checker.md",
+      " M .claude/agents/ff-implementer.md",
+      " M .claude/agents/ff-planner.md",
+      " M .claude/agents/ff-reviewer.md",
+      " M .claude/skills/ff-check/SKILL.md",
+      " M .claude/skills/ff-clarify/SKILL.md",
+      " M .claude/skills/ff-discard/SKILL.md",
+      " M .claude/skills/ff-doctor/SKILL.md",
+      " M .claude/skills/ff-finish/SKILL.md",
+      " M .claude/skills/ff-plan/SKILL.md",
+      " M .claude/skills/ff-resume/SKILL.md",
+      " M .claude/skills/ff-run/SKILL.md",
+      " M .claude/skills/ff-understand/SKILL.md",
+      " M .claude/skills/ff-work/SKILL.md",
+      " M .codex/agents/ff-advisor.toml",
+      " M .codex/agents/ff-baseline-writer.toml",
+      " M .codex/agents/ff-checker.toml",
+      " M .codex/agents/ff-implementer.toml",
+      " M .codex/agents/ff-planner.toml",
+      " M .codex/agents/ff-reviewer.toml",
+      " M .cursor/agents/ff-advisor.md",
+      " M .cursor/agents/ff-baseline-writer.md",
+      " M .cursor/agents/ff-checker.md",
+      " M .cursor/agents/ff-implementer.md",
+      " M .cursor/agents/ff-planner.md",
+      " M .cursor/agents/ff-reviewer.md",
+      " M .ff/project/architecture.md",
+      " M .ff/project/commands.md",
+      " M .ff/project/rules.md",
+      "?? .ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/baseline-delta.md",
+      "?? .ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/context-package.manifest.json",
+      "?? .ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/context-package.md",
+      "?? .ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/plan.md",
+      "?? .ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/spec.md",
+      "?? .ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/task.json",
+      "?? .ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/task.md",
+      "?? .ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/trace.jsonl",
+      " M .opencode/agents/ff-advisor.md",
+      " M .opencode/agents/ff-baseline-writer.md",
+      " M .opencode/agents/ff-checker.md",
+      " M .opencode/agents/ff-implementer.md",
+      " M .opencode/agents/ff-planner.md",
+      " M .opencode/agents/ff-reviewer.md",
+      " M .pi/agents/ff-advisor.md",
+      " M .pi/agents/ff-baseline-writer.md",
+      " M .pi/agents/ff-checker.md",
+      " M .pi/agents/ff-implementer.md",
+      " M .pi/agents/ff-planner.md",
+      " M .pi/agents/ff-reviewer.md",
+      " M src/cli/help.ts",
+      " M src/cli/index.ts",
+      " M src/harness/adapters.ts",
+      "?? src/tasks/context-package.ts",
+      " M src/tasks/index.ts",
+      " M tests/cli/help.test.ts",
+      " M tests/harness/harness.test.ts",
+      " M tests/support/kernel.ts",
+      " M tests/tasks/tasks.test.ts"
+    ],
+    "git_status_hash": "ceba5630330944b5806cddcbc58911d9308421a73a419b0b7220e2b52f088fcd",
+    "diff_hash": "0446869f5472f7145a0a2cc245debef95d89ad1761bc24b0cc6d3ca00c0c960e"
+  },
+  "diff": {
+    "included": [
+      {
+        "status": "??",
+        "path": ".ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/baseline-delta.md",
+        "reason": "current task artifact or generated package"
+      },
+      {
+        "status": "??",
+        "path": ".ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/context-package.manifest.json",
+        "reason": "current task artifact or generated package"
+      },
+      {
+        "status": "??",
+        "path": ".ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/context-package.md",
+        "reason": "current task artifact or generated package"
+      },
+      {
+        "status": "??",
+        "path": ".ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/plan.md",
+        "reason": "current task artifact or generated package"
+      },
+      {
+        "status": "??",
+        "path": ".ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/spec.md",
+        "reason": "current task artifact or generated package"
+      },
+      {
+        "status": "??",
+        "path": ".ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/task.json",
+        "reason": "current task artifact or generated package"
+      },
+      {
+        "status": "??",
+        "path": ".ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/task.md",
+        "reason": "current task artifact or generated package"
+      },
+      {
+        "status": "??",
+        "path": ".ff/tasks/0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness/trace.jsonl",
+        "reason": "current task artifact or generated package"
+      }
+    ],
+    "excluded": [],
+    "uncertain": [
+      {
+        "status": "M",
+        "path": ".agents/skills/ff-check/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".agents/skills/ff-clarify/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".agents/skills/ff-discard/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".agents/skills/ff-doctor/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".agents/skills/ff-finish/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".agents/skills/ff-plan/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".agents/skills/ff-resume/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".agents/skills/ff-run/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".agents/skills/ff-understand/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".agents/skills/ff-work/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".claude/agents/ff-advisor.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".claude/agents/ff-baseline-writer.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".claude/agents/ff-checker.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".claude/agents/ff-implementer.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".claude/agents/ff-planner.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".claude/agents/ff-reviewer.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".claude/skills/ff-check/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".claude/skills/ff-clarify/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".claude/skills/ff-discard/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".claude/skills/ff-doctor/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".claude/skills/ff-finish/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".claude/skills/ff-plan/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".claude/skills/ff-resume/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".claude/skills/ff-run/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".claude/skills/ff-understand/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".claude/skills/ff-work/SKILL.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".codex/agents/ff-advisor.toml",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".codex/agents/ff-baseline-writer.toml",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".codex/agents/ff-checker.toml",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".codex/agents/ff-implementer.toml",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".codex/agents/ff-planner.toml",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".codex/agents/ff-reviewer.toml",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".cursor/agents/ff-advisor.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".cursor/agents/ff-baseline-writer.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".cursor/agents/ff-checker.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".cursor/agents/ff-implementer.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".cursor/agents/ff-planner.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".cursor/agents/ff-reviewer.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".ff/project/architecture.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".ff/project/commands.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".ff/project/rules.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".opencode/agents/ff-advisor.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".opencode/agents/ff-baseline-writer.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".opencode/agents/ff-checker.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".opencode/agents/ff-implementer.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".opencode/agents/ff-planner.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".opencode/agents/ff-reviewer.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".pi/agents/ff-advisor.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".pi/agents/ff-baseline-writer.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".pi/agents/ff-checker.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".pi/agents/ff-implementer.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".pi/agents/ff-planner.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": ".pi/agents/ff-reviewer.md",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": "src/cli/help.ts",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": "src/cli/index.ts",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": "src/harness/adapters.ts",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "??",
+        "path": "src/tasks/context-package.ts",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": "src/tasks/index.ts",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": "tests/cli/help.test.ts",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": "tests/harness/harness.test.ts",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": "tests/support/kernel.ts",
+        "reason": "outside the current task path; read original git diff before verdict"
+      },
+      {
+        "status": "M",
+        "path": "tests/tasks/tasks.test.ts",
+        "reason": "outside the current task path; read original git diff before verdict"
+      }
+    ]
+  },
+  "metrics": {
+    "package_bytes": 22158,
+    "role_handoff_raw_bytes": 42191,
+    "role_handoff_savings_percent": 47.48,
+    "review_check_raw_bytes": 48222,
+    "review_check_savings_percent": 54.05
+  }
+}

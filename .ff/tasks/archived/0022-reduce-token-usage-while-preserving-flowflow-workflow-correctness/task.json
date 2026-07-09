@@ -1,0 +1,22 @@
+{
+  "id": "0022-reduce-token-usage-while-preserving-flowflow-workflow-correctness",
+  "title": "Reduce token usage while preserving Flowflow workflow correctness",
+  "lifecycle": "closed",
+  "phase": "finish",
+  "next_action": "Task is closed",
+  "health_flags": [],
+  "artifacts": {
+    "spec": "spec.md",
+    "plan": "plan.md",
+    "task": "task.md",
+    "baseline_delta": "baseline-delta.md",
+    "resume": null
+  },
+  "invalidated_artifacts": [],
+  "blocked_reason": null,
+  "parked_reason": null,
+  "resume_condition": null,
+  "created_at": "2026-07-09T12:26:46.329Z",
+  "updated_at": "2026-07-09T13:21:30.693Z",
+  "schema_version": 1
+}

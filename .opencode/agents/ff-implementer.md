@@ -28,6 +28,7 @@ Execute task.md implementation checklist items against the accepted spec and pla
 ## Responsibilities
 
 - Read spec.md, plan.md, task.md, relevant Project Baseline, and necessary code.
+- Use a current context package to reduce handoff reading, then fall back to original artifacts when the package is stale, incomplete, or uncertain.
 - Modify code and tests within the accepted task contract.
 - Update task.md progress for completed implementation items.
 - Append material progress through Flowflow helpers when delegated tooling permits it.
@@ -44,6 +45,7 @@ Execute task.md implementation checklist items against the accepted spec and pla
 - .ff/orchestration.json when present
 - Relevant .ff/project files
 - Current task files under .ff/tasks/<task-id>/ when a task exists
+- Current task context-package.md and context-package.manifest.json when present and current
 - Minimal code context needed for the assigned role
 
 ## Report Format

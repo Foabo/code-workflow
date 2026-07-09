@@ -19,6 +19,7 @@ Execute the next checklist items from task.md, modify repository code, update pr
 - .ff/project/rules.md
 - .ff/project/commands.md
 - Current task files under .ff/tasks/<task-id>/ when a task exists
+- Current task context package under .ff/tasks/<task-id>/context-package.md when present and current
 
 ## Rules
 
@@ -26,6 +27,7 @@ Execute the next checklist items from task.md, modify repository code, update pr
 - Use Git as the source of truth for code changes.
 - Use ff internal helpers for deterministic task state changes and trace events.
 - Keep edits scoped to the current workflow action.
+- Treat context-package.md as a generated cache; refresh it or fall back to original .ff files and git information when it is missing, stale, incomplete, or uncertain.
 - Stop for user judgment when requirements, product behavior, destructive worktree handling, workflow overrides, or baseline promotion need confirmation.
 - Inline execution must remain complete; if optional helpers are unavailable, continue inline when responsible.
 
@@ -35,7 +37,9 @@ Execute the next checklist items from task.md, modify repository code, update pr
 - Use `.ff/orchestration.json` and generated `ff-<role>` agent files as the role and model contract when delegation is available.
 - Explicitly ask the harness to spawn the named `ff-<role>` agent for bounded delegated work; Codex only spawns subagents after the main session asks.
 - Delegation is optional and permission-bound; continue inline when delegation is unavailable or unauthorized.
-- Delegated work receives task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
+- Before delegated work, run `ff internal refresh-context-package --task <task-id>` when a task id is known, then provide context-package.md plus any role-specific original files that remain necessary.
+- Delegated work receives the current context package, task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
+- The context package is not Repo Truth; stale manifests, missing sections, uncertain diff entries, or verdict work require reading original .ff files and git information.
 - Delegated agents must not close tasks; closure decisions and unresolved drift return to the main session.
 
 Role routing for this command:
@@ -59,6 +63,7 @@ Role routing for this command:
 ## Phase Guidance
 
 - Run executes the accepted task contract. Do not expand product behavior or implementation scope beyond spec.md and plan.md without user confirmation.
+- Refresh context-package.md before delegating implementation slices when a task id is known; stale, incomplete, or uncertain packages require reading original task artifacts and git information.
 - Behavior changes require test evidence by default. Use red-green TDD when a clear public seam exists; use commands, fixtures, snapshots, file checks, or manual review when those are the right evidence.
 - Use `ff-implementer` for independent vertical slices only when the harness, tools, and user or environment permission allow delegation; otherwise implement the same checklist items inline.
 - Delegated implementers may write code and update checklist progress, but they must not close tasks or decide requirement drift.
@@ -86,3 +91,4 @@ Role routing for this command:
 - ff internal ensure-baseline-delta --task <task-id>
 - ff internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped [--selected-files <overview.md,architecture.md,rules.md,commands.md>] [--edited-content <confirmed-current-state-sections>]
 - ff internal consume-resume --task <task-id>
+- ff internal refresh-context-package --task <task-id>

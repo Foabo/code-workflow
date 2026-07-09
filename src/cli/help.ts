@@ -22,6 +22,7 @@ export type InternalHelper =
   | "ensure-baseline-delta"
   | "sync-baseline-delta"
   | "consume-resume"
+  | "refresh-context-package"
   | "migrate-task-ids"
   | "propose-spec"
   | "accept-spec";
@@ -145,6 +146,7 @@ export const INTERNAL_HELPERS: readonly HelpEntry<InternalHelper>[] = [
   helper("ensure-baseline-delta", "Create a task-local baseline-delta.md when needed.", "ff internal ensure-baseline-delta --task <id>", ["--task <id>  Task id."]),
   helper("sync-baseline-delta", "Apply a task-local baseline delta decision.", "ff internal sync-baseline-delta --task <id> --decision accepted|selected|edited|skipped [--selected-files <files>] [--edited-content <markdown>]", ["--task <id>  Task id.", "--decision <decision>  Baseline sync decision."]),
   helper("consume-resume", "Consume a task resume note after progress.", "ff internal consume-resume --task <id>", ["--task <id>  Task id."]),
+  helper("refresh-context-package", "Generate or refresh a task context package.", "ff internal refresh-context-package --task <id>", ["--task <id>  Task id."]),
   helper("migrate-task-ids", "Migrate legacy task ids into the current task-id format.", "ff internal migrate-task-ids [--root <path>]", ["--root <path>  Repository root; defaults to the current directory."]),
   helper("propose-spec", "Record a spec proposal identity from spec.md.", "ff internal propose-spec --task <id> --spec-file <path>", ["--task <id>  Task id.", "--spec-file <path>  Spec file to hash and bind."]),
   helper("accept-spec", "Record advisor review and explicit spec acceptance.", "ff internal accept-spec --task <id> --verdict pass|concern|blocker [...]", ["--task <id>  Task id.", "--verdict <value>  pass, concern, or blocker.", "--advisor-unavailable  Use degraded advisor evidence path."])

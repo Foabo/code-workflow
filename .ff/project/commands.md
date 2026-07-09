@@ -31,3 +31,5 @@
 
 - Public command help is available through `ff --help`, `ff <command> --help`, `ff internal <helper> --help`, and `ff-<workflow> --help`.
 - Public internal helper help covers `create-task`, `select-task`, `append-trace`, `validate-clarify`, `set-state`, `finish-task`, `discard-task`, `create-resume`, `ensure-baseline-delta`, `sync-baseline-delta`, `consume-resume`, `migrate-task-ids`, `propose-spec`, and `accept-spec`.
+
+- `ff internal refresh-context-package --task <id>` 生成或刷新 `.ff/tasks/<task-id>/context-package.md` 与 `.ff/tasks/<task-id>/context-package.manifest.json`，并返回 status、stale flag、paths、metrics 和 diff classification。

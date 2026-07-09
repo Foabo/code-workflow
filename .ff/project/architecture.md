@@ -42,3 +42,6 @@
 
 - `ff update` uses `.ff/orchestration.json` as the durable source for Flowflow role agent model configuration. Generated role agent files remain invocation surfaces.
 - During update, Flowflow protects recognized user-edited role agent configuration fields before overwriting generated role agents: Codex TOML model fields and markdown/frontmatter model, temperature, tools, readonly, background, and capability-tier fields.
+
+- `src/tasks/` 负责确定性任务上下文包及其 manifest。它们是 task-local generated view，输入来自 task artifacts、trace、Project Baseline、git status 和 diff 输入。
+- `src/harness/` 只在渲染 workflow skills 和 role agents 时消费 context package guidance；context package 的事实生成不归 `src/harness/` 所有。

@@ -45,3 +45,17 @@ export { listTasks, selectTask } from "./store.js";
 export type { ListTasksInput, SelectTaskInput, TaskSummary } from "./store.js";
 
 export { TASK_ARTIFACT_TEMPLATES } from "./templates.js";
+
+export {
+  contextPackageManifestPath,
+  contextPackagePath,
+  refreshContextPackage
+} from "./context-package.js";
+export type {
+  ContextPackageDiffCategory,
+  ContextPackageDiffEntry,
+  ContextPackageManifest,
+  ContextPackageMetrics,
+  ContextPackageStatus,
+  RefreshContextPackageResult
+} from "./context-package.js";

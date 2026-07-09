@@ -25,6 +25,7 @@ Independent review for artifact alignment, implementation evidence, regressions,
 
 - Map every acceptance criterion to evidence.
 - Inspect spec.md, plan.md, task.md, and relevant code for contradiction or overbuild.
+- Never give a spec verdict from a diff summary alone; compare diff, task brief, accepted spec, acceptance criteria, and verification evidence.
 - Prioritize bugs, regressions, and missing verification.
 - Separate findings from style preferences.
 
@@ -40,6 +41,7 @@ Independent review for artifact alignment, implementation evidence, regressions,
 - .ff/orchestration.json when present
 - Relevant .ff/project files
 - Current task files under .ff/tasks/<task-id>/ when a task exists
+- Current task context-package.md and context-package.manifest.json when present and current
 - Minimal code context needed for the assigned role
 
 ## Report Format

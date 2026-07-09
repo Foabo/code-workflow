@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
 import { access, chmod, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
@@ -26,6 +28,7 @@ import {
   migrateTasksViaCli,
   parseCliJson,
   parseJsonOutput,
+  refreshContextPackageViaCli,
   readTaskStateFile,
   readTrace,
   runCli,
@@ -37,6 +40,8 @@ import {
   tempRoot,
   writeLegacyTask
 } from "../support/kernel.js";
+
+const execFileAsync = promisify(execFile);
 
 describe("ff tasks", () => {
   it("creates a task with core artifacts and append-only trace events", async () => {
@@ -239,6 +244,84 @@ describe("ff tasks", () => {
     assert.match(await readFile(path.join(root, ".ff/tasks/0001-resume-flow/trace.jsonl"), "utf8"), /resume.consumed/);
   });
 
+  it("generates a task context package with manifest fingerprints and dirty classification", async () => {
+    const root = await tempRoot();
+    await initProject(root);
+    await initGitRepository(root);
+    await createTaskViaCli(root, {
+      id: "0001-context-package",
+      title: "Context package"
+    });
+    await writeFile(
+      path.join(root, ".ff/tasks/0001-context-package/spec.md"),
+      [
+        "# Spec",
+        "",
+        "## Goal",
+        "",
+        "Reduce repeated task context reading.",
+        "",
+        "## Scope",
+        "",
+        "- Generate a package.",
+        "",
+        "## Acceptance Criteria",
+        "- [ ] package exists",
+        "- [ ] manifest exists",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
+    await writeFile(
+      path.join(root, ".ff/tasks/0001-context-package/task.md"),
+      "# Task\n\n## Implementation\n- [ ] Build package\n\n## Verification\n- [ ] Run tests\n\n## Check\n- [ ] Evidence\n",
+      "utf8"
+    );
+    await writeFile(path.join(root, "outside.txt"), "outside current task\n", "utf8");
+
+    const result = await refreshContextPackageViaCli(root, "0001-context-package");
+
+    assert.equal(result.ok, true);
+    assert.equal(result.status, "created");
+    assert.equal(result.stale, true);
+    assert.equal(result.package_path, ".ff/tasks/0001-context-package/context-package.md");
+    assert.equal(result.manifest_path, ".ff/tasks/0001-context-package/context-package.manifest.json");
+    const packageText = await readFile(path.join(root, ".ff/tasks/0001-context-package/context-package.md"), "utf8");
+    assert.match(packageText, /# Context Package/);
+    assert.match(packageText, /## Task Brief/);
+    assert.match(packageText, /## Acceptance Criteria/);
+    assert.match(packageText, /package exists/);
+    assert.match(packageText, /## Git Status/);
+    assert.match(packageText, /## Diff Classification/);
+    assert.match(packageText, /Do not give a spec verdict from diff summary alone/);
+    const manifest = JSON.parse(
+      await readFile(path.join(root, ".ff/tasks/0001-context-package/context-package.manifest.json"), "utf8")
+    ) as Record<string, unknown>;
+    assert.equal(manifest.task_id, "0001-context-package");
+    assert.equal(manifest.generator_version, 1);
+    assert.ok(Array.isArray((manifest.inputs as Record<string, unknown>).files));
+    const diff = manifest.diff as Record<string, Array<{ path: string }>>;
+    assert.ok(diff.included.some((entry) => entry.path === ".ff/tasks/0001-context-package" || entry.path.startsWith(".ff/tasks/0001-context-package/")));
+    assert.ok(diff.uncertain.some((entry) => entry.path === "outside.txt"));
+    const metrics = manifest.metrics as Record<string, number>;
+    assert.ok(metrics.package_bytes > 0);
+    assert.ok(metrics.role_handoff_raw_bytes > 0);
+    assert.equal(typeof metrics.role_handoff_savings_percent, "number");
+
+    const current = await refreshContextPackageViaCli(root, "0001-context-package");
+    assert.equal(current.status, "current");
+    assert.equal(current.stale, false);
+    const currentManifest = JSON.parse(
+      await readFile(path.join(root, ".ff/tasks/0001-context-package/context-package.manifest.json"), "utf8")
+    ) as Record<string, unknown>;
+    assert.equal(currentManifest.status, "current");
+
+    await writeFile(path.join(root, ".ff/tasks/0001-context-package/spec.md"), `${packageText}\nchanged input\n`, "utf8");
+    const refreshed = await refreshContextPackageViaCli(root, "0001-context-package");
+    assert.equal(refreshed.status, "refreshed");
+    assert.equal(refreshed.stale, true);
+  });
+
 
   it("discards a task only with explicit confirmation", async () => {
     const root = await tempRoot();
@@ -314,3 +397,9 @@ describe("ff tasks", () => {
   });
 
 });
+
+async function initGitRepository(root: string): Promise<void> {
+  await execFileAsync("git", ["init"], { cwd: root });
+  await execFileAsync("git", ["add", "."], { cwd: root });
+  await execFileAsync("git", ["-c", "user.email=flowflow@example.test", "-c", "user.name=Flowflow Test", "commit", "-m", "baseline"], { cwd: root });
+}

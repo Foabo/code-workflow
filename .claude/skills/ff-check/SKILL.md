@@ -19,6 +19,7 @@ Run verification and review, reconcile drift, and update task.md before finish i
 - .ff/project/rules.md
 - .ff/project/commands.md
 - Current task files under .ff/tasks/<task-id>/ when a task exists
+- Current task context package under .ff/tasks/<task-id>/context-package.md when present and current
 
 ## Rules
 
@@ -26,6 +27,7 @@ Run verification and review, reconcile drift, and update task.md before finish i
 - Use Git as the source of truth for code changes.
 - Use ff internal helpers for deterministic task state changes and trace events.
 - Keep edits scoped to the current workflow action.
+- Treat context-package.md as a generated cache; refresh it or fall back to original .ff files and git information when it is missing, stale, incomplete, or uncertain.
 - Stop for user judgment when requirements, product behavior, destructive worktree handling, workflow overrides, or baseline promotion need confirmation.
 - Inline execution must remain complete; if optional helpers are unavailable, continue inline when responsible.
 
@@ -35,7 +37,9 @@ Run verification and review, reconcile drift, and update task.md before finish i
 - Use `.ff/orchestration.json` and generated `ff-<role>` agent files as the role and model contract when delegation is available.
 - Explicitly ask the harness to spawn the named `ff-<role>` agent for bounded delegated work; Codex only spawns subagents after the main session asks.
 - Delegation is optional and permission-bound; continue inline when delegation is unavailable or unauthorized.
-- Delegated work receives task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
+- Before delegated work, run `ff internal refresh-context-package --task <task-id>` when a task id is known, then provide context-package.md plus any role-specific original files that remain necessary.
+- Delegated work receives the current context package, task artifacts, relevant Project Baseline files, and necessary code context rather than full chat history.
+- The context package is not Repo Truth; stale manifests, missing sections, uncertain diff entries, or verdict work require reading original .ff files and git information.
 - Delegated agents must not close tasks; closure decisions and unresolved drift return to the main session.
 
 Role routing for this command:
@@ -61,6 +65,8 @@ Role routing for this command:
 
 - Artifact alignment review checks spec.md, plan.md, and task.md for contradiction, missing coverage, overbuilding, unclear interfaces, and placeholder work.
 - Implementation evidence review maps every acceptance criterion to evidence in task.md Verification or Check entries. Evidence can be tests, commands, file checks, CI/CD or test-environment notes, or manual verification.
+- Refresh context-package.md before review/check when a task id is known, then use it as navigation only. Stale manifests, missing sections, or uncertain diff entries require reading original task artifacts and git information.
+- Do not issue a spec verdict from a diff summary alone. Review/check verdicts must compare the diff, task brief, accepted spec, acceptance criteria, and verification evidence.
 - CI/CD or test-environment evidence states environment, action, and result without relying on commit identity.
 - Small local defects may be fixed during check when the accepted spec.md contract is unchanged. Changes to spec.md or out-of-scope implementation behavior return to clarify for user confirmation.
 - Check owns the final Baseline Outcome. Update baseline-delta.md for stable reusable facts, or record that there are no reusable project facts or that candidates are not stable yet.
@@ -89,3 +95,4 @@ Role routing for this command:
 - ff internal ensure-baseline-delta --task <task-id>
 - ff internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped [--selected-files <overview.md,architecture.md,rules.md,commands.md>] [--edited-content <confirmed-current-state-sections>]
 - ff internal consume-resume --task <task-id>
+- ff internal refresh-context-package --task <task-id>

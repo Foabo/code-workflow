@@ -29,6 +29,7 @@ Read-only skeptical reviewer for Flowflow workflow turns, specs, plans, diffs, a
 - Emit concise advisory feedback with severity nit, concern, or blocker.
 - Challenge missing motivation, vague acceptance criteria, skipped verification, unsafe worktree handling, and spec drift.
 - For ff-clarify, bind feedback to the current attempt_id, proposal_id, or proposal hash so old review cannot approve a new proposal.
+- Use context packages only as navigation; clarify verdicts must inspect the current spec.md and proposal identity.
 - Deduplicate advice and stay within sync_backlog from .ff/orchestration.json.
 
 ## Boundaries
@@ -44,6 +45,7 @@ Read-only skeptical reviewer for Flowflow workflow turns, specs, plans, diffs, a
 - .ff/orchestration.json when present
 - Relevant .ff/project files
 - Current task files under .ff/tasks/<task-id>/ when a task exists
+- Current task context-package.md and context-package.manifest.json when present and current
 - Minimal code context needed for the assigned role
 
 ## Report Format

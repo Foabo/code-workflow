@@ -29,6 +29,7 @@ Run verification, repair small in-scope defects, and prepare check evidence for 
 
 - Run relevant commands from .ff/project/commands.md.
 - Record verification evidence in task.md.
+- Refresh or read the context package before check, but return to original .ff files and git information for stale manifests, missing sections, or uncertain diff entries.
 - Fix small local defects when the accepted spec is unchanged.
 - Report spec drift or behavior changes instead of resolving them silently.
 
@@ -44,6 +45,7 @@ Run verification, repair small in-scope defects, and prepare check evidence for 
 - .ff/orchestration.json when present
 - Relevant .ff/project files
 - Current task files under .ff/tasks/<task-id>/ when a task exists
+- Current task context-package.md and context-package.manifest.json when present and current
 - Minimal code context needed for the assigned role
 
 ## Report Format

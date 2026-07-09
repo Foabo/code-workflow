@@ -19,6 +19,7 @@ Abandon a task after user-confirmed worktree handling, then remove the task reco
 - .ff/project/rules.md
 - .ff/project/commands.md
 - Current task files under .ff/tasks/<task-id>/ when a task exists
+- Current task context package under .ff/tasks/<task-id>/context-package.md when present and current
 
 ## Rules
 
@@ -26,6 +27,7 @@ Abandon a task after user-confirmed worktree handling, then remove the task reco
 - Use Git as the source of truth for code changes.
 - Use ff internal helpers for deterministic task state changes and trace events.
 - Keep edits scoped to the current workflow action.
+- Treat context-package.md as a generated cache; refresh it or fall back to original .ff files and git information when it is missing, stale, incomplete, or uncertain.
 - Stop for user judgment when requirements, product behavior, destructive worktree handling, workflow overrides, or baseline promotion need confirmation.
 - Inline execution must remain complete; if optional helpers are unavailable, continue inline when responsible.
 
@@ -56,3 +58,4 @@ Abandon a task after user-confirmed worktree handling, then remove the task reco
 - ff internal ensure-baseline-delta --task <task-id>
 - ff internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped [--selected-files <overview.md,architecture.md,rules.md,commands.md>] [--edited-content <confirmed-current-state-sections>]
 - ff internal consume-resume --task <task-id>
+- ff internal refresh-context-package --task <task-id>

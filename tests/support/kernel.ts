@@ -209,6 +209,10 @@ export async function consumeResumeNoteViaCli(root: string, taskId: string): Pro
   return cliJson<TaskStateRecord>(["internal", "consume-resume", "--root", root, "--task", taskId]);
 }
 
+export async function refreshContextPackageViaCli(root: string, taskId: string): Promise<Record<string, unknown>> {
+  return cliJson<Record<string, unknown>>(["internal", "refresh-context-package", "--root", root, "--task", taskId]);
+}
+
 export async function ensureBaselineDeltaViaCli(root: string, taskId: string): Promise<TaskStateRecord> {
   return cliJson<TaskStateRecord>(["internal", "ensure-baseline-delta", "--root", root, "--task", taskId]);
 }
