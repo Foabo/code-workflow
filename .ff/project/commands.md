@@ -28,3 +28,6 @@
 
 - `ff update --harness <codex|claude|opencode|pi|cursor>` refreshes generated skills, role agents, and local watchdog artifacts, then reports a restart/reload notice when the update completes successfully.
 - `ff update --force --harness <codex|claude|opencode|pi|cursor>` intentionally overwrites protected generated role agent configuration from `.ff/orchestration.json`.
+
+- Public command help is available through `ff --help`, `ff <command> --help`, `ff internal <helper> --help`, and `ff-<workflow> --help`.
+- Public internal helper help covers `create-task`, `select-task`, `append-trace`, `validate-clarify`, `set-state`, `finish-task`, `discard-task`, `create-resume`, `ensure-baseline-delta`, `sync-baseline-delta`, `consume-resume`, `migrate-task-ids`, `propose-spec`, and `accept-spec`.

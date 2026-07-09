@@ -44,6 +44,12 @@ import {
 import { HarnessName } from "../harness/index.js";
 import { BaselineDecision, ensureBaselineDelta, syncBaselineDelta } from "../baseline/index.js";
 import { updateProject } from "../harness/index.js";
+import {
+  renderGlobalHelp,
+  renderInternalHelperHelp,
+  renderInternalOverviewHelp,
+  renderTopLevelCommandHelp
+} from "./help.js";
 
 type Flags = Record<string, string | boolean>;
 type Choice<T extends string> = {
@@ -101,6 +107,20 @@ export async function main(argv: string[]): Promise<number> {
   const root = initRoot(command, publicFlags, publicArgs.positional, internalFlags);
 
   try {
+    if (command === undefined || command === "--help") {
+      console.log(renderGlobalHelp());
+      return 0;
+    }
+    if (command !== "internal" && flagEnabled(publicFlags, "help")) {
+      const help = renderTopLevelCommandHelp(command);
+      if (help === null) {
+        printUsage();
+        return 1;
+      }
+      console.log(help);
+      return 0;
+    }
+
     switch (command) {
       case "init": {
         const prompts = flagEnabled(publicFlags, "yes") ? null : createPromptSession();
@@ -181,6 +201,20 @@ export async function main(argv: string[]): Promise<number> {
 
 async function runInternal(subcommand: string | undefined, args: string[], root: string): Promise<number> {
   const { flags } = parseFlags(args);
+
+  if (subcommand === undefined || subcommand === "--help" || flagEnabled(flags, "help")) {
+    if (subcommand === undefined || subcommand === "--help") {
+      console.log(renderInternalOverviewHelp());
+      return 0;
+    }
+    const help = renderInternalHelperHelp(subcommand);
+    if (help === null) {
+      printInternalUsage();
+      return 1;
+    }
+    console.log(help);
+    return 0;
+  }
 
   switch (subcommand) {
     case "create-task": {
@@ -1010,29 +1044,9 @@ function printJson(value: unknown): void {
 }
 
 function printUsage(): void {
-  console.log(`Usage:
-  ff init [path] [--root <path>] [--harness codex|claude|opencode|pi|cursor] [--code-index skipped|codebase-memory-mcp|aft|codegraph|graphify] [--context-memory skipped|codex-native-memories|claude-mem|magic-context] [--pi-subagents install|skipped] [--yes]
-  ff validate [--root <path>]
-  ff doctor [--root <path>]
-  ff update [--root <path>] [--harness codex|claude|opencode|pi|cursor] [--force]
-  ff tasks [--root <path>] [--archived|--all]
-  ff preflight --action <action> [--task <id>] [--root <path>]
-  ff internal <helper> [flags]`);
+  console.log(renderGlobalHelp());
 }
 
 function printInternalUsage(): void {
-  console.log(`Internal helpers:
-  ff internal create-task --title <title> [--id <id>] [--phase <phase>] [--next-action <text>]
-  ff internal select-task [--task <id>]
-  ff internal append-trace --task <id> --type <type> --summary <text>
-  ff internal propose-spec --task <id> --spec-file <path>
-  ff internal accept-spec --task <id> --verdict pass|concern|blocker [...] | --advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>
-  ff internal set-state --task <id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
-  ff internal finish-task --task <id> --summary <text> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none] [--edited-content <confirmed-current-state-sections>]
-  ff internal discard-task --task <id> --confirm [--worktree keep|stash|revert|delete-worktree|none]
-  ff internal create-resume --task <id> --content <markdown>
-  ff internal ensure-baseline-delta --task <id>
-  ff internal sync-baseline-delta --task <id> --decision accepted|selected|edited|skipped [--edited-content <confirmed-current-state-sections>]
-  ff internal consume-resume --task <id>
-  ff internal migrate-task-ids`);
+  console.log(renderInternalOverviewHelp());
 }

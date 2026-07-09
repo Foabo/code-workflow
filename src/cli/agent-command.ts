@@ -1,13 +1,27 @@
 #!/usr/bin/env node
 import path from "node:path";
 import { runWorkflowAction, WorkflowCommandAction, WorkflowOptions } from "../workflow/index.js";
+import { hasHelpFlag, renderWorkflowCommandHelp, renderWorkflowOverviewHelp } from "./help.js";
 
 type Flags = Record<string, string | boolean | string[]>;
 
 export async function main(argv = process.argv): Promise<number> {
   const commandName = path.basename(argv[1] ?? "");
+  if (commandName === "agent-command.js" && argv[2] === "--help") {
+    console.log(renderWorkflowOverviewHelp());
+    return 0;
+  }
   const action = actionFromCommand(commandName, argv[2]);
   const rawArgs = commandName === "agent-command.js" ? argv.slice(3) : argv.slice(2);
+  if (hasHelpFlag(rawArgs)) {
+    const help = renderWorkflowCommandHelp(action);
+    if (help === null) {
+      console.log(renderWorkflowOverviewHelp());
+      return 1;
+    }
+    console.log(help);
+    return 0;
+  }
   return await run(action, rawArgs);
 }
 

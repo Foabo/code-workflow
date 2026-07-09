@@ -48,3 +48,5 @@
 - Ordinary `ff update` must not silently overwrite recognized user-edited role agent configuration. Use `ff update --force` only when intentionally regenerating role agents from `.ff/orchestration.json`.
 - Direct edits to generated role agent files are protected only for recognized configuration fields; arbitrary generated instruction-body edits remain generated-output drift.
 - Generated `ff-clarify` guidance must show `accept-spec --advisor-unavailable` as mutually exclusive with `--verdict`.
+
+- Public CLI help requests must return before workflow execution, project checks, task selection, trace writes, resume-note consumption, or other repository state changes.

@@ -30,6 +30,7 @@
   "files": [
     "dist",
     "README.md",
+    "README.zh-CN.md",
     "DESIGN.md",
     "CONTEXT.md",
     "docs/adr"
