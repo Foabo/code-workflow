@@ -21,6 +21,8 @@ import { preflight, WorkflowAction } from "../workflow/index.js";
 import { listTasks, selectTask } from "../tasks/index.js";
 import {
   appendTrace,
+  assertCodeContext,
+  buildWorkPacketObserved,
   checkClosureGate,
   consumeResumeNote,
   createResumeNote,
@@ -28,7 +30,9 @@ import {
   discardTask,
   finishTask,
   migrateTasks,
+  parseWorkPacketRole,
   refreshContextPackage,
+  toWorkPacketHandoff,
   updateTaskState
 } from "../tasks/index.js";
 import { resolveTaskReference } from "../tasks/index.js";
@@ -350,6 +354,25 @@ async function runInternal(subcommand: string | undefined, args: string[], root:
       const taskId = await requiredActiveTaskId(root, flags);
       const task = await consumeResumeNote(root, taskId);
       printJson(task);
+      return 0;
+    }
+    case "build-work-packet": {
+      const taskId = await requiredActiveTaskId(root, flags);
+      const role = parseWorkPacketRole(requiredString(flags, "role"));
+      const codeContextFile = optionalString(flags, "code-context-file");
+      let codeContext;
+      if (codeContextFile !== undefined) {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(await readFile(codeContextFile, "utf8"));
+        } catch (error) {
+          throw new Error(`code context file could not be parsed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        assertCodeContext(parsed, "code context file");
+        codeContext = parsed;
+      }
+      const packet = await buildWorkPacketObserved(root, taskId, { role, codeContext });
+      printJson(toWorkPacketHandoff(packet));
       return 0;
     }
     case "refresh-context-package": {

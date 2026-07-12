@@ -9,13 +9,6 @@ tools: Read, Grep, Glob, Edit, MultiEdit, Bash
 
 Execute task.md implementation checklist items against the accepted spec and plan.
 
-## Harness
-
-- Platform: Claude
-- Flowflow role: implementer
-- Model profile: balanced, medium reasoning, platform default model, temperature 0.2
-- Configuration: .ff/orchestration.json owns advisor mode, role model profiles, and per-harness model overrides.
-
 ## Use When
 
 - The current task phase is run.
@@ -24,7 +17,7 @@ Execute task.md implementation checklist items against the accepted spec and pla
 ## Responsibilities
 
 - Read spec.md, plan.md, task.md, relevant Project Baseline, and necessary code.
-- Use a current context package to reduce handoff reading, then fall back to original artifacts when the package is stale, incomplete, or uncertain.
+- Use the supplied bounded task and code context; request missing contract details instead of scanning all task history.
 - Modify code and tests within the accepted task contract.
 - Update task.md progress for completed implementation items.
 - Append material progress through Flowflow helpers when delegated tooling permits it.
@@ -37,12 +30,10 @@ Execute task.md implementation checklist items against the accepted spec and pla
 
 ## Required Context
 
-- .ff/version.json
-- .ff/orchestration.json when present
-- Relevant .ff/project files
-- Current task files under .ff/tasks/<task-id>/ when a task exists
-- Current task context-package.md and context-package.manifest.json when present and current
-- Minimal code context needed for the assigned role
+- Supplied role-specific work packet and bounded task instruction
+- Supplied files, symbols, snippets, and code-discovery result when code evidence is required
+
+Do not inspect context-package.md, probe the code-index provider, or scan the repository by default. When required contract, diff, verification, or code context is missing, return degraded or insufficient-context instead of guessing, editing, or issuing a pass verdict.
 
 ## Report Format
 

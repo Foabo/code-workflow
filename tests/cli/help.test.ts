@@ -18,6 +18,7 @@ const INTERNAL_HELPERS = [
   "ensure-baseline-delta",
   "sync-baseline-delta",
   "consume-resume",
+  "build-work-packet",
   "refresh-context-package",
   "migrate-task-ids",
   "propose-spec",

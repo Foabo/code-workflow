@@ -51,6 +51,29 @@ export {
   contextPackagePath,
   refreshContextPackage
 } from "./context-package.js";
+
+export {
+  assertCodeContext,
+  buildWorkPacket,
+  buildWorkPacketObserved,
+  parseWorkPacketRole,
+  toWorkPacketHandoff,
+  validateCodeContext,
+  WORK_PACKET_MAX_HANDOFF_BYTES,
+  WORK_PACKET_ROLES,
+  WorkPacketBudgetError,
+  WorkPacketContextError
+} from "./work-packet.js";
+export type {
+  CodeContext,
+  CodeDiscoveryFallbackReason,
+  CodeDiscoveryStrategy,
+  CodeIndexProviderStatus,
+  CodeIndexToolVisibility,
+  WorkPacketEnvelope,
+  WorkPacketHandoff,
+  WorkPacketRole
+} from "./work-packet.js";
 export type {
   ContextPackageDiffCategory,
   ContextPackageDiffEntry,

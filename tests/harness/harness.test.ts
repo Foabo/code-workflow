@@ -38,6 +38,26 @@ import {
   writeLegacyTask
 } from "../support/kernel.js";
 
+type GeneratedHarness = "codex" | "claude" | "opencode" | "pi" | "cursor";
+
+function generatedRolePath(harness: GeneratedHarness, role: string): string {
+  const roots: Record<GeneratedHarness, string> = {
+    codex: ".codex/agents",
+    claude: ".claude/agents",
+    opencode: ".opencode/agents",
+    pi: ".pi/agents",
+    cursor: ".cursor/agents"
+  };
+  return `${roots[harness]}/ff-${role}.${harness === "codex" ? "toml" : "md"}`;
+}
+
+function generatedRoleBody(harness: GeneratedHarness, content: string): string {
+  if (harness === "codex") {
+    return /developer_instructions = """\n([\s\S]*?)\n"""/.exec(content)?.[1] ?? "";
+  }
+  return content.replace(/^---\n[\s\S]*?\n---\n+/, "");
+}
+
 describe("ff harness", () => {
   it("generates repo-local agent skills for the Codex harness", async () => {
     const root = await tempRoot();
@@ -63,12 +83,18 @@ describe("ff harness", () => {
     assert.match(skill, /## Execution Strategy Guidance/);
     assert.match(skill, /Inline execution must remain complete/);
     assert.match(skill, /\.ff\/orchestration\.json/);
-    assert.match(skill, /generated `ff-<role>` agent files/);
-    assert.match(skill, /Explicitly ask the harness to spawn the named `ff-<role>` agent/);
+    assert.match(skill, /`ff-<role>` agents for role\/model routing/);
     assert.match(skill, /Delegation is optional and permission-bound/);
-    assert.match(skill, /refresh-context-package/);
-    assert.match(skill, /context-package\.md/);
-    assert.match(skill, /The context package is not Repo Truth/);
+    assert.match(skill, /explicit diagnostic artifact/);
+    assert.match(skill, /Do not pass the full task set, context package, manifest/);
+    assert.match(skill, /packet already contains validated code context/);
+    assert.match(skill, /index is configured and its tool is visible, query it first/);
+    for (const status of ["call-failed", "failed", "skipped", "unconfigured", "tool-missing"]) {
+      assert.match(skill, new RegExp(status));
+    }
+    assert.match(skill, /build-work-packet --task <task-id> --role <role>/);
+    assertInOrder(skill, ["owns code discovery", "build-work-packet", "Spawn the named role"]);
+    assert.doesNotMatch(skill, /Before delegated work, run `ff internal refresh-context-package/);
     assert.match(skill, /Role routing for this command/);
     assert.match(skill, /Clarify phase: use `ff-advisor`/);
     assert.match(skill, /Plan phase: use `ff-planner`/);
@@ -92,13 +118,19 @@ describe("ff harness", () => {
     assert.match(advisorAgent, /Do not ask the user directly/);
     assert.match(advisorAgent, /severity: nit \| concern \| blocker/);
     assert.match(advisorAgent, /proposal hash/);
-    assert.match(advisorAgent, /context packages only as navigation/);
+    assert.match(advisorAgent, /Review the supplied proposal context/);
     assert.match(advisorAgent, /current spec\.md and proposal identity/);
+    assert.match(advisorAgent, /after the primary session writes and binds it/);
+    assert.doesNotMatch(advisorAgent, /before the primary session asks for acceptance or edits spec\.md/);
     const codexWatchdog = await readFile(path.join(root, ".codex/hooks.json"), "utf8");
     assert.match(codexWatchdog, /ff internal validate-clarify --watchdog/);
     const implementerAgent = await readFile(path.join(root, ".codex/agents/ff-implementer.toml"), "utf8");
     assert.match(implementerAgent, /Modify code and tests within the accepted task contract/);
-    assert.match(implementerAgent, /Use a current context package to reduce handoff reading/);
+    assert.match(implementerAgent, /supplied bounded task and code context/);
+    assert.match(implementerAgent, /Do not inspect context-package\.md/);
+    assert.match(implementerAgent, /probe the code-index provider, or scan the repository by default/);
+    assert.match(implementerAgent, /return degraded or insufficient-context/);
+    assert.doesNotMatch(implementerAgent, /decision_ready/);
     assert.match(implementerAgent, /Do not decide requirement drift/);
     for (const skillName of await readdir(path.join(root, ".agents/skills"))) {
       const skill = await readFile(path.join(root, ".agents/skills", skillName, "SKILL.md"), "utf8");
@@ -114,6 +146,9 @@ describe("ff harness", () => {
     assert.match(clarifySkill, /recommend the smallest sufficient path/);
     assert.match(clarifySkill, /assumptions, risks, and acceptance evidence/);
     assert.match(clarifySkill, /Open Decisions/);
+    assert.match(clarifySkill, /Challenge proxy metrics/);
+    assert.match(clarifySkill, /truncating output/);
+    assert.match(clarifySkill, /forceful request to skip questions is not risk acceptance/);
     assert.match(clarifySkill, /Do not write spec\.md during Brainstorm Pass/);
     assert.match(clarifySkill, /### Grill Loop/);
     assert.match(clarifySkill, /Input: use the Brainstorm Pass Open Decisions and any high-risk assumptions/);
@@ -166,14 +201,19 @@ describe("ff harness", () => {
     assert.ok(!skillNames.includes("ff-grill"));
     const planSkill = await readFile(path.join(root, ".agents/skills/ff-plan/SKILL.md"), "utf8");
     assert.match(planSkill, /spec quality gate/);
-    assert.match(planSkill, /When a current context-package\.md exists/);
-    assert.match(planSkill, /spec quality gate must still read accepted spec\.md directly/);
+    assert.doesNotMatch(planSkill, /inspect-context-package --task <task-id>` reports `current: true`/);
     assert.match(planSkill, /Do not modify spec\.md during planning/);
+    assert.match(planSkill, /accepted spec\.md as the only product contract/);
+    assert.match(planSkill, /replace the stale content/);
+    assert.match(planSkill, /Order prerequisites before the gates/);
+    assert.match(planSkill, /Preserve user-owned configuration/);
     assert.match(planSkill, /one concrete next question/);
     assert.match(planSkill, /vertical slices/);
     assert.match(planSkill, /## Execution Strategy Guidance/);
     assert.match(planSkill, /Delegation is optional and permission-bound/);
-    assert.match(planSkill, /role and model contract/);
+    assert.match(planSkill, /role\/model routing/);
+    assert.match(planSkill, /main session owns code discovery/i);
+    assert.match(planSkill, /Do not pass the full task set, context package, manifest/);
     assert.match(planSkill, /Use `ff-planner` to draft plan\.md and task\.md/);
     assert.match(planSkill, /Use `ff-reviewer` for post-plan cross-review/);
     assert.match(planSkill, /Post-plan artifact cross-review/);
@@ -196,10 +236,11 @@ describe("ff harness", () => {
     assert.match(planSkill, /expected failure mode, desired behavior, reviewer verdict, and remaining risk/);
     assert.match(planSkill, /deterministic tests separate from behavior review/);
     assert.match(planSkill, /stable design, workflow, command, or rule candidates/);
+    assert.doesNotMatch(planSkill, /leave the active context package current/);
     const runSkill = await readFile(path.join(root, ".agents/skills/ff-run/SKILL.md"), "utf8");
     assert.match(runSkill, /accepted task contract/);
-    assert.match(runSkill, /Refresh context-package\.md before delegating implementation slices/);
-    assert.match(runSkill, /stale, incomplete, or uncertain packages require reading original task artifacts and git information/);
+    assert.match(runSkill, /Delegate only a bounded task instruction and the code context/);
+    assert.doesNotMatch(runSkill, /Refresh context-package\.md before delegating/);
     assert.match(runSkill, /requirement drift/);
     assert.match(runSkill, /Behavior changes require test evidence/);
     assert.match(runSkill, /## Execution Strategy Guidance/);
@@ -212,10 +253,11 @@ describe("ff harness", () => {
     assert.match(runSkill, /must not close tasks or decide requirement drift/);
     assert.doesNotMatch(runSkill, /Subagents are optional\. Use them/);
     assert.match(runSkill, /External TDD, domain modeling, implement, Superpowers, or subagent skills may help when installed/);
+    assert.doesNotMatch(runSkill, /leave the active context package current/);
     const checkSkill = await readFile(path.join(root, ".agents/skills/ff-check/SKILL.md"), "utf8");
     assert.match(checkSkill, /Artifact alignment review/);
     assert.match(checkSkill, /Implementation evidence review/);
-    assert.match(checkSkill, /Refresh context-package\.md before review\/check/);
+    assert.match(checkSkill, /Supply the checker with the relevant contract, diff, verification evidence/);
     assert.match(checkSkill, /Do not issue a spec verdict from a diff summary alone/);
     assert.match(checkSkill, /accepted spec, acceptance criteria, and verification evidence/);
     assert.match(checkSkill, /--baseline-outcome <text>/);
@@ -229,16 +271,19 @@ describe("ff harness", () => {
     assert.match(checkSkill, /final broad review/);
     assert.match(checkSkill, /Record one Baseline Outcome before finish/);
     assert.match(checkSkill, /no reusable project facts/);
+    assert.doesNotMatch(checkSkill, /leave the active context package current/);
     const finishSkill = await readFile(path.join(root, ".agents/skills/ff-finish/SKILL.md"), "utf8");
     assert.match(finishSkill, /closure packet/);
     assert.match(finishSkill, /does not create commits/);
     assert.match(finishSkill, /current-state descriptions/);
     assert.match(finishSkill, /merge it by default/);
     assert.match(finishSkill, /default baseline decision is accepted/);
-    assert.match(finishSkill, /--selected-files <overview\.md,architecture\.md,rules\.md,commands\.md>/);
+    assert.match(finishSkill, /--selected-files/);
     assert.match(finishSkill, /## Execution Strategy Guidance/);
     assert.match(finishSkill, /Use `ff-baseline-writer` to draft current-state Project Baseline updates/);
     assert.match(finishSkill, /main session must review the draft/);
+    assert.doesNotMatch(finishSkill, /retry only with .*refresh-context-package/);
+    assert.doesNotMatch(finishSkill, /## Helper Commands/);
     assert.match(finishSkill, /CLI core must not call an LLM/);
     const resumeSkill = await readFile(path.join(root, ".agents/skills/ff-resume/SKILL.md"), "utf8");
     assert.match(resumeSkill, /user-triggered continuation/);
@@ -430,7 +475,33 @@ describe("ff harness", () => {
     assert.match(advisorAgent, /model: anthropic\/claude-sonnet-4-20250514/);
     assert.match(advisorAgent, /temperature: 0\.1/);
     assert.match(advisorAgent, /tools:\n  write: false\n  edit: false\n  bash: false/);
-    assert.match(advisorAgent, /Model profile: high-reasoning, high reasoning, anthropic\/claude-sonnet-4-20250514, temperature 0\.1/);
+    assert.match(advisorAgent, /Do not inspect context-package\.md/);
+    assert.match(advisorAgent, /return degraded or insufficient-context/);
+    assert.doesNotMatch(advisorAgent, /freshness inspection result supplied by the main workflow/);
+    assert.doesNotMatch(advisorAgent, /## Harness/);
+  });
+
+  it("keeps required workflow and role behavior in every generated harness", async () => {
+    const harnesses = ["codex", "claude", "opencode", "pi", "cursor"] as const;
+    const workflowSkills = ["ff-plan", "ff-run", "ff-check", "ff-finish"] as const;
+    const roles = ["advisor", "planner", "implementer", "checker", "reviewer", "baseline-writer"] as const;
+
+    for (const harness of harnesses) {
+      const root = await tempRoot();
+      await initProject(root, { harnesses: [harness] });
+      const skillRoot = harness === "claude" ? ".claude/skills" : ".agents/skills";
+      for (const skill of workflowSkills) {
+        const content = await readFile(path.join(root, skillRoot, skill, "SKILL.md"), "utf8");
+        assert.match(content, /Treat \.ff task files and project baseline files as repo truth/);
+      }
+      for (const role of roles) {
+        const rolePath = generatedRolePath(harness, role);
+        const content = await readFile(path.join(root, rolePath), "utf8");
+        const body = generatedRoleBody(harness, content);
+        assert.match(body, /role-specific work packet/);
+        assert.match(body, /degraded or insufficient-context/);
+      }
+    }
   });
 
 
@@ -464,6 +535,8 @@ describe("ff harness", () => {
     const claudeAdvisor = await readFile(path.join(claudeRoot, ".claude/agents/ff-advisor.md"), "utf8");
     assert.match(claudeAdvisor, /^---\nname: ff-advisor/m);
     assert.match(claudeAdvisor, /tools: Read, Grep, Glob/);
+    assert.match(claudeAdvisor, /Supplied role-specific work packet/);
+    assert.match(claudeAdvisor, /return degraded or insufficient-context/);
     assert.match(await readFile(path.join(claudeRoot, ".claude/settings.json"), "utf8"), /ff internal validate-clarify --watchdog/);
 
     assert.equal(opencode.adapters[0]?.harness, "opencode");
@@ -481,6 +554,8 @@ describe("ff harness", () => {
     assert.match(opencodeAdvisor, /mode: subagent/);
     assert.match(opencodeAdvisor, /temperature: 0\.1/);
     assert.match(opencodeAdvisor, /tools:\n  write: false\n  edit: false\n  bash: false/);
+    assert.match(opencodeAdvisor, /Supplied role-specific work packet/);
+    assert.match(opencodeAdvisor, /probe the code-index provider, or scan the repository by default/);
     assert.match(
       await readFile(path.join(opencodeRoot, ".opencode/plugins/ff-clarify-watchdog.ts"), "utf8"),
       /ff internal validate-clarify --watchdog/
@@ -498,7 +573,7 @@ describe("ff harness", () => {
     assert.doesNotMatch(piSkill, /asks Pi to run/);
     assert.match(piSkill, /ff preflight --action work/);
     const piAdvisor = await readFile(path.join(piRoot, ".pi/agents/ff-advisor.md"), "utf8");
-    assert.match(piAdvisor, /Pi subagents discover project agents from \.pi\/agents/);
+    assert.match(piAdvisor, /Supplied role-specific work packet/);
     assert.match(await readFile(path.join(piRoot, ".pi/extensions/ff-clarify-watchdog.ts"), "utf8"), /ff internal validate-clarify --watchdog/);
 
     assert.equal(cursor.adapters[0]?.harness, "cursor");

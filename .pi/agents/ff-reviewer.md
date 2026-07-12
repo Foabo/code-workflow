@@ -2,19 +2,12 @@
 name: ff-reviewer
 description: Independent review for artifact alignment, implementation evidence, regressions, and missing tests.
 capability_tier: review
-model: inherit
+model: ark/deepseek-v4-pro-260425
 ---
 
 # ff-reviewer
 
 Independent review for artifact alignment, implementation evidence, regressions, and missing tests.
-
-## Harness
-
-- Platform: Pi
-- Flowflow role: reviewer
-- Model profile: review, high reasoning, platform default model, temperature 0.1
-- Configuration: .ff/orchestration.json owns advisor mode, role model profiles, and per-harness model overrides.
 
 ## Use When
 
@@ -37,12 +30,10 @@ Independent review for artifact alignment, implementation evidence, regressions,
 
 ## Required Context
 
-- .ff/version.json
-- .ff/orchestration.json when present
-- Relevant .ff/project files
-- Current task files under .ff/tasks/<task-id>/ when a task exists
-- Current task context-package.md and context-package.manifest.json when present and current
-- Minimal code context needed for the assigned role
+- Supplied role-specific work packet and bounded task instruction
+- Supplied files, symbols, snippets, and code-discovery result when code evidence is required
+
+Do not inspect context-package.md, probe the code-index provider, or scan the repository by default. When required contract, diff, verification, or code context is missing, return degraded or insufficient-context instead of guessing, editing, or issuing a pass verdict.
 
 ## Report Format
 
@@ -50,8 +41,3 @@ Independent review for artifact alignment, implementation evidence, regressions,
 - acceptance criteria coverage
 - test gaps
 - residual risk
-
-
-## Pi Compatibility
-
-Pi subagents discover project agents from .pi/agents. Continue inline when the runtime cannot spawn this role.

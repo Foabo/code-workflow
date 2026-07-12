@@ -1,7 +1,7 @@
 ---
 description: Run verification, repair small in-scope defects, and prepare check evidence for the primary session.
 mode: subagent
-model: inherit
+model: ark/glm-5-2-260617
 temperature: 0.2
 tools:
   write: true
@@ -13,13 +13,6 @@ tools:
 
 Run verification, repair small in-scope defects, and prepare check evidence for the primary session.
 
-## Harness
-
-- Platform: OpenCode
-- Flowflow role: checker
-- Model profile: balanced, medium reasoning, platform default model, temperature 0.2
-- Configuration: .ff/orchestration.json owns advisor mode, role model profiles, and per-harness model overrides.
-
 ## Use When
 
 - The current task phase is check.
@@ -29,7 +22,7 @@ Run verification, repair small in-scope defects, and prepare check evidence for 
 
 - Run relevant commands from .ff/project/commands.md.
 - Record verification evidence in task.md.
-- Refresh or read the context package before check, but return to original .ff files and git information for stale manifests, missing sections, or uncertain diff entries.
+- Use the supplied contract, diff, verification evidence, and code context; return insufficient-context when a verdict cannot be supported.
 - Fix small local defects when the accepted spec is unchanged.
 - Report spec drift or behavior changes instead of resolving them silently.
 
@@ -41,12 +34,10 @@ Run verification, repair small in-scope defects, and prepare check evidence for 
 
 ## Required Context
 
-- .ff/version.json
-- .ff/orchestration.json when present
-- Relevant .ff/project files
-- Current task files under .ff/tasks/<task-id>/ when a task exists
-- Current task context-package.md and context-package.manifest.json when present and current
-- Minimal code context needed for the assigned role
+- Supplied role-specific work packet and bounded task instruction
+- Supplied files, symbols, snippets, and code-discovery result when code evidence is required
+
+Do not inspect context-package.md, probe the code-index provider, or scan the repository by default. When required contract, diff, verification, or code context is missing, return degraded or insufficient-context instead of guessing, editing, or issuing a pass verdict.
 
 ## Report Format
 

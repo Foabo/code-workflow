@@ -94,9 +94,47 @@
       }
     },
     "claude": {},
-    "opencode": {},
-    "pi": {},
+    "opencode": {
+      "advisor": {
+        "model": "ark/deepseek-v4-pro-260425"
+      },
+      "planner": {
+        "model": "ark/glm-5-2-260617"
+      },
+      "implementer": {
+        "model": "ark/glm-5-2-260617"
+      },
+      "reviewer": {
+        "model": "ark/deepseek-v4-pro-260425"
+      },
+      "checker": {
+        "model": "ark/glm-5-2-260617"
+      },
+      "baseline-writer": {
+        "model": "ark/deepseek-v4-flash-260425"
+      }
+    },
+    "pi": {
+      "advisor": {
+        "model": "ark/deepseek-v4-pro-260425"
+      },
+      "planner": {
+        "model": "ark/glm-5-2-260617"
+      },
+      "implementer": {
+        "model": "ark/glm-5-2-260617"
+      },
+      "reviewer": {
+        "model": "ark/deepseek-v4-pro-260425"
+      },
+      "checker": {
+        "model": "ark/glm-5-2-260617"
+      },
+      "baseline-writer": {
+        "model": "ark/deepseek-v4-flash-260425"
+      }
+    },
     "cursor": {}
   },
-  "updated_at": "2026-07-05T15:42:29.000Z"
+  "updated_at": "2026-07-10T13:24:35.000Z"
 }

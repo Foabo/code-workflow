@@ -1,6 +1,6 @@
 ---
 name: ff-clarify
-description: Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md with the accepted task contract.
+description: Review fuzzy intent, write and bind a Proposed Spec, obtain explicit user acceptance, then advance the accepted task contract.
 ---
 
 Use this skill for the `ff-clarify` Flowflow workflow action in this repository. Trigger it for `/ff-clarify`, `$ff-clarify`, `ff clarify`, or natural-language requests for the same workflow action.
@@ -9,25 +9,14 @@ Before acting, read the repository's `.ff` files relevant to the current task. T
 
 # ff-clarify
 
-Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md with the accepted task contract.
+Review fuzzy intent, write and bind a Proposed Spec, obtain explicit user acceptance, then advance the accepted task contract.
 
-## Required Reading
-
-- .ff/version.json
-- .ff/project/overview.md
-- .ff/project/architecture.md
-- .ff/project/rules.md
-- .ff/project/commands.md
-- Current task files under .ff/tasks/<task-id>/ when a task exists
-- Current task context package under .ff/tasks/<task-id>/context-package.md when present and current
-
-## Rules
+## Contract
 
 - Treat .ff task files and project baseline files as repo truth for workflow facts.
 - Use Git as the source of truth for code changes.
-- Use ff internal helpers for deterministic task state changes and trace events.
-- Keep edits scoped to the current workflow action.
-- Treat context-package.md as a generated cache; refresh it or fall back to original .ff files and git information when it is missing, stale, incomplete, or uncertain.
+- Read only the task and Baseline inputs required by this phase; use ff internal helpers for state and trace changes.
+- Treat context-package.md as an explicit diagnostic artifact. Workflow actions and delegated roles do not refresh or load it automatically.
 - Stop for user judgment when requirements, product behavior, destructive worktree handling, workflow overrides, or baseline promotion need confirmation.
 - Inline execution must remain complete; if optional helpers are unavailable, continue inline when responsible.
 
@@ -52,6 +41,7 @@ Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md
 
 - Clarify uses one fixed sequence for all tasks: Brainstorm Pass -> Grill Loop -> Proposed Spec (write spec.md + `propose-spec`) -> advisor review of the current Proposed Spec -> concern/blocker handling -> explicit accept (`accept-spec`) -> `validate-clarify --stage advance` -> move to plan. The required trace events (`brainstorm.done`, `spec.proposed`, `advisor.reviewed`|`advisor.unavailable`, `spec.accepted`) share one identity triple (`attempt_id`, `proposal_id`, `proposal_hash` where `proposal_hash = sha256(spec content)`); `propose-spec` and `accept-spec` compute and thread this identity so the agent never hand-hashes or hand-threads field names.
 - Brainstorm Pass must restate the goal and motivation, offer at most three directions, recommend the smallest path, list assumptions, risks, acceptance evidence, and produce Open Decisions.
+- Challenge proxy metrics that can be improved by truncating output, disabling tools or required roles, skipping verification, or excluding failed attempts. Clarify the real completed-work outcome before treating such a metric as acceptance evidence; a forceful request to skip questions is not risk acceptance.
 - Grill Loop asks one concrete question at a time for Open Decisions and high-risk assumptions. Include your recommended answer and the trade-off so the user can make a concrete decision.
 - Use the full Grill Loop when the request is broad, ambiguous, high risk, or affects workflow semantics, CLI/API behavior, task lifecycle, state machines, cross-module behavior, irreversible work, or baseline promotion.
 - Clarification is complete only when the goal, boundary, acceptance criteria, key risks, and important trade-offs are clear enough to write spec.md without high-risk assumptions.
@@ -83,26 +73,3 @@ Review fuzzy intent, produce a user-confirmed Proposed Spec, then update spec.md
 - Escalate to the full loop for broad, ambiguous, high-risk, irreversible, workflow-semantics, CLI/API, task-lifecycle, state-machine, cross-module, or baseline-promotion decisions.
 - Stop only when the goal, boundary, acceptance criteria, key risks, and important trade-offs are clear enough to write spec.md without high-risk assumptions, or when the user explicitly accepts the remaining risk.
 - Keep Brainstorm Pass and Grill Loop inside this ff-clarify guidance; do not rely on another skill or cross-skill lookup for these protocol stages.
-
-
-## Helper Commands
-
-- ff validate
-- ff doctor
-- ff tasks
-- ff preflight --action <action> [--task <task-id>]
-- ff internal create-task --title <title> [--id <task-id>]
-- ff internal select-task [--task <task-id>]
-- ff internal append-trace --task <task-id> --type <event-type> --summary <summary>
-- ff internal append-trace --task <task-id> --type <event-type> --summary <summary> --data-json <json-object>
-- ff internal propose-spec --task <task-id> --spec-file <path>
-- ff internal accept-spec --task <task-id> (--verdict pass|concern|blocker [--concerns-resolved] [--deferred-reason <text>] [--user-risk-acceptance] [--blockers-resolved] [--user-override] | --advisor-unavailable --harness <text> --failure-reason <text> --fallback-checklist-result <text>)
-- ff internal validate-clarify --task <task-id> --stage proposal|accept|advance
-- ff internal set-state --task <task-id> [--lifecycle <state>] [--phase <phase>] [--next-action <text>]
-- ff internal finish-task --task <task-id> --summary <summary> [--dirty-worktree covered|unrelated|clean] [--baseline accepted|selected|edited|skipped|none] [--edited-content <confirmed-current-state-sections>]
-- ff internal discard-task --task <task-id> --confirm --worktree <handling>
-- ff internal create-resume --task <task-id> --content <markdown>
-- ff internal ensure-baseline-delta --task <task-id>
-- ff internal sync-baseline-delta --task <task-id> --decision accepted|selected|edited|skipped [--selected-files <overview.md,architecture.md,rules.md,commands.md>] [--edited-content <confirmed-current-state-sections>]
-- ff internal consume-resume --task <task-id>
-- ff internal refresh-context-package --task <task-id>
