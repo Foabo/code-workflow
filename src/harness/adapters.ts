@@ -473,6 +473,10 @@ async function generateAgentSkillAdapter(
     await writeGenerated(root, path.join(skillDir, "SKILL.md"), renderHarnessSkill(command, harness), options, result);
   }
 
+  if (harness === "opencode") {
+    await generateOpenCodeCommands(root, options, result);
+  }
+
   await generateRoleAgents(root, harness, options, result);
   await generateWatchdogArtifacts(root, harness, options, result);
 
@@ -523,6 +527,19 @@ async function generateWatchdogArtifacts(
   }
 }
 
+async function generateOpenCodeCommands(
+  root: string,
+  options: AdapterOptions,
+  result: AdapterResult
+): Promise<void> {
+  const commandsRoot = path.join(root, ".opencode", "commands");
+  await ensureDir(commandsRoot);
+
+  for (const expected of expectedGeneratedOpenCodeCommands()) {
+    await writeGenerated(root, path.join(root, expected.path), expected.content, options, result);
+  }
+}
+
 export function expectedGeneratedWatchdogArtifactsForRoot(
   _root: string,
   harness: HarnessName
@@ -537,6 +554,14 @@ export function expectedGeneratedWatchdogArtifacts(harness: HarnessName): Array<
       content: renderWatchdogArtifact(harness)
     }
   ];
+}
+
+export function expectedGeneratedOpenCodeCommands(): Array<{ command: (typeof AGENT_COMMANDS)[number]; path: string; content: string }> {
+  return AGENT_COMMANDS.map((command) => ({
+    command,
+    path: path.join(".opencode", "commands", `${command}.md`),
+    content: renderOpenCodeCommand(command)
+  }));
 }
 
 export async function expectedGeneratedRoleAgentsForRoot(root: string, harness: HarnessName): Promise<Array<{ path: string; content: string }>> {
@@ -883,6 +908,24 @@ Use this skill for the \`${command}\` Flowflow workflow action in this repositor
 Before acting, read the repository's \`.ff\` files relevant to the current task. Treat \`.ff\` as Repo Truth, generated skills as invocation surfaces, and Git as the source of truth for code changes.
 
 ${renderWorkflowInstructions(command)}
+`.replace(/\n+$/, "\n");
+}
+
+function renderOpenCodeCommand(command: (typeof AGENT_COMMANDS)[number]): string {
+  const skillPath = `.agents/skills/${command}/SKILL.md`;
+  return `---
+description: ${commandPurposes[command]}
+---
+
+Use this OpenCode slash command for the \`${command}\` Flowflow workflow action in this repository.
+
+Load and follow the generated Flowflow skill guidance from:
+@${skillPath}
+
+User request from slash command arguments:
+\`$ARGUMENTS\`
+
+If \`${skillPath}\` cannot be loaded, stop and report the missing generated skill. Do not continue from memory or from this shim alone.
 `.replace(/\n+$/, "\n");
 }
 

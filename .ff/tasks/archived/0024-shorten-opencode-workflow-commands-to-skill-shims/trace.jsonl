@@ -1,0 +1,6 @@
+{"ts":"2026-07-17T11:44:57.371Z","type":"task.created","summary":"Task created: Shorten OpenCode workflow commands to skill shims"}
+{"ts":"2026-07-17T11:48:23.963Z","type":"run.updated","summary":"Implemented thin OpenCode command shims, regenerated command files, updated tests and baseline wording."}
+{"ts":"2026-07-17T11:48:24.000Z","type":"task.state.updated","summary":"phase run -> check; next action updated"}
+{"ts":"2026-07-17T11:48:49.781Z","type":"check.passed","summary":"Verified thin OpenCode command shims against spec; full verification stack passed."}
+{"ts":"2026-07-17T11:48:49.817Z","type":"task.state.updated","summary":"phase check -> finish; next action updated"}
+{"ts":"2026-07-17T11:55:12.400Z","type":"task.finished","summary":"OpenCode workflow commands now use thin shims that reference generated Flowflow skills and pass user arguments without duplicating skill bodies.","data":{"baseline_decision":"none","dirty_worktree_handling":"covered"}}

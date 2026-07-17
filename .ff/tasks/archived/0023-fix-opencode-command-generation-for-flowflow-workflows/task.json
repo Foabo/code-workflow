@@ -1,0 +1,22 @@
+{
+  "id": "0023-fix-opencode-command-generation-for-flowflow-workflows",
+  "title": "Fix OpenCode command generation for Flowflow workflows",
+  "lifecycle": "closed",
+  "phase": "finish",
+  "next_action": "Task is closed",
+  "health_flags": [],
+  "artifacts": {
+    "spec": "spec.md",
+    "plan": "plan.md",
+    "task": "task.md",
+    "baseline_delta": "baseline-delta.md",
+    "resume": null
+  },
+  "invalidated_artifacts": [],
+  "blocked_reason": null,
+  "parked_reason": null,
+  "resume_condition": null,
+  "created_at": "2026-07-16T11:38:22.329Z",
+  "updated_at": "2026-07-16T13:00:18.552Z",
+  "schema_version": 1
+}

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { access, chmod, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -11,6 +11,8 @@ import {
   validateProject
 } from "../../src/index.js";
 import type { WorkflowOptions } from "../../src/index.js";
+import { AGENT_COMMANDS } from "../../src/domain/index.js";
+import { expectedGeneratedOpenCodeCommands } from "../../src/harness/index.js";
 import {
   acceptClarifyViaWorkflow,
   appendTraceViaCli,
@@ -56,6 +58,12 @@ function generatedRoleBody(harness: GeneratedHarness, content: string): string {
     return /developer_instructions = """\n([\s\S]*?)\n"""/.exec(content)?.[1] ?? "";
   }
   return content.replace(/^---\n[\s\S]*?\n---\n+/, "");
+}
+
+function frontmatter(content: string): string {
+  const match = /^---\n([\s\S]*?)\n---\n/.exec(content);
+  assert.ok(match, "expected frontmatter");
+  return match[1];
 }
 
 describe("ff harness", () => {
@@ -481,6 +489,47 @@ describe("ff harness", () => {
     assert.doesNotMatch(advisorAgent, /## Harness/);
   });
 
+  it("reports and refreshes missing or stale OpenCode command files", async () => {
+    const root = await tempRoot();
+    await initProject(root, { harnesses: ["opencode"] });
+    const expected = expectedGeneratedOpenCodeCommands();
+    const clarifyCommand = expected.find((entry) => entry.command === "ff-clarify");
+    assert.ok(clarifyCommand);
+
+    const currentReport = await doctorProject(root);
+    assert.equal(
+      currentReport.warnings.some((warning) => warning.path.startsWith(".opencode/commands/")),
+      false
+    );
+
+    await writeFile(path.join(root, clarifyCommand.path), "stale", "utf8");
+    const staleReport = await doctorProject(root);
+    assert.ok(staleReport.warnings.some((warning) => (
+      warning.path === ".opencode/commands/ff-clarify.md" &&
+      warning.message === "generated OpenCode command appears stale"
+    )));
+
+    const refreshed = await updateProject(root, ["opencode"]);
+    assert.equal(refreshed.validation.ok, true);
+    assert.equal(await readFile(path.join(root, clarifyCommand.path), "utf8"), clarifyCommand.content);
+
+    await rm(path.join(root, ".opencode", "commands"), { recursive: true, force: true });
+    const missingFromAgentsReport = await doctorProject(root);
+    assert.ok(missingFromAgentsReport.warnings.some((warning) => (
+      warning.path === ".opencode/commands/ff-clarify.md" &&
+      warning.message === "generated OpenCode command is missing"
+    )));
+
+    await updateProject(root, ["opencode"]);
+    await rm(path.join(root, ".opencode", "agents"), { recursive: true, force: true });
+    await rm(path.join(root, ".opencode", "commands"), { recursive: true, force: true });
+    const missingFromPluginsReport = await doctorProject(root);
+    assert.ok(missingFromPluginsReport.warnings.some((warning) => (
+      warning.path === ".opencode/commands/ff-clarify.md" &&
+      warning.message === "generated OpenCode command is missing"
+    )));
+  });
+
   it("keeps required workflow and role behavior in every generated harness", async () => {
     const harnesses = ["codex", "claude", "opencode", "pi", "cursor"] as const;
     const workflowSkills = ["ff-plan", "ff-run", "ff-check", "ff-finish"] as const;
@@ -542,14 +591,38 @@ describe("ff harness", () => {
     assert.equal(opencode.adapters[0]?.harness, "opencode");
     assert.ok(opencode.adapters[0]?.created.includes(".agents/skills/ff-work/SKILL.md"));
     assert.ok(opencode.adapters[0]?.created.includes(".opencode/agents/ff-advisor.md"));
+    assert.ok(opencode.adapters[0]?.created.includes(".opencode/commands/ff-work.md"));
+    assert.ok(opencode.adapters[0]?.created.includes(".opencode/commands/ff-clarify.md"));
     assert.ok(opencode.adapters[0]?.created.includes(".opencode/plugins/ff-clarify-watchdog.ts"));
     await assert.rejects(access(path.join(opencodeRoot, ".ff/agent-commands")));
-    await assert.rejects(access(path.join(opencodeRoot, ".opencode/commands")));
     const opencodeSkill = await readFile(path.join(opencodeRoot, ".agents/skills/ff-work/SKILL.md"), "utf8");
     assert.match(opencodeSkill, /^---\nname: ff-work/m);
     assert.match(opencodeSkill, /Use this skill for the `ff-work` Flowflow workflow action/);
     assert.doesNotMatch(opencodeSkill, /asks OpenCode to run/);
     assert.match(opencodeSkill, /ff preflight --action work/);
+    for (const command of AGENT_COMMANDS) {
+      const commandContent = await readFile(path.join(opencodeRoot, ".opencode/commands", `${command}.md`), "utf8");
+      const commandFrontmatter = frontmatter(commandContent);
+      const commandFrontmatterKeys = commandFrontmatter.split(/\r?\n/).map((line) => line.split(":")[0]);
+      assert.deepEqual(commandFrontmatterKeys, ["description"]);
+      assert.match(commandFrontmatter, /^description: /m);
+      assert.doesNotMatch(commandFrontmatter, /^name:/m);
+      assert.doesNotMatch(commandFrontmatter, /^agent:/m);
+      assert.doesNotMatch(commandFrontmatter, /^model:/m);
+      assert.match(commandContent, /Use this OpenCode slash command/);
+      assert.match(commandContent, new RegExp(`@\\.agents/skills/${command}/SKILL\\.md`));
+      assert.match(commandContent, /\$ARGUMENTS/);
+      assert.match(commandContent, /cannot be loaded, stop and report the missing generated skill/);
+      assert.doesNotMatch(commandContent, /## Workflow Steps/);
+      assert.doesNotMatch(commandContent, /## Phase Guidance/);
+    }
+    const opencodeClarifyCommand = await readFile(path.join(opencodeRoot, ".opencode/commands/ff-clarify.md"), "utf8");
+    assert.match(opencodeClarifyCommand, /ff-clarify/);
+    assert.match(opencodeClarifyCommand, /@\.agents\/skills\/ff-clarify\/SKILL\.md/);
+    assert.doesNotMatch(opencodeClarifyCommand, /## Clarify Protocol/);
+    assert.doesNotMatch(opencodeClarifyCommand, /## Workflow Steps/);
+    assert.doesNotMatch(opencodeClarifyCommand, /## Phase Guidance/);
+    assert.doesNotMatch(opencodeClarifyCommand, /validate-clarify/);
     const opencodeAdvisor = await readFile(path.join(opencodeRoot, ".opencode/agents/ff-advisor.md"), "utf8");
     assert.match(opencodeAdvisor, /mode: subagent/);
     assert.match(opencodeAdvisor, /temperature: 0\.1/);

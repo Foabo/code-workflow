@@ -45,3 +45,5 @@
 
 - `src/tasks/` 负责确定性任务上下文包及其 manifest。它们是 task-local generated view，输入来自 task artifacts、trace、Project Baseline、git status 和 diff 输入。
 - `src/harness/` 只在渲染 workflow skills 和 role agents 时消费 context package guidance；context package 的事实生成不归 `src/harness/` 所有。
+
+- OpenCode harness 会生成项目级 slash command 文件到 `.opencode/commands/<ff-command>.md`。这些 command 文件是 OpenCode 斜杠菜单和 command template 的调用表面，正文通过 `@.agents/skills/<ff-command>/SKILL.md` 引用对应 Flowflow skill，并包含 `$ARGUMENTS` 参数入口。

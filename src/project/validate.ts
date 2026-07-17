@@ -1,6 +1,7 @@
 import path from "node:path";
 import { access, readFile } from "node:fs/promises";
 import {
+  expectedGeneratedOpenCodeCommands,
   expectedGeneratedRoleAgentsForRoot,
   expectedGeneratedWatchdogArtifactsForRoot,
   isGeneratedSkillCurrent
@@ -180,6 +181,13 @@ async function generatedAdapterWarnings(root: string): Promise<ValidationIssue[]
   if (await exists(path.join(root, ".opencode", "agents"))) {
     warnings.push(...(await generatedRoleAgentWarnings(root, "opencode")));
   }
+  if (
+    await exists(path.join(root, ".opencode", "agents")) ||
+    await exists(path.join(root, ".opencode", "plugins")) ||
+    await exists(path.join(root, ".opencode", "commands"))
+  ) {
+    warnings.push(...(await generatedOpenCodeCommandWarnings(root)));
+  }
   if (await exists(path.join(root, ".opencode"))) {
     warnings.push(...(await generatedWatchdogWarnings(root, "opencode")));
   }
@@ -194,6 +202,22 @@ async function generatedAdapterWarnings(root: string): Promise<ValidationIssue[]
   }
   if (await exists(path.join(root, ".cursor"))) {
     warnings.push(...(await generatedWatchdogWarnings(root, "cursor")));
+  }
+  return warnings;
+}
+
+async function generatedOpenCodeCommandWarnings(root: string): Promise<ValidationIssue[]> {
+  const warnings: ValidationIssue[] = [];
+  for (const expected of expectedGeneratedOpenCodeCommands()) {
+    const filePath = path.join(root, expected.path);
+    if (!(await exists(filePath))) {
+      warnings.push({ path: expected.path, message: "generated OpenCode command is missing" });
+      continue;
+    }
+    const content = await readFile(filePath, "utf8");
+    if (content !== expected.content) {
+      warnings.push({ path: expected.path, message: "generated OpenCode command appears stale" });
+    }
   }
   return warnings;
 }

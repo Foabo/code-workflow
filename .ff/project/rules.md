@@ -57,3 +57,6 @@
 - workflow 和 role guidance 可以使用 current context package 来减少重复读取。package 缺失、stale、不完整或包含 uncertain diff entry 时，必须读取原始 `.ff` 文件和 git 信息后再判断。
 - reviewer/checker 不能只根据 diff summary 给出 spec verdict；必须同时对照 diff、task brief、accepted spec、acceptance criteria 和 verification evidence。
 - context package manifest 包含 generator version 和输入 fingerprints。package 渲染语义变化时要 bump generator version，使旧 cache 自动刷新。
+
+- OpenCode generated command 文件属于 generated invocation surface。其规范变更应通过更新 `src/harness/adapters.ts` 并重新生成完成，不能把 `.opencode/commands/*.md` 的手工编辑当作 canonical workflow truth。
+- `doctor` 需要检查现有 OpenCode harness 产物中 `.opencode/commands/<ff-command>.md` 的缺失或过期；`validate` 继续只负责结构校验。

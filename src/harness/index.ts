@@ -1,4 +1,5 @@
 export {
+  expectedGeneratedOpenCodeCommands,
   ProtectedRoleAgentConfigConflictError,
   expectedGeneratedRoleAgents,
   expectedGeneratedRoleAgentsForRoot,
